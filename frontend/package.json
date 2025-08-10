@@ -10,12 +10,23 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tsparticles/react": "^3.0.0",
+    "@tsparticles/slim": "^3.9.1",
+    "aos": "^2.3.4",
     "axios": "^1.11.0",
     "bootstrap": "^5.3.7",
     "bootstrap-icons": "^1.13.1",
+    "framer-motion": "^12.23.12",
+    "gsap": "^3.13.0",
+    "lottie-react": "^2.4.1",
     "react": "^19.1.1",
+    "react-confetti": "^6.4.0",
+    "react-countup": "^6.5.3",
     "react-dom": "^19.1.1",
-    "react-router-dom": "^7.8.0"
+    "react-hot-toast": "^2.5.2",
+    "react-loading-skeleton": "^3.5.0",
+    "react-router-dom": "^7.8.0",
+    "react-spring": "^10.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",

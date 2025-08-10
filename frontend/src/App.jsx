@@ -10,17 +10,19 @@ import LiveAgent from './pages/LiveAgent';
 function App() {
   return (
     <Router>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/sessions" element={<Sessions />} />
-          <Route path="/replay" element={<Replay />} />
-          <Route path="/replay/:sessionId" element={<Replay />} />
-          <Route path="/compliance" element={<Compliance />} />
-          <Route path="/compliance/:sessionId" element={<Compliance />} />
-          <Route path="/live-agent" element={<LiveAgent />} />
-        </Routes>
-      </Layout>
+      <div className="app-wrapper">
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/sessions" element={<Sessions />} />
+            <Route path="/replay" element={<Replay />} />
+            <Route path="/replay/:sessionId" element={<Replay />} />
+            <Route path="/compliance" element={<Compliance />} />
+            <Route path="/compliance/:sessionId" element={<Compliance />} />
+            <Route path="/live-agent" element={<LiveAgent />} />
+          </Routes>
+        </Layout>
+      </div>
     </Router>
   );
 }
