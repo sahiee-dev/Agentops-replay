@@ -19,4 +19,4 @@ tenacity==8.2.3
 celery==5.3.4
 aiofiles==23.2.1
 python-dotenv==1.0.0
-python-3.12.4
+
