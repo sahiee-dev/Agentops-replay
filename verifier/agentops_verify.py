@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 agentops_verify.py - Standalone Verifier for AgentOps Replay logs.
-Strictly implements checks defined in EVENT_LOG_SPEC.md v0.4.
+Strictly implements checks defined in EVENT_LOG_SPEC.md v0.5.
 
 Usage:
   python3 agentops_verify.py <session.jsonl> --format json
@@ -176,14 +176,13 @@ def verify_session(events: List[Dict[str, Any]]) -> Dict[str, Any]:
     return report
 
 def _validate_envelope(event: Dict[str, Any], index: int):
-    required = ["event_id", "session_id", "sequence_number", "event_type", "payload_hash", "event_hash", "payload"]
+    required = ["event_id", "session_id", "sequence_number", "event_type", "payload_hash", "event_hash", "payload", "schema_ver"]
     for field in required:
         if field not in event:
             raise VerificationError("MISSING_FIELD", f"Missing required field: {field}")
     
-    # Spec v0.4: strict schema_ver
-    if "schema_ver" in event and event["schema_ver"] != SPEC_VERSION:
-         # Warning or Error? Spec says "MUST match ELS version". Error.
+    # Spec v0.5: strict schema_ver matching
+    if event["schema_ver"] != SPEC_VERSION:
          raise VerificationError("SCHEMA_VERSION_MISMATCH", f"Expected {SPEC_VERSION}, got {event['schema_ver']}")
 
 

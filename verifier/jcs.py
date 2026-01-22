@@ -109,10 +109,13 @@ def canonicalize(data) -> bytes:
         return b'[' + b','.join(parts) + b']'
     
     if isinstance(data, dict):
-        # Object: Sort keys lexicographically by their UTF-16 code units (UCS-2)
-        # In Python, simple string sort usually usually works for BMP.
-        # RFC 8785 requires sorting using UTF-16 code units.
-        sorted_keys = sorted(data.keys())
+        # Object: Sort keys by UTF-16BE code unit sequence (RFC 8785)
+        # Python's default sort uses Unicode code points, which differs for non-BMP chars
+        def utf16_sort_key(s: str) -> bytes:
+            # Encode to UTF-16BE and use resulting byte sequence for comparison
+            return s.encode('utf-16-be')
+        
+        sorted_keys = sorted(data.keys(), key=utf16_sort_key)
         
         parts = []
         for key in sorted_keys:

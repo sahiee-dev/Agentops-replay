@@ -1,5 +1,5 @@
 """
-agentops_sdk/events.py - Strict Event Definitions from Spec v0.4
+agentops_sdk/events.py - Strict Event Definitions from Spec v0.5
 """
 from enum import Enum
 from typing import Dict, Any, Optional

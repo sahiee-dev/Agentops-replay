@@ -37,6 +37,9 @@ html {
 .events-list{
  margin: 20px;
 }
+.content-wrapper {
+    width: 95%;
+}
 
 .progress-section{
   padding: 20px;

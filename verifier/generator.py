@@ -3,9 +3,14 @@ test_generator.py - Generates valid and invalid test vectors for agentops-verify
 """
 import json
 import hashlib
-import time
 import uuid
-import jcs
+import sys
+
+try:
+    import jcs
+except ImportError:
+    # Fallback for package-relative import
+    from . import jcs
 
 SPEC_VERSION = "v0.5"
 SIGNED_FIELDS = [
@@ -25,7 +30,7 @@ def sha256(data: bytes) -> str:
 
 def create_event(session_id: str, seq: int, prev_hash: str, event_type: str, payload: dict, tamper=None):
     event = {
-        "event_id": str(uuid.uuid7()) if hasattr(uuid, 'uuid7') else str(uuid.uuid4()), # Python <3.13 uuid7 fallback
+        "event_id": str(uuid.uuid7()) if sys.version_info >= (3, 14) else str(uuid.uuid4()), # Python 3.14+ has uuid7
         "session_id": session_id,
         "sequence_number": seq,
         "timestamp_wall": "2023-10-27T10:00:00Z",

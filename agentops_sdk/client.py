@@ -5,6 +5,11 @@ from typing import Optional, Dict, Any, List
 from .events import EventType, SCHEMA_VER, validate_payload
 from .envelope import ProposedEvent, create_proposal
 from .buffer import EventBuffer
+import hashlib
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'verifier')))
+import jcs
 import uuid
 import datetime
 
@@ -88,7 +93,6 @@ class AgentOpsClient:
                 "payload_hash": proposal.payload_hash,
                 "prev_event_hash": proposal.prev_event_hash
             }
-            import hashlib
             canonical_env = jcs.canonicalize(signed_obj)
             self.prev_hash = hashlib.sha256(canonical_env).hexdigest()
             
