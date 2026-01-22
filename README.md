@@ -1,358 +1,158 @@
 # AgentOps Replay
 
-> **Log, visualize & replay agent workflows for debugging & compliance**
+> **The system of record for AI agent behavior**
 
-A comprehensive AI agent monitoring and observability platform that captures, visualizes, and replays agent interactions for debugging, compliance, and performance optimization.
+AgentOps Replay is an open-source, production-grade observability and audit system for AI agents. Unlike traditional monitoring tools, AgentOps Replay provides **cryptographically verifiable, immutable event logs** designed for incident investigation, compliance, and post-mortems.
 
-[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)](https://reactjs.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=flat&logo=postgresql&logoColor=white)](https://postgresql.org/)
-[![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)](https://python.org/)
+## Why AgentOps Replay?
 
-## 🚀 Overview
+When your AI agent crashes, leaks PII, or makes an unexpected decision, you need more than logs—you need **evidence**.
 
-AgentOps Replay solves the critical problem of **AI agent observability** by turning opaque AI workflows into transparent, reproducible processes. Perfect for enterprises that need confidence in their AI agents' decision-making, policy compliance, and operational reliability.
+AgentOps Replay is built for:
 
-### Key Value Propositions
-- 🔍 **Complete Visibility** - Every agent action logged and traceable
-- 🎬 **Interactive Replay** - Step-through agent workflows like video playback
-- 🛡️ **Compliance Monitoring** - Automated policy violation detection
-- 🤖 **Live Agent Integration** - Real AI agents with monitoring built-in
-- 📊 **Professional Dashboard** - Production-ready monitoring interface
+- **Incident Response**: Step-by-step replay of agent behavior
+- **Compliance**: Audit-grade timelines with tamper-evident integrity
+- **Governance**: Policy violation detection and reporting
+- **Trust**: Cryptographic proof that logs haven't been modified
 
-## ✨ Features
+## Core Principles
 
-### 🎯 Core Features (MVP)
-- **Universal Agent Logger** - Records prompts, tool calls, retrievals, outputs, and timestamps
-- **Visualization UI** - Timeline view of agent actions with click-through inspection
-- **Deterministic Replay** - Visual playback of agent sessions with progress tracking
-- **Session Management** - Complete lifecycle management of agent sessions
+1. **Auditability** over convenience
+2. **Correctness** over performance
+3. **Evidence** over interpretation
 
-### 🏆 Advanced Features (Implemented)
-- **Compliance Pack** - Policy violation checks and audit report generation
-- **Live AI Agent** - Google Gemini-powered customer support agent
-- **Real-time Event Capture** - Live monitoring as agents operate
-- **Multi-Agent Support** - Customer support, data analysis, voice agents
-- **Professional UI** - Bootstrap-based interface with seamless navigation
+## Architecture
 
-### 🎪 Demo Features
-- **Event Generator** - One-click realistic workflow simulation
-- **Live Chat Interface** - Real-time customer support demonstrations
-- **Multi-window Monitoring** - Watch replay, compliance, and dashboard simultaneously
+```
+Agent SDK (Untrusted Producer)
+    ↓
+Event Log (Immutable, Hash-Chained)
+    ↓
+Verifier (Independent Validation)
+    ↓
+Compliance Reports (Evidence)
+```
 
-## 🏗️ Architecture
+## Quick Start
 
-graph TB
-A[React Frontend] --> B[FastAPI Backend]
-B --> C[PostgreSQL Database]
-B --> D[Google Gemini AI]
-B --> E[Agent Framework]
+### 1. Verify Existing Logs
 
-text
-E --> F[Customer Support Agent]
-E --> G[Data Analysis Agent] 
-E --> H[Voice Call Agent]
+```bash
+python3 verifier/agentops_verify.py session.jsonl --format json
+```
 
-F --> I[Event Logger]
-G --> I
-H --> I
+### 2. Record Agent Events
 
-I --> C
+```python
+from agentops_sdk.client import AgentOpsClient
+from agentops_sdk.events import EventType
 
-subgraph "Monitoring System"
-    J[Session Tracker]
-    K[Event Replay]
-    L[Compliance Monitor]
-end
+# Local authority mode for testing
+client = AgentOpsClient(local_authority=True)
+client.start_session(agent_id="my-agent")
 
-C --> J
-C --> K  
-C --> L
-text
+# Record events
+client.record(EventType.TOOL_CALL, {
+    "tool_name": "calculator",
+    "args": {"expression": "2 + 2"}
+})
 
-## 🛠️ Tech Stack
+client.end_session(status="success", duration_ms=150)
+client.flush_to_jsonl("my_session.jsonl")
+```
 
-### Backend
-- **FastAPI** - High-performance Python web framework
-- **SQLAlchemy** - Database ORM with PostgreSQL
-- **Google Gemini** - AI-powered agent responses
-- **Pydantic** - Data validation and settings management
-- **Asyncio** - Asynchronous programming for real-time features
+### 3. Verify Your Session
 
-### Frontend
-- **React** - Modern UI library with hooks
-- **React Router** - Client-side routing
-- **Bootstrap 5** - Professional styling framework
-- **Axios** - HTTP client for API communication
+```bash
+python3 verifier/agentops_verify.py my_session.jsonl
+# Output: PASS ✅
+```
 
-### Database & Infrastructure
-- **PostgreSQL** - Primary database for sessions and events
-- **Docker** (optional) - Containerization support
+## Project Structure
 
-## 🚀 Quick Start
+```
+├── CONSTITUTION.md          # Immutable project principles
+├── EVENT_LOG_SPEC.md        # v0.5 - The truth
+├── SCHEMA.md                # Strict payload definitions
+├── verifier/
+│   ├── agentops_verify.py   # Standalone verification tool
+│   ├── jcs.py               # RFC 8785 canonicalization
+│   └── test_vectors/        # Canonical valid/invalid logs
+├── agentops_sdk/
+│   ├── client.py            # Main SDK entry point
+│   ├── events.py            # Strict event types
+│   ├── envelope.py          # Event proposals
+│   └── buffer.py            # Ring buffer + LOG_DROP
+└── examples/
+    └── sdk_demo.py          # Working example
+```
 
-### Prerequisites
-- Python 3.9+
-- Node.js 16+
-- PostgreSQL 12+
-- Google Gemini API key
+## What Makes This Different?
 
-### 1. Clone Repository
-git clone https://github.com/yourusername/agentops-replay-pro.git
-cd agentops-replay-pro
+| Feature          | AgentOps Replay         | Traditional Observability |
+| ---------------- | ----------------------- | ------------------------- |
+| **Immutability** | Hash-chained events     | Mutable logs              |
+| **Verification** | Independent CLI tool    | Trust the vendor          |
+| **Compliance**   | Audit-grade exports     | Dashboard screenshots     |
+| **Authority**    | Server-authoritative    | Client-side only          |
+| **Redaction**    | PII-safe with integrity | Delete = evidence loss    |
 
-text
+## Current Status
 
-### 2. Backend Setup
-cd backend
+**Phase 2 Complete**: Reference Verifier operational ✅  
+**Phase 3 Complete**: Python SDK functional ✅  
+**Phase 4**: Framework integrations (in progress)
 
-Install dependencies
-pip install -r requirements.txt
+## Development
 
-Create environment file
-cp .env.example .env
+### Requirements
 
-Edit .env with your configuration
-nano .env
+- Python 3.11+ (pinned for float determinism)
+- No external dependencies for verification
 
-text
+### Run Tests
 
-**Backend Environment Variables (.env):**
-Database
-POSTGRES_USER=agentops
-POSTGRES_PASSWORD=password
-POSTGRES_DB=agentops_replay
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
+```bash
+# Generate test vectors
+python3 verifier/generator.py
 
-AI Integration
-GEMINI_API_KEY=your_gemini_api_key_here
+# Verify all test cases
+python3 verifier/agentops_verify.py verifier/test_vectors/valid_session.jsonl
+python3 verifier/agentops_verify.py verifier/test_vectors/invalid_hash.jsonl  # Should fail
+```
 
-API Configuration
-SECRET_KEY=your-super-secret-key
-ALLOWED_ORIGINS=["http://localhost:3000"]
+## Roadmap
 
-text
+- [x] Constitutional layer (CONSTITUTION.md)
+- [x] Event Log Spec v0.5
+- [x] Standalone verifier (`agentops-verify`)
+- [x] Python SDK (local authority mode)
+- [ ] LangChain integration
+- [ ] Ingestion service (server authority)
+- [ ] Compliance report generators
+- [ ] Long-term storage backend
 
-### 3. Database Setup
-Create PostgreSQL database
-createdb agentops_replay
+## Contributing
 
-Run migrations (if using Alembic)
-alembic upgrade head
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
 
-Or create tables directly
-python -c "from app.database import engine; from app.models import Base; Base.metadata.create_all(bind=engine)"
+**Key principle**: If a change violates the Constitution or breaks the verifier, it's invalid—even if it "works."
 
-text
+## License
 
-### 4. Start Backend Server
-uvicorn app.main:app --reload
+Apache 2.0 - See [LICENSE](LICENSE)
 
-text
-Backend will be available at: http://localhost:8000
+## Citation
 
-### 5. Frontend Setup
-cd frontend
-
-Install dependencies
-npm install
-
-Start development server
-npm run dev
-
-text
-Frontend will be available at: http://localhost:3000
-
-## 📖 Usage Guide
-
-### 1. Dashboard Overview
-Navigate to the dashboard to see:
-- Total sessions and active agents
-- Event statistics and system health
-- Recent session activity
-
-### 2. Create Agent Sessions
-Via API
-curl -X POST "http://localhost:8000/api/v1/sessions/"
--H "Content-Type: application/json"
--d '{"user_id": 1, "agent_name": "CustomerBot", "status": "running"}'
-
-Via Frontend
-Go to Sessions page → Click "New Session"
-text
-
-### 3. Generate Events
-Automated event generation
-curl -X POST "http://localhost:8000/api/v1/event-generation/generate"
--H "Content-Type: application/json"
--d '{"session_id": 1, "scenario_type": "customer_support"}'
-
-Or use the frontend Event Generator
-text
-
-### 4. Watch Session Replay
-1. Go to **Replay** page
-2. Select a session with events
-3. Click **"Start Replay"** 
-4. Watch events play step-by-step with timeline visualization
-
-### 5. Live AI Agent Demo
-1. Go to **Live Agent** page
-2. Click **"Start Agent Session"**
-3. Chat with the Gemini-powered customer support bot
-4. Open replay in new tab to watch live event logging
-
-### 6. Compliance Monitoring
-1. Go to **Compliance** page  
-2. Select a session to analyze
-3. View policy violations and risk assessment
-4. Generate audit reports
-
-## 🤖 Agent Types Supported
-
-### Customer Support Agent
-- **Tools**: Order lookup, knowledge search, escalation
-- **Use Cases**: E-commerce support, billing inquiries, technical issues
-- **Events**: `customer_message`, `intent_analysis`, `llm_call`, `tool_usage`
-
-### Data Analysis Agent  
-- **Tools**: Data processing, statistical analysis, visualization
-- **Use Cases**: Report generation, data insights, automated analysis
-- **Events**: `data_ingestion`, `processing`, `analysis`, `report_generation`
-
-### Voice Call Agent
-- **Tools**: Speech-to-text, voice synthesis, call management
-- **Use Cases**: Phone support, voice interactions, call center automation
-- **Events**: `speech_recognition`, `voice_synthesis`, `call_management`
-
-## 📡 API Documentation
-
-### Sessions API
-Get all sessions
-GET /api/v1/sessions/
-
-Create session
-POST /api/v1/sessions/
-{
-"user_id": 1,
-"agent_name": "CustomerBot",
-"status": "running"
+```bibtex
+@software{agentops_replay,
+  title = {AgentOps Replay: Immutable Event Logging for AI Agents},
+  author = {Sahir},
+  year = {2026},
+  url = {https://github.com/sahiee-dev/Agentops-replay}
 }
-
-Get session by ID
-GET /api/v1/sessions/{session_id}
-
-text
-
-### Events API
-Get events for session
-GET /api/v1/events/?session_id={session_id}
-
-Create event
-POST /api/v1/events/
-{
-"session_id": 1,
-"event_type": "tool_call",
-"tool_name": "order_lookup",
-"flags": ["external_api"],
-"sequence_number": 1
-}
-
-text
-
-### Live Agent API
-Start agent session
-POST /api/v1/live-agent/start-agent-session
-
-Chat with agent
-POST /api/v1/live-agent/chat
-{
-"message": "I need help with my order",
-"session_id": 123
-}
-
-End agent session
-POST /api/v1/live-agent/end-agent-session/{session_id}
-
-text
-
-### Event Generation API
-Generate realistic events
-POST /api/v1/event-generation/generate
-{
-"session_id": 1,
-"scenario_type": "customer_support" # or "data_analysis", "voice_agent"
-}
-
-Get available scenarios
-GET /api/v1/event-generation/scenarios
-
-text
-
-## 🎯 Demo Scenarios
-
-### Hackathon Demo Flow
-1. **Dashboard Overview**: "Here's our real-time agent monitoring platform"
-2. **Create Session**: "Let me start a new customer support agent"
-3. **Live Agent Chat**: "Watch as I interact with our AI customer support"
-4. **Real-time Replay**: "See every decision the agent makes, live"
-5. **Compliance Check**: "Automatically detect policy violations and assess risk"
-
-### Sample Demo Questions
-- "I need help with my order status"
-- "I want to request a refund for my recent purchase"  
-- "My account login isn't working properly"
-- "How do I update my billing information?"
-
-## 🏆 Hackathon Highlights
-
-### Problem Solved
-**Enterprise AI Agent Observability** - Making AI agent behavior transparent, debuggable, and compliant for safe enterprise deployment.
-
-### Technical Achievement
-- ✅ **Full-stack implementation** with professional UI
-- ✅ **Real AI integration** with Google Gemini
-- ✅ **Live event capture** and replay system
-- ✅ **Compliance monitoring** with automated violation detection
-- ✅ **Production-ready architecture** with proper database design
-
-### Business Impact
-- **Faster Debugging**: Reduce agent troubleshooting from hours to minutes
-- **Regulatory Compliance**: Automated audit trails for enterprise governance  
-- **Risk Mitigation**: Early detection of agent behavior anomalies
-- **Developer Productivity**: Clear visibility into agent decision-making
-
-## 🔮 Future Roadmap
-
-- [ ] **Multi-tenant Support** - Enterprise customer isolation
-- [ ] **Advanced Analytics** - Agent performance metrics and insights
-- [ ] **Integration SDK** - Easy integration with existing agent frameworks
-- [ ] **Alerting System** - Real-time notifications for policy violations
-- [ ] **Export Capabilities** - Audit report generation and data export
-- [ ] **Deployment Automation** - Docker compose and Kubernetes support
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **Google Gemini** for AI-powered agent responses
-- **FastAPI** community for excellent documentation
-- **React** ecosystem for modern frontend development
-- **PostgreSQL** for reliable data persistence
+```
 
 ---
 
-**Built for the AI Agent Observability hackathon** 🚀
-
-> *"Turning opaque AI workflows into transparent, reproducible processes for safer enterprise AI deployment"*
+**Built for production. Designed for trust.**

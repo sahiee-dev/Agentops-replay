@@ -1,0 +1,159 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AgentOps Replay Event Log Schema v0.1",
+  "description": "Validation schema for AgentOps event payloads. Does not include envelope fields.",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/definitions/SessionStart" },
+    { "$ref": "#/definitions/SessionEnd" },
+    { "$ref": "#/definitions/ModelRequest" },
+    { "$ref": "#/definitions/ModelResponse" },
+    { "$ref": "#/definitions/ToolCall" },
+    { "$ref": "#/definitions/ToolResult" },
+    { "$ref": "#/definitions/DecisionTrace" },
+    { "$ref": "#/definitions/Error" },
+    { "$ref": "#/definitions/Annotation" }
+  ],
+  "definitions": {
+    "SessionStart": {
+      "type": "object",
+      "required": [
+        "agent_id",
+        "environment",
+        "framework",
+        "framework_version",
+        "sdk_version"
+      ],
+      "properties": {
+        "agent_id": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "environment": { "type": "string", "enum": ["prod", "staging", "dev"] },
+        "framework": { "type": "string" },
+        "framework_version": { "type": "string" },
+        "sdk_version": { "type": "string" },
+        "system_prompt_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "SessionEnd": {
+      "type": "object",
+      "required": ["status", "duration_ms"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["success", "failure", "timeout", "cancelled"]
+        },
+        "reason": { "type": "string" },
+        "duration_ms": { "type": "integer", "minimum": 0 },
+        "total_cost_usd": { "type": "number", "minimum": 0 }
+      }
+    },
+    "ToolCall": {
+      "type": "object",
+      "required": ["tool_name", "args"],
+      "properties": {
+        "tool_name": { "type": "string" },
+        "tool_id": { "type": "string" },
+        "args": { "type": "object" },
+        "timeout_ms": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "ToolResult": {
+      "type": "object",
+      "required": ["tool_name", "result", "status", "duration_ms"],
+      "properties": {
+        "tool_name": { "type": "string" },
+        "tool_id": { "type": "string" },
+        "result": { "type": ["object", "string", "number", "boolean", "null"] },
+        "status": { "type": "string", "enum": ["success", "error"] },
+        "duration_ms": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "ModelRequest": {
+      "type": "object",
+      "required": ["model", "provider", "messages"],
+      "properties": {
+        "model": { "type": "string" },
+        "provider": { "type": "string" },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["role", "content"],
+            "properties": {
+              "role": {
+                "type": "string",
+                "enum": ["system", "user", "assistant", "tool"]
+              },
+              "content": { "type": "string" },
+              "name": { "type": "string" }
+            }
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "temperature": { "type": "number" },
+            "top_p": { "type": "number" },
+            "max_tokens": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "ModelResponse": {
+      "type": "object",
+      "required": ["model", "content", "role", "finish_reason"],
+      "properties": {
+        "model": { "type": "string" },
+        "content": { "type": "string" },
+        "role": { "type": "string", "const": "assistant" },
+        "finish_reason": {
+          "type": "string",
+          "enum": ["stop", "length", "tool_calls", "content_filter"]
+        },
+        "usage": {
+          "type": "object",
+          "properties": {
+            "prompt_tokens": { "type": "integer" },
+            "completion_tokens": { "type": "integer" },
+            "total_tokens": { "type": "integer" }
+          }
+        },
+        "raw_response": { "type": "object" }
+      }
+    },
+    "DecisionTrace": {
+      "type": "object",
+      "required": ["decision_id", "inputs", "outputs", "justification"],
+      "properties": {
+        "decision_id": { "type": "string" },
+        "inputs": { "type": "object" },
+        "outputs": { "type": "object" },
+        "justification": { "type": "string" },
+        "policy_version": { "type": "string" }
+      }
+    },
+    "Error": {
+      "type": "object",
+      "required": ["error_type", "message", "fatal"],
+      "properties": {
+        "error_type": { "type": "string" },
+        "message": { "type": "string" },
+        "stack_trace": { "type": "string" },
+        "fatal": { "type": "boolean" }
+      }
+    },
+    "Annotation": {
+      "type": "object",
+      "required": ["annotator_id", "annotation_type", "content"],
+      "properties": {
+        "annotator_id": { "type": "string" },
+        "annotation_type": {
+          "type": "string",
+          "enum": ["flag", "comment", "rating"]
+        },
+        "content": { "type": "object" },
+        "target_event_id": { "type": "string" }
+      }
+    }
+  }
+}
