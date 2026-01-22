@@ -96,13 +96,10 @@ def canonicalize(data) -> bytes:
         return _float_to_string(data).encode('utf-8')
     
     if isinstance(data, str):
-        # Strings: UTF-8 NFC?
-        # Python 3 strings are Unicode. json.dumps handles escaping.
-        # JCS: minimal escaping.
-        # Check standard json dumps escaping vs JCS requirements.
-        # JCS: Escape only " and \ and control chars U+0000 to U+001F.
-        # Python json.dumps (default) escapes / as \/ optionally? No, usually not.
-        return json.dumps(data, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+        # Strings: UTF-8 NFC normalization (Spec v0.5 requirement)
+        import unicodedata
+        normalized = unicodedata.normalize('NFC', data)
+        return json.dumps(normalized, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
     
     if isinstance(data, list):
         # Array: preserve order

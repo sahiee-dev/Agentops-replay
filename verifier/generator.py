@@ -7,7 +7,7 @@ import time
 import uuid
 import jcs
 
-SPEC_VERSION = "v0.4"
+SPEC_VERSION = "v0.5"
 SIGNED_FIELDS = [
     "event_id", 
     "session_id", 
@@ -17,6 +17,8 @@ SIGNED_FIELDS = [
     "payload_hash", 
     "prev_event_hash"
 ]
+
+REQUIRED_SESSION_START = ["agent_id", "environment", "framework", "framework_version", "sdk_version"]
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -61,7 +63,14 @@ def generate_valid_session():
     prev_hash = None
     
     # 1. Start
-    e1 = create_event(session_id, 0, None, "SESSION_START", {"agent_id": "test-agent", "environment": "dev"})
+    e1 = create_event(session_id, 0, None, "SESSION_START", {
+        "agent_id": "test-agent",
+        "environment": "dev",
+        "framework": "test-framework",
+        "framework_version": "1.0.0",
+        "sdk_version": "0.1.0",
+        "tags": ["verification-test"]
+    })
     events.append(e1)
     prev_hash = e1["event_hash"]
 

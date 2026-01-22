@@ -4,7 +4,7 @@ agentops_sdk/events.py - Strict Event Definitions from Spec v0.4
 from enum import Enum
 from typing import Dict, Any, Optional
 
-SCHEMA_VER = "v0.4"
+SCHEMA_VER = "v0.5"
 
 class EventType(str, Enum):
     SESSION_START = "SESSION_START"

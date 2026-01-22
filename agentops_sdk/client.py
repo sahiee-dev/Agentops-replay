@@ -42,19 +42,20 @@ class AgentOpsClient:
         # 1. Strict Validation
         validate_payload(event_type, payload)
         
-        # 2. Check for Drop Injection
-        dropped = self.buffer.get_dropped_count()
+        # 2. Check for Drop Injection  
+        dropped = self.buffer.dropped_count  # Read but don't reset yet
         if dropped > 0:
-            # We must emit LOG_DROP *before* this event? 
-            # Or as part of flow. 
-            # If we emit it now, we increment sequence.
             drop_payload = {
                 "dropped_events": dropped,
                 "reason": "buffer_overflow"
             }
-            # Recursive call? Careful.
-            # Local construct proposal directly to avoid recursion loops logic
-            self._emit_proposal(EventType.LOG_DROP, drop_payload)
+            try:
+                self._emit_proposal(EventType.LOG_DROP, drop_payload)
+                # Only reset after successful emission
+                self.buffer.dropped_count = 0
+            except Exception:
+                # If emission fails, preserve drop count for next attempt
+                raise
             
         # 3. Emit Proposal
         self._emit_proposal(event_type, payload)
@@ -76,17 +77,20 @@ class AgentOpsClient:
             # In local mode, we trust our own hash
             self.prev_hash = proposal.event_hash
         else:
-            # In server mode, we don't know the hash yet.
-            # Next event prev_hash is NULL (hint)? Or we guess?
-            # Spec says: "prev_event_hash: SHA-256(previous_event_hash)"
-            # If we don't have it, we send null? 
-            # Or we compute the proposal hash and send that as hint?
-            # We compute proposal hash (payload_hash is done).
-            # But envelope hash requires finalized fields.
-            # So hints are likely None or client-side approximation.
-            # Let's use client-side approximation as hint.
-            # However, `create_proposal` returns `event_hash=None` unless local_authority.
-            pass
+            # In server mode, SDK still computes hash as hint for server validation
+            # Server may re-stamp, but SDK tracks its own chain for integrity
+            signed_obj = {
+                "event_id": proposal.event_id,
+                "session_id": proposal.session_id,
+                "sequence_number": proposal.sequence_number,
+                "timestamp_wall": proposal.timestamp_wall,
+                "event_type": proposal.event_type,
+                "payload_hash": proposal.payload_hash,
+                "prev_event_hash": proposal.prev_event_hash
+            }
+            import hashlib
+            canonical_env = jcs.canonicalize(signed_obj)
+            self.prev_hash = hashlib.sha256(canonical_env).hexdigest()
             
         self.buffer.append(proposal)
 

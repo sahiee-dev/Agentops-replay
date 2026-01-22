@@ -15,7 +15,7 @@ from typing import Dict, Any, List, Optional
 import jcs  # Local module
 
 # --- Constants ---
-SPEC_VERSION = "v0.4"
+SPEC_VERSION = "v0.5"
 SIGNED_FIELDS = [
     "event_id", 
     "session_id", 
@@ -84,7 +84,7 @@ def verify_session(events: List[Dict[str, Any]]) -> Dict[str, Any]:
             
             # Check Session Consistency
             if event.get("session_id") != session_id:
-                raise VerificationError("SESSION_MISMATCH", f"Event session_id {event.get('session_id')} matches session {session_id}")
+                raise VerificationError("SESSION_MISMATCH", f"Event session_id {event.get('session_id')} does not match session {session_id}")
 
             # B. Canonicalization & Payload Hash
             payload = event.get("payload")
@@ -122,15 +122,10 @@ def verify_session(events: List[Dict[str, Any]]) -> Dict[str, Any]:
             # Calculate current event hash
             # Create object with ONLY signed fields
             signed_obj = {k: event[k] for k in SIGNED_FIELDS if k in event}
-            # Spec v0.4: "The object MUST contain ONLY the signed fields."
-            # Missing signed fields is a validation error? Yes.
+            # Spec v0.5: All signed fields must be present (prev_event_hash can be null but must exist)
             for f in SIGNED_FIELDS:
-                if f not in signed_obj:
-                     # Allow prev_event_hash to be None -> null in valid JSON?
-                     # Spec says "OR null". JCS handles None as null.
-                     # But key must be present?
-                     # Spec: "string prev_event_hash = 10" implies presence.
-                     pass 
+                if f not in event:
+                    raise VerificationError("MISSING_SIGNED_FIELD", f"Required signed field missing: {f}") 
 
             canonical_envelope = jcs.canonicalize(signed_obj)
             calculated_hash = sha256(canonical_envelope)

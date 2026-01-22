@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "AgentOps Replay Event Log Schema v0.1",
+  "title": "AgentOps Replay Event Log Schema v0.5",
   "description": "Validation schema for AgentOps event payloads. Does not include envelope fields.",
   "type": "object",
   "oneOf": [
@@ -10,20 +10,17 @@
     { "$ref": "#/definitions/ModelResponse" },
     { "$ref": "#/definitions/ToolCall" },
     { "$ref": "#/definitions/ToolResult" },
+    { "$ref": "#/definitions/AgentStateSnapshot" },
     { "$ref": "#/definitions/DecisionTrace" },
     { "$ref": "#/definitions/Error" },
-    { "$ref": "#/definitions/Annotation" }
+    { "$ref": "#/definitions/Annotation" },
+    { "$ref": "#/definitions/ChainSeal" },
+    { "$ref": "#/definitions/LogDrop" }
   ],
   "definitions": {
     "SessionStart": {
       "type": "object",
-      "required": [
-        "agent_id",
-        "environment",
-        "framework",
-        "framework_version",
-        "sdk_version"
-      ],
+      "required": ["agent_id", "environment", "framework", "framework_version", "sdk_version"],
       "properties": {
         "agent_id": { "type": "string" },
         "tags": { "type": "array", "items": { "type": "string" } },
@@ -38,10 +35,7 @@
       "type": "object",
       "required": ["status", "duration_ms"],
       "properties": {
-        "status": {
-          "type": "string",
-          "enum": ["success", "failure", "timeout", "cancelled"]
-        },
+        "status": { "type": "string", "enum": ["success", "failure", "timeout", "cancelled"] },
         "reason": { "type": "string" },
         "duration_ms": { "type": "integer", "minimum": 0 },
         "total_cost_usd": { "type": "number", "minimum": 0 }
@@ -54,6 +48,7 @@
         "tool_name": { "type": "string" },
         "tool_id": { "type": "string" },
         "args": { "type": "object" },
+        "args_hash": { "type": "string", "description": "SHA-256 hash if args redacted" },
         "timeout_ms": { "type": "integer", "minimum": 0 }
       }
     },
@@ -64,6 +59,7 @@
         "tool_name": { "type": "string" },
         "tool_id": { "type": "string" },
         "result": { "type": ["object", "string", "number", "boolean", "null"] },
+        "result_hash": { "type": "string", "description": "SHA-256 hash if result redacted" },
         "status": { "type": "string", "enum": ["success", "error"] },
         "duration_ms": { "type": "integer", "minimum": 0 }
       }
@@ -80,11 +76,9 @@
             "type": "object",
             "required": ["role", "content"],
             "properties": {
-              "role": {
-                "type": "string",
-                "enum": ["system", "user", "assistant", "tool"]
-              },
+              "role": { "type": "string", "enum": ["system", "user", "assistant", "tool"] },
               "content": { "type": "string" },
+              "content_hash": { "type": "string", "description": "SHA-256 hash if content is [REDACTED]" },
               "name": { "type": "string" }
             }
           }
@@ -105,11 +99,9 @@
       "properties": {
         "model": { "type": "string" },
         "content": { "type": "string" },
+        "content_hash": { "type": "string", "description": "SHA-256 hash if content is [REDACTED]" },
         "role": { "type": "string", "const": "assistant" },
-        "finish_reason": {
-          "type": "string",
-          "enum": ["stop", "length", "tool_calls", "content_filter"]
-        },
+        "finish_reason": { "type": "string", "enum": ["stop", "length", "tool_calls", "content_filter"] },
         "usage": {
           "type": "object",
           "properties": {
@@ -117,8 +109,14 @@
             "completion_tokens": { "type": "integer" },
             "total_tokens": { "type": "integer" }
           }
-        },
-        "raw_response": { "type": "object" }
+        }
+      }
+    },
+    "AgentStateSnapshot": {
+      "type": "object",
+      "description": "Optional checkpoint of agent state",
+      "properties": {
+        "state": { "type": "object" }
       }
     },
     "DecisionTrace": {
@@ -147,12 +145,26 @@
       "required": ["annotator_id", "annotation_type", "content"],
       "properties": {
         "annotator_id": { "type": "string" },
-        "annotation_type": {
-          "type": "string",
-          "enum": ["flag", "comment", "rating"]
-        },
+        "annotation_type": { "type": "string", "enum": ["flag", "comment", "rating"] },
         "content": { "type": "object" },
         "target_event_id": { "type": "string" }
+      }
+    },
+    "ChainSeal": {
+      "type": "object",
+      "required": ["final_event_hash"],
+      "description": "Server or SDK (local mode) generated seal",
+      "properties": {
+        "final_event_hash": { "type": "string" }
+      }
+    },
+    "LogDrop": {
+      "type": "object",
+      "required": ["dropped_events", "reason"],
+      "description": "Data loss marker when buffer overflows",
+      "properties": {
+        "dropped_events": { "type": "integer", "minimum": 1 },
+        "reason": { "type": "string", "enum": ["buffer_overflow", "shutdown", "unknown"] }
       }
     }
   }
