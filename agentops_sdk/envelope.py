@@ -9,19 +9,12 @@ import json
 import uuid
 import datetime
 
-# We need JCS for local authority signatures. 
-# In a real package we'd vendor it properly or depend on it.
-# For now, we import from verifier directory if available (dev mode) or minimal reimplementation.
+# We need JCS for local authority signatures.
+# Vendoring JCS into SDK for standalone distribution
 try:
-    import sys
-    import os
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'verifier')))
-    import jcs
+    from . import jcs
 except ImportError:
-    # Minimal fallback or fail? 
-    # For this exercise, we assume the verifier/jcs.py is in path or we duplicate.
-    # Duplicating minimal for standalone safety.
-    raise ImportError("Verifier JCS module not found. In dev, ensure verifier/ is in path.")
+    import jcs  # Fallback if installed as package
 
 @dataclass
 class ProposedEvent:
@@ -65,7 +58,8 @@ def create_proposal(
     
     # 2. Envelope
     ts_wall = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-    ts_mono = 0 # Todo: monotonic clock
+    import time
+    ts_mono = int(time.monotonic() * 1000)  # Convert to milliseconds
     
     proposal = ProposedEvent(
         event_id=str(uuid.uuid4()), # UUID7 preferred

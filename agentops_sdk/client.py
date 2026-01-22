@@ -101,8 +101,8 @@ class AgentOpsClient:
     def end_session(self, status: str, duration_ms: int):
         self.record(EventType.SESSION_END, {"status": status, "duration_ms": duration_ms})
         
-        if self.local_authority:
-            # Emit CHAIN_SEAL
+        if self.local_authority and self.prev_hash is not None:
+            # Emit CHAIN_SEAL only if we have a valid prev_hash
             validate_payload(EventType.CHAIN_SEAL, {"final_event_hash": self.prev_hash})
             self._emit_proposal(EventType.CHAIN_SEAL, {"final_event_hash": self.prev_hash})
 

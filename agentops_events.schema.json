@@ -48,7 +48,10 @@
         "tool_name": { "type": "string" },
         "tool_id": { "type": "string" },
         "args": { "type": "object" },
-        "args_hash": { "type": "string", "description": "SHA-256 hash if args redacted" },
+        "args_hash": { 
+          "type": "string",
+          "description": "SHA-256 hash required when args is redacted"
+        },
         "timeout_ms": { "type": "integer", "minimum": 0 }
       }
     },
@@ -59,7 +62,10 @@
         "tool_name": { "type": "string" },
         "tool_id": { "type": "string" },
         "result": { "type": ["object", "string", "number", "boolean", "null"] },
-        "result_hash": { "type": "string", "description": "SHA-256 hash if result redacted" },
+        "result_hash": { 
+          "type": "string",
+          "description": "SHA-256 hash required when result is redacted"
+        },
         "status": { "type": "string", "enum": ["success", "error"] },
         "duration_ms": { "type": "integer", "minimum": 0 }
       }
@@ -78,7 +84,10 @@
             "properties": {
               "role": { "type": "string", "enum": ["system", "user", "assistant", "tool"] },
               "content": { "type": "string" },
-              "content_hash": { "type": "string", "description": "SHA-256 hash if content is [REDACTED]" },
+              "content_hash": { 
+                "type": "string",
+                "description": "SHA-256 hash required when content is [REDACTED]"
+              },
               "name": { "type": "string" }
             }
           }
@@ -99,7 +108,10 @@
       "properties": {
         "model": { "type": "string" },
         "content": { "type": "string" },
-        "content_hash": { "type": "string", "description": "SHA-256 hash if content is [REDACTED]" },
+        "content_hash": { 
+          "type": "string",
+          "description": "SHA-256 hash required when content is [REDACTED]"
+        },
         "role": { "type": "string", "const": "assistant" },
         "finish_reason": { "type": "string", "enum": ["stop", "length", "tool_calls", "content_filter"] },
         "usage": {
@@ -116,7 +128,8 @@
       "type": "object",
       "description": "Optional checkpoint of agent state",
       "properties": {
-        "state": { "type": "object" }
+        "state": { "type": "object" },
+        "checkpoint_id": { "type": "string" }
       }
     },
     "DecisionTrace": {
@@ -153,7 +166,7 @@
     "ChainSeal": {
       "type": "object",
       "required": ["final_event_hash"],
-      "description": "Server or SDK (local mode) generated seal",
+      "description": "Server or SDK (local mode) generated integrity seal",
       "properties": {
         "final_event_hash": { "type": "string" }
       }
@@ -161,7 +174,7 @@
     "LogDrop": {
       "type": "object",
       "required": ["dropped_events", "reason"],
-      "description": "Data loss marker when buffer overflows",
+      "description": "Data loss marker emitted when buffer overflows",
       "properties": {
         "dropped_events": { "type": "integer", "minimum": 1 },
         "reason": { "type": "string", "enum": ["buffer_overflow", "shutdown", "unknown"] }
