@@ -60,6 +60,7 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
         "sealed": False,
         "authority": "unknown",
         "evidence_class": "UNKNOWN_EVIDENCE",
+        "partial_reasons": [],  # Why session is PARTIAL_AUTHORITATIVE
         "replay_fingerprint": None,
         "event_count": len(events),
         "complete": False,
@@ -204,8 +205,20 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
             })
              break
 
-    # Determine session completeness
+    # Determine session completeness and partial reasons
     has_session_end = any(e.get("event_type") == "SESSION_END" for e in events)
+    
+    # Track why session might be partial
+    if report["authority"] == "server":
+        if not report["sealed"]:
+            report["partial_reasons"].append("UNSEALED_SESSION")
+        if not has_session_end:
+            report["partial_reasons"].append("MISSING_SESSION_END")
+        if report["total_drops"] > 0:
+            report["partial_reasons"].append("LOG_DROP_PRESENT")
+        if report["status"] == "FAIL":
+            report["partial_reasons"].append("CHAIN_VALIDATION_FAILED")
+    
     report["complete"] = has_session_end and report["status"] == "PASS" and report["total_drops"] == 0
     
     # Classify evidence
