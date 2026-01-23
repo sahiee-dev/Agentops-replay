@@ -64,7 +64,8 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
         "replay_fingerprint": None,
         "event_count": len(events),
         "complete": False,
-        "total_drops": 0
+        "total_drops": 0,
+        "partial": False
     }
 
     if not events:
@@ -182,6 +183,7 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
             if event["event_type"] == "LOG_DROP":
                 # Always degrade evidence class if LOG_DROP is present
                 report["partial_reasons"].append("LOG_DROP_PRESENT")
+                report["partial"] = True
                 
                 drop_payload = event.get("payload", {})
                 dropped_count = drop_payload.get("dropped_count")
@@ -232,7 +234,7 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
         if report["status"] == "FAIL":
             report["partial_reasons"].append("CHAIN_VALIDATION_FAILED")
     
-    report["complete"] = has_session_end and report["status"] == "PASS" and report["total_drops"] == 0
+    report["complete"] = has_session_end and report["status"] == "PASS" and report["total_drops"] == 0 and not report["partial"]
     
     # Classify evidence
     # Classify evidence
