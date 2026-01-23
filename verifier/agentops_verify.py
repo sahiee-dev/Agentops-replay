@@ -178,10 +178,23 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
                     raise VerificationError("INVALID_SEAL", f"CHAIN_SEAL authority '{event.get('chain_authority')}' is not valid (must be 'server' or 'sdk')")
             
             # F. Track LOG_DROP events
+            # F. Track LOG_DROP events
             if event["event_type"] == "LOG_DROP":
+                # Always degrade evidence class if LOG_DROP is present
+                report["partial_reasons"].append("LOG_DROP_PRESENT")
+                
                 drop_payload = event.get("payload", {})
-                dropped_count = drop_payload.get("dropped_count", 0)
-                report["total_drops"] += dropped_count
+                dropped_count = drop_payload.get("dropped_count")
+                
+                if isinstance(dropped_count, int) and dropped_count > 0:
+                     report["total_drops"] += dropped_count
+                else:
+                    # Invalid/missing count still degrades evidence, but we log warning
+                    report["warnings"] = report.get("warnings", [])
+                    report["warnings"].append({
+                        "type": "INVALID_DROP_COUNT",
+                        "message": f"LOG_DROP at seq {i} has invalid dropped_count: {dropped_count}"
+                    })
 
 
         except VerificationError as e:
@@ -222,11 +235,19 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
     report["complete"] = has_session_end and report["status"] == "PASS" and report["total_drops"] == 0
     
     # Classify evidence
-    evidence_class = classify_evidence(
-        authority=report["authority"],
-        sealed=report["sealed"],
-        complete=report["complete"]
-    )
+    # Classify evidence
+    if report["status"] == "PASS":
+        evidence_class = classify_evidence(
+            authority=report["authority"],
+            sealed=report["sealed"],
+            complete=report["complete"]
+        )
+    else:
+        # Failed verification cannot be authoritative
+        evidence_class = "NON_AUTHORITATIVE_EVIDENCE"
+        if report["status"] == "FAIL":
+             report["partial_reasons"].append("VERIFICATION_FAILED")
+
     report["evidence_class"] = evidence_class
     
     # Policy enforcement

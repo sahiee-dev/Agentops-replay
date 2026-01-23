@@ -25,7 +25,7 @@ message EventEnvelope {
   uint64 timestamp_monotonic = 5;
   EventType event_type = 6;
   string source_sdk_ver = 7;
-  string schema_ver = 8;        // "v0.6" (MUST match ELS version)
+  string schema_ver = 8;        // "v0.6" (Canonical; "v0.5" accepted for legacy re-interpretation)
   string payload_hash = 9;
   string prev_event_hash = 10;
   string event_hash = 11;
@@ -118,7 +118,7 @@ enum EventType {
 ### 2.1 CHAIN_SEAL Authority Rules
 
 - **Server Mode:** Server MUST emit `CHAIN_SEAL` for `AUTHORITATIVE_EVIDENCE` status
-- **Local Mode:** SDK MAY emit` CHAIN_SEAL` if `chain_authority == "sdk"` for entire session
+- **Local Mode:** SDK MAY emit `CHAIN_SEAL` if `chain_authority == "sdk"` for entire session
 - **Mixed authority sessions:** INVALID, MUST fail verification
 
 **Required CHAIN_SEAL Payload (Server Authority):**
@@ -159,7 +159,7 @@ All three fields are REQUIRED for server authority `CHAIN_SEAL`. Missing fields 
 **Replay Behavior:**
 
 - Replay MUST continue after LOG_DROP
-- Replay MUST mark the session as `INCOMPLETE_EVIDENCE`
+- Replay MUST mark the session as `PARTIAL_AUTHORITATIVE_EVIDENCE`
 - Auditors MUST be shown cumulative drop count
 
 **SESSION_END Behavior:**

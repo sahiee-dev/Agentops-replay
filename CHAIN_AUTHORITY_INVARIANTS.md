@@ -102,7 +102,7 @@ The SDK MUST NOT contain logic to emit `CHAIN_SEAL` events in server authority m
    - Explicitly flagged, cannot be mistaken for production
 
 **Cryptographic Guarantee:**
-SDK cannot forge `ingestion_service_id` because it never receives this value from the server. Future versions with signing will make this cryptographically unforgeable.
+The SDK MAY fabricate `ingestion_service_id`, but without a valid cryptographic signature (v1.1+), the server authority claim is unverifiable. The `CHAIN_SEAL` metadata alone is a semantic signal, not a cryptographic proof, until signing is strictly enforced.
 
 ---
 
