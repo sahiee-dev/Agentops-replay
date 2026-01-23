@@ -255,7 +255,7 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
     
     # Policy enforcement
     policy = policy or {}
-    if policy.get("reject_local_authority", False) and evidence_class == "NON_AUTHORITATIVE_EVIDENCE":
+    if policy.get("reject_local_authority", False) and report["authority"] == "sdk":
         report["status"] = "FAIL"
         report["violations"].append({
             "type": "POLICY_VIOLATION",
