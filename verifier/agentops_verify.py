@@ -230,7 +230,8 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
         if not has_session_end:
             report["partial_reasons"].append("MISSING_SESSION_END")
         if report["total_drops"] > 0:
-            report["partial_reasons"].append("LOG_DROP_PRESENT")
+            if "LOG_DROP_PRESENT" not in report["partial_reasons"]:
+                report["partial_reasons"].append("LOG_DROP_PRESENT")
         if report["status"] == "FAIL":
             report["partial_reasons"].append("CHAIN_VALIDATION_FAILED")
     
