@@ -71,9 +71,11 @@ python3 verifier/agentops_verify.py my_session.jsonl
 ## Project Structure
 
 ```
-├── CONSTITUTION.md          # Immutable project principles
-├── EVENT_LOG_SPEC.md        # v0.5 - The truth
-├── SCHEMA.md                # Strict payload definitions
+├── CONSTITUTION.md                  # Immutable project principles
+├── CHAIN_AUTHORITY_INVARIANTS.md    # v1.0 - Cryptographic authority separation
+├── FAILURE_MODES.md                 # v1.0 - Component failure semantics
+├── EVENT_LOG_SPEC.md                # v0.6 - The truth
+├── SCHEMA.md                        # Strict payload definitions
 ├── verifier/
 │   ├── agentops_verify.py   # Standalone verification tool
 │   ├── jcs.py               # RFC 8785 canonicalization
@@ -99,9 +101,22 @@ python3 verifier/agentops_verify.py my_session.jsonl
 
 ## Current Status
 
-**Phase 2 Complete**: Reference Verifier operational ✅  
 **Phase 3 Complete**: Python SDK functional ✅  
-**Phase 4**: Framework integrations (in progress)
+**Phase 3.5 In Progress**: Constitutional Hardening (Day-2) 🟡  
+**Status**: Yellow (not green) - Awaiting failure mode validation
+
+### Recent Updates (Day-2)
+
+- Event Log Spec bumped to **v0.6**
+- Added **three-state evidence classification**:
+  - `AUTHORITATIVE_EVIDENCE` (compliance-grade)
+  - `PARTIAL_AUTHORITATIVE_EVIDENCE` (incident analysis)
+  - `NON_AUTHORITATIVE_EVIDENCE` (testing only)
+- Cryptographic authority separation via CHAIN_SEAL enforcement
+- Comprehensive failure mode documentation
+- Verifier supports policy-based rejection
+
+**Next**: Phase 4 (LangChain Integration) after Day-2 validation
 
 ## Development
 
@@ -124,9 +139,12 @@ python3 verifier/agentops_verify.py verifier/test_vectors/invalid_hash.jsonl  # 
 ## Roadmap
 
 - [x] Constitutional layer (CONSTITUTION.md)
-- [x] Event Log Spec v0.5
+- [x] Chain authority invariants (CHAIN_AUTHORITY_INVARIANTS.md)
+- [x] Failure mode documentation (FAILURE_MODES.md)
+- [x] Event Log Spec v0.6
 - [x] Standalone verifier (`agentops-verify`)
 - [x] Python SDK (local authority mode)
+- [ ] Day-2 validation complete
 - [ ] LangChain integration
 - [ ] Ingestion service (server authority)
 - [ ] Compliance report generators
