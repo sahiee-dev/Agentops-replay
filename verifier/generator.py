@@ -12,7 +12,7 @@ except ImportError:
     # Fallback for package-relative import
     from . import jcs
 
-SPEC_VERSION = "v0.5"
+SPEC_VERSION = "v0.6"
 SIGNED_FIELDS = [
     "event_id", 
     "session_id", 
@@ -84,9 +84,22 @@ def generate_valid_session():
     events.append(e2)
     prev_hash = e2["event_hash"]
 
-    # 3. Seal
-    e3 = create_event(session_id, 2, prev_hash, "CHAIN_SEAL", {"final_event_hash": prev_hash})
+    # 3. Session End
+    e3 = create_event(session_id, 2, prev_hash, "SESSION_END", {
+        "status": "success",
+        "duration_ms": 200
+    })
     events.append(e3)
+    prev_hash = e3["event_hash"]
+
+    # 4. Seal with required server authority metadata (Spec v0.6)
+    e4 = create_event(session_id, 3, prev_hash, "CHAIN_SEAL", {
+        "final_event_hash": prev_hash,
+        "ingestion_service_id": "ingestion-svc-prod-001",
+        "seal_timestamp": "2023-10-27T10:00:02Z",
+        "session_digest": prev_hash[:16]  # Short digest for session summary
+    })
+    events.append(e4)
 
     return events
 
