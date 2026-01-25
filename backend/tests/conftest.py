@@ -16,7 +16,11 @@ from app.database import Base, engine
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_database():
-    """Create test database tables before tests."""
+    """
+    Set up a fresh test database schema for the test session and remove it afterward.
+    
+    This fixture ensures the database schema is recreated before tests run by dropping all existing tables and creating them from the metadata, yields control to tests, and drops all tables again after the test session completes. Intended to be used as a session-scoped, autouse pytest fixture to provide a clean schema for the entire test session.
+    """
     # Drop all tables
     Base.metadata.drop_all(bind=engine)
     
@@ -31,7 +35,11 @@ def setup_test_database():
 
 @pytest.fixture(autouse=True)
 def clean_tables():
-    """Clean tables between tests."""
+    """
+    Truncate specific database tables to provide a clean state before each test.
+    
+    This fixture clears the `chain_seals`, `event_chains`, and `sessions` tables and commits the transaction, ensuring tests run against an empty set of rows. It yields control to the test and closes the database session afterwards.
+    """
     from app.database import SessionLocal
     
     db = SessionLocal()

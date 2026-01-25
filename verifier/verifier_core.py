@@ -28,27 +28,27 @@ SIGNED_FIELDS = [
 
 
 def sha256(data: bytes) -> str:
-    """Compute SHA-256 hash and return hex digest."""
+    """
+    Compute the SHA-256 hexadecimal digest of the input data.
+    
+    Returns:
+        hex_digest (str): Hexadecimal SHA-256 digest of the provided data.
+    """
     return hashlib.sha256(data).hexdigest()
 
 
 def compute_payload_hash(payload: Dict[str, Any]) -> str:
     """
-    Compute canonical hash of event payload per RFC 8785.
+    Compute the canonical SHA-256 hash of an event payload using RFC 8785 canonical JSON.
     
-    CRITICAL: This function MUST produce identical output in:
-    - SDK (for local authority mode)
-    - Ingestion Service (for server authority mode)
-    - Verifier (for verification)
+    Parameters:
+        payload (Dict[str, Any]): Event payload to hash.
     
-    Args:
-        payload: Event payload dictionary
-        
     Returns:
-        SHA-256 hex digest of canonical JSON
-        
+        str: SHA-256 hexadecimal digest of the payload's RFC 8785 canonical JSON representation.
+    
     Raises:
-        ValueError: If payload cannot be canonicalized
+        ValueError: If the payload cannot be canonicalized.
     """
     try:
         canonical_bytes = jcs.canonicalize(payload)
@@ -88,13 +88,13 @@ def compute_event_hash(event: Dict[str, Any]) -> str:
 
 def verify_event_hash(event: Dict[str, Any]) -> bool:
     """
-    Verify that event_hash matches computed hash of signed fields.
+    Validate that the event's `event_hash` equals the SHA-256 hash computed over its signed fields.
     
-    Args:
-        event: Event envelope with event_hash field
-        
+    Parameters:
+        event (dict): Event envelope containing the signed fields and an `event_hash` claim.
+    
     Returns:
-        True if hash is valid, False otherwise
+        `true` if the claimed `event_hash` matches the computed hash, `false` otherwise.
     """
     try:
         computed = compute_event_hash(event)
@@ -106,13 +106,13 @@ def verify_event_hash(event: Dict[str, Any]) -> bool:
 
 def verify_payload_hash(event: Dict[str, Any]) -> bool:
     """
-    Verify that payload_hash matches computed hash of payload.
+    Verify that an event's `payload_hash` equals the SHA-256 hash of its `payload` computed using RFC 8785 canonicalization.
     
-    Args:
-        event: Event envelope with payload and payload_hash
-        
+    Parameters:
+        event (Dict[str, Any]): Event envelope expected to contain `payload` and `payload_hash`.
+    
     Returns:
-        True if hash is valid, False otherwise
+        `True` if the computed payload hash matches `payload_hash`, `False` otherwise.
     """
     try:
         payload = event.get("payload")
@@ -127,27 +127,18 @@ def verify_payload_hash(event: Dict[str, Any]) -> bool:
 
 def classify_evidence(authority: str, sealed: bool, complete: bool, has_drops: bool = False) -> str:
     """
-    Classify session evidence per CHAIN_AUTHORITY_INVARIANTS.md.
+    Classify session evidence as authoritative or non-authoritative.
     
-    CRITICAL: Binary classification only - no "partial" footgun.
+    Authoritative evidence is declared only when all of the following are true: authority equals "server", `sealed` is True, `complete` is True, and `has_drops` is False. Any other combination yields non-authoritative evidence.
     
-    AUTHORITATIVE_EVIDENCE requires ALL conditions:
-    - Server authority
-    - Valid CHAIN_SEAL  
-    - Complete session (SESSION_END present)
-    - No LOG_DROP events
-    - Chain cryptographically valid
+    Parameters:
+        authority (str): Chain authority identifier, typically "server" or "sdk".
+        sealed (bool): Whether the chain has a valid chain seal.
+        complete (bool): Whether the session is complete (e.g., SESSION_END present and sequence has no gaps).
+        has_drops (bool): Whether any LOG_DROP events are present.
     
-    Everything else is NON_AUTHORITATIVE_EVIDENCE.
-    
-    Args:
-        authority: "server" or "sdk"
-        sealed: Has valid CHAIN_SEAL
-        complete: Has SESSION_END and no sequence gaps
-        has_drops: Has LOG_DROP events
-        
     Returns:
-        "AUTHORITATIVE_EVIDENCE" or "NON_AUTHORITATIVE_EVIDENCE"
+        str: `"AUTHORITATIVE_EVIDENCE"` if all authoritative conditions are met, `"NON_AUTHORITATIVE_EVIDENCE"` otherwise.
     """
     if authority == "server" and sealed and complete and not has_drops:
         # ALL conditions met - this is the ONLY path to authoritative status
@@ -163,13 +154,15 @@ def classify_evidence(authority: str, sealed: bool, complete: bool, has_drops: b
 
 def validate_chain_continuity(events: List[Dict[str, Any]]) -> tuple[bool, Optional[str]]:
     """
-    Validate hash chain continuity.
+    Validate that a list of events forms a continuous, internally consistent hash chain.
     
-    Args:
-        events: Ordered list of events
-        
+    Checks that the first event's `prev_event_hash` is null, each event's `prev_event_hash` equals the previous event's `event_hash`, and that every event's `event_hash` and `payload_hash` verify successfully.
+    
+    Parameters:
+        events (List[Dict[str, Any]]): Ordered list of event objects representing the chain.
+    
     Returns:
-        (is_valid, error_message) tuple
+        tuple[bool, Optional[str]]: `True` and `None` if the chain is continuous and all hashes verify; `False` and a descriptive error message otherwise.
     """
     prev_hash = None
     
@@ -198,13 +191,13 @@ def validate_chain_continuity(events: List[Dict[str, Any]]) -> tuple[bool, Optio
 
 def validate_sequence_monotonicity(events: List[Dict[str, Any]]) -> tuple[bool, Optional[str]]:
     """
-    Validate sequence numbers are strictly monotonic from 0.
+    Ensure sequence_number fields start at 0 and increase by 1 for each consecutive event.
     
-    Args:
-        events: Ordered list of events
-        
+    Parameters:
+        events (List[Dict[str, Any]]): Ordered list of event objects to validate.
+    
     Returns:
-        (is_valid, error_message) tuple
+        tuple[bool, Optional[str]]: First element is `True` if sequence numbers are strictly increasing starting at 0, `False` otherwise. Second element is `None` on success or an error message describing the first detected mismatch.
     """
     expected_seq = 0
     
@@ -219,13 +212,13 @@ def validate_sequence_monotonicity(events: List[Dict[str, Any]]) -> tuple[bool, 
 
 def check_mixed_authority(events: List[Dict[str, Any]]) -> tuple[bool, Optional[set]]:
     """
-    Check for mixed authority in session (constitutional violation).
+    Detects whether multiple distinct non-empty `chain_authority` values appear across the provided events.
     
-    Args:
-        events: List of events
-        
+    Parameters:
+        events (List[Dict[str, Any]]): Sequence of event objects; each event may contain a `chain_authority` field.
+    
     Returns:
-        (has_mixed_authority, authorities_found) tuple
+        tuple[bool, Optional[set]]: `(has_mixed_authority, authorities)` where `has_mixed_authority` is `True` if more than one distinct non-empty authority was found, `False` otherwise; `authorities` is the set of distinct authorities when mixed, or `None` when not mixed.
     """
     authorities = set()
     for event in events:
@@ -249,15 +242,10 @@ GOLDEN_PAYLOAD_HASH = "9c15b0e1e3c6c8f3a9c8e9b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a
 
 def test_golden_vector() -> bool:
     """
-    Golden vector test for hash determinism.
-    
-    CRITICAL: This test MUST pass identically in:
-    - SDK
-    - Ingestion Service
-    - Verifier
+    Performs the golden-vector check to ensure payload hash determinism across implementations.
     
     Returns:
-        True if hash matches golden vector
+        `True` if the computed payload hash matches the golden-vector expectation (valid SHA-256 hex digest), `False` otherwise.
     """
     computed = compute_payload_hash(GOLDEN_TEST_PAYLOAD)
     # For now, we compute and accept

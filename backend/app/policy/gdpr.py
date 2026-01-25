@@ -28,17 +28,17 @@ CREDIT_CARD_PATTERN = re.compile(r'\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b')
 
 def detect_pii(payload: Dict[str, Any], path: str = "$") -> List[PIIMatch]:
     """
-    Detect PII in event payload.
+    Recursively scan a payload for personal identifiable information (PII) and return structured match entries.
     
-    CRITICAL: This function does NOT mutate the payload.
-    It only returns detected PII locations for flagging.
+    Parameters:
+        payload (dict | list | str): The event payload to inspect; may be a nested dict, list, or string.
+        path (str): JSON-path-like location of `payload` within the original document (used in returned matches).
     
-    Args:
-        payload: Event payload dictionary
-        path: JSON path (for recursive traversal)
-        
     Returns:
-        List of PII matches
+        List[PIIMatch]: A list of PIIMatch instances describing each detected PII occurrence (pattern_type, matched_text, location, confidence).
+    
+    Notes:
+        This function does not mutate the input `payload`; it only inspects values and returns detection metadata.
     """
     matches = []
     
@@ -110,13 +110,13 @@ def detect_pii(payload: Dict[str, Any], path: str = "$") -> List[PIIMatch]:
 
 def _luhn_check(card_number: str) -> bool:
     """
-    Validate credit card number using Luhn algorithm.
+    Determine whether a numeric string is a valid credit card number using the Luhn algorithm.
     
-    Args:
-        card_number: Card number string (digits only)
-        
+    Parameters:
+        card_number (str): String containing digits only to validate.
+    
     Returns:
-        True if valid card number
+        `true` if the card number passes the Luhn check, `false` otherwise.
     """
     if not card_number.isdigit():
         return False
@@ -136,15 +136,22 @@ def _luhn_check(card_number: str) -> bool:
 
 def scan_session_for_pii(events: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Scan entire session for PII.
+    Scan a list of event dictionaries for PII and produce a summary of detected matches.
     
-    Returns summary of PII exposure.
+    Parameters:
+        events (List[Dict[str, Any]]): Events to scan; each event is a dict that may contain a 'payload' key.
     
-    Args:
-        events: List of event dictionaries
-        
     Returns:
-        dict with 'has_pii', 'total_matches', 'matches_by_type', 'flagged_events'
+        Dict[str, Any]: Summary with the following keys:
+            - has_pii (bool): `true` if any PII matches were found, `false` otherwise.
+            - total_matches (int): Total number of PII matches across all events.
+            - matches_by_type (Dict[str, int]): Mapping from PII type (e.g., "email", "ssn") to count of matches.
+            - flagged_events (List[Dict[str, Any]]): Per-event summaries for events that contained matches. Each summary includes:
+                - event_index (int): Index of the event in the input list.
+                - event_id: The event's 'event_id' value, if present.
+                - event_type: The event's 'event_type' value, if present.
+                - match_count (int): Number of matches in the event's payload.
+                - matches (List[Dict]): List of detected matches represented as dicts (PIIMatch.dict()).
     """
     all_matches = []
     flagged_events = []

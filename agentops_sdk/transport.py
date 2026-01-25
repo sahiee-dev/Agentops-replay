@@ -26,26 +26,21 @@ def send_batch_with_retry(
     max_wait: float = 10.0
 ) -> Dict[str, Any]:
     """
-    Send event batch to server with exponential backoff.
+    Send a batch of events to the ingest endpoint, retrying with exponential backoff on transient failures.
     
-    CONSTITUTIONAL GUARANTEES:
-    - Retries up to max_retries times
-    - Exponential backoff between attempts
-    - Returns error details on persistent failure
+    Parameters:
+        http_client (httpx.Client): HTTP client used to perform requests.
+        session_id (str): Session UUID to include in the request path and payload.
+        events (List[Dict[str, Any]]): List of event objects to send.
+        max_retries (int): Maximum number of attempts before giving up.
+        min_wait (float): Minimum backoff delay in seconds.
+        max_wait (float): Maximum backoff delay in seconds.
     
-    Args:
-        http_client: HTTP client instance
-        session_id: Session UUID
-        events: List of events to send
-        max_retries: Maximum retry attempts
-        min_wait: Minimum wait between retries (seconds)
-        max_wait: Maximum wait between retries (seconds)
-        
     Returns:
-        Response dict with 'status', 'accepted_count', 'final_hash'
-        
+        dict: Parsed JSON response from the server (e.g., contains keys like 'status', 'accepted_count', 'final_hash').
+    
     Raises:
-        RetryExhausted: After all retries are exhausted
+        RetryExhausted: If all retry attempts are exhausted without a successful response.
     """
     attempt = 0
     last_error = None

@@ -21,6 +21,11 @@ depends_on = None
 
 def upgrade():
     # Create chain_authority enum
+    """
+    Apply schema changes that introduce event chain tracking, per-session seals, and related session metadata.
+    
+    Creates new enum types for chain authority and session status; adds the event_chains table with its columns and indexes; enforces append-only behavior for event_chains via a trigger that rejects UPDATE/DELETE; creates the chain_seals table with a positive event_count constraint and unique session index; and augments the sessions table with UUID/session metadata columns, constraints to validate chain authority and non-negative drop counts, and indexes to optimize lookups.
+    """
     op.execute("CREATE TYPE chain_authority_enum AS ENUM ('server', 'sdk')")
     
     # Create session_status enum
@@ -105,6 +110,11 @@ def upgrade():
 
 def downgrade():
     # Drop indexes
+    """
+    Revert the migration by removing event chain and chain seal structures and undoing the session schema extensions.
+    
+    This drops the indexes added to sessions, removes the session constraints and the columns introduced by the migration, drops the chain_seals table and its index, removes the append-only trigger and its helper function for event_chains, drops event_chains and its indexes, and removes the enum types `session_status_enum` and `chain_authority_enum`.
+    """
     op.drop_index('idx_sessions_evidence_class')
     op.drop_index('idx_sessions_authority')
     op.drop_index('idx_sessions_session_id_str')

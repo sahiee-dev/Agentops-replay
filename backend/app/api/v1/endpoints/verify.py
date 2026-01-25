@@ -25,13 +25,28 @@ router = APIRouter()
 @router.post("/verify")
 async def verify_session_api(session_id: str, db: DBSession = Depends(get_db)):
     """
-    Verify session integrity using canonical export.
+    Verify a session's integrity by exporting its events to RFC 8785 canonical form and running the verifier.
     
-    CONSTITUTIONAL: Operates on RFC 8785 canonical form, NOT ORM objects.
-    Stores verification result for later inspection.
+    Parameters:
+        session_id (str): UUID string of the session to verify.
     
     Returns:
-        Evidence class, violations, replay fingerprint
+        dict: Verification summary containing:
+            - session_id (str): The verified session UUID string.
+            - status (str|None): Verification status reported by the verifier.
+            - evidence_class (str|None): Evidence classification assigned by the verifier.
+            - sealed (bool|None): Whether the session was sealed.
+            - complete (bool|None): Whether the event chain is complete.
+            - authority (str|None): Authority identifier used for verification.
+            - total_drops (int): Number of dropped events (defaults to 0).
+            - violations (list): List of verifier-reported violations (defaults to []).
+            - replay_fingerprint (str|None): Replay fingerprint if produced.
+            - event_count (int|None): Number of events processed by the verifier.
+    
+    Raises:
+        HTTPException: 404 if the session_id does not exist.
+        HTTPException: 400 if the session has no events or if input is invalid (ValueError).
+        HTTPException: 500 for unexpected verification errors.
     """
     try:
         # 1. Get session

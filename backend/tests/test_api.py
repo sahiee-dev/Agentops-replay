@@ -122,7 +122,15 @@ class TestIngestionAPI:
         assert "Sequence violation" in response.json()["detail"]
     
     def test_seal_session(self):
-        """Test session sealing."""
+        """
+        Verify that sealing a session after a `SESSION_END` event transitions the session to sealed and returns sealing metadata.
+        
+        Creates a server-authority session, appends a `SESSION_END` event, sends a seal request, and asserts the response status code is 200 and that the response contains:
+        - `status` equal to `"sealed"`,
+        - a `session_digest` value,
+        - a `seal_timestamp` value,
+        - `event_count` greater than 0.
+        """
         # Create session with SESSION_END
         session_resp = client.post(
             "/api/v1/ingest/sessions",
@@ -201,7 +209,14 @@ class TestExportAPI:
     """Test export endpoints."""
     
     def test_json_export(self):
-        """Test JSON export generation."""
+        """
+        Create a server-authority session, ingest a test event, request a JSON export for that session, and validate the export structure.
+        
+        Performs the following checks:
+        - Response HTTP status is 200 and Content-Type is application/json.
+        - JSON body contains `export_version`, `session_id`, `events`, and `chain_of_custody`.
+        - `chain_of_custody.canonical_format` equals "RFC 8785 (JCS)".
+        """
         # Create and populate session
         session_resp = client.post(
             "/api/v1/ingest/sessions",
@@ -237,7 +252,11 @@ class TestExportAPI:
         assert data["chain_of_custody"]["canonical_format"] == "RFC 8785 (JCS)"
     
     def test_pdf_export(self):
-        """Test PDF export generation."""
+        """
+        Verify the API returns a valid PDF export for a populated session.
+        
+        Creates a server-authority ingestion session, appends a single event, requests the PDF export for that session, and asserts the response status is 200, the Content-Type is "application/pdf", and the returned PDF content is non-trivially sized.
+        """
         # Create session
         session_resp = client.post(
             "/api/v1/ingest/sessions",
