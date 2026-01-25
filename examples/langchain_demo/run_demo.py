@@ -154,7 +154,7 @@ def run_demo(use_agentops: bool = True, output_file: str = "session_output.jsonl
         print("Session data exported to:", output_file)
         print()
         print("To verify the session, run:")
-        print(f"  python verify_session.py")
+        print("  python verify_session.py")
         print("  # or")
         print(f"  python ../../verifier/agentops_verify.py {output_file}")
     
@@ -243,7 +243,7 @@ def run_mock_demo(output_file: str = "session_output.jsonl"):
     print("=" * 60)
     print()
     print("To verify the session, run:")
-    print(f"  python verify_session.py")
+    print("  python verify_session.py")
     
     return True
 

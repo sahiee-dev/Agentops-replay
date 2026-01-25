@@ -22,13 +22,18 @@ SUPPORTED_MAX = (0, 3, 0)  # Exclusive upper bound
 def get_langchain_version() -> Optional[Tuple[int, int, int]]:
     """
     Get installed LangChain version as tuple.
-    Returns None if LangChain is not installed.
+    Returns None if LangChain is not installed or parse error.
     """
     try:
         version_str = importlib.metadata.version("langchain")
+        
+        # Strip local version metadata (e.g., "0.2.0+local" -> "0.2.0")
+        if "+" in version_str:
+            version_str = version_str.split("+")[0]
+        
         parts = version_str.split(".")[:3]
         return tuple(int(p.split("a")[0].split("b")[0].split("rc")[0]) for p in parts)
-    except importlib.metadata.PackageNotFoundError:
+    except (importlib.metadata.PackageNotFoundError, ValueError):
         return None
 
 

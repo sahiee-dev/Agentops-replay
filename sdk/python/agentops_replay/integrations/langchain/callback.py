@@ -16,13 +16,13 @@ import os
 import time
 import hashlib
 import json
+import logging
 from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 from datetime import datetime, timezone
 
-# Add parent paths for imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..')))
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..', 'agentops_sdk')))
+# Module logger for debug output
+logger = logging.getLogger(__name__)
 
 from .version import (
     INTEGRATION_VERSION, 
@@ -89,20 +89,29 @@ def _safe_serialize(obj: Any, max_depth: int = 5) -> Any:
     if hasattr(obj, 'dict'):
         try:
             return _safe_serialize(obj.dict(), max_depth - 1)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(
+                "Serialization via .dict() failed for %s: %s",
+                type(obj).__name__, e, exc_info=True
+            )
     
     if hasattr(obj, 'to_dict'):
         try:
             return _safe_serialize(obj.to_dict(), max_depth - 1)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(
+                "Serialization via .to_dict() failed for %s: %s",
+                type(obj).__name__, e, exc_info=True
+            )
     
     if hasattr(obj, '__dict__'):
         try:
             return _safe_serialize(obj.__dict__, max_depth - 1)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(
+                "Serialization via __dict__ failed for %s: %s",
+                type(obj).__name__, e, exc_info=True
+            )
     
     # Fallback: string representation
     try:
