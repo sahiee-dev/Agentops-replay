@@ -14,7 +14,12 @@ from typing import List, Dict, Any, Optional
 
 class RetryExhausted(Exception):
     """Raised when all retry attempts are exhausted."""
-    pass
+    
+    def __init__(self, message=None, *, error_class=None, attempts=None, last_error=None):
+        super().__init__(message or "Retry attempts exhausted")
+        self.error_class = error_class
+        self.attempts = attempts
+        self.last_error = last_error
 
 
 def send_batch_with_retry(

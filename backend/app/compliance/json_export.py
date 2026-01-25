@@ -77,10 +77,12 @@ def generate_json_export(session_id: str, db: DBSession) -> Dict[str, Any]:
         }
         canonical_events.append(canonical_event)
     
-    # Build export metadata
+    # Build export metadata (use single timestamp for determinism)
+    export_timestamp = datetime.utcnow().isoformat() + "Z"
+    
     export = {
         "export_version": "1.0",
-        "export_timestamp": datetime.utcnow().isoformat() + "Z",
+        "export_timestamp": export_timestamp,
         "session_id": session_id,
         "evidence_class": session.evidence_class or "PENDING_VERIFICATION",
         "chain_authority": session.chain_authority.value,
@@ -96,7 +98,7 @@ def generate_json_export(session_id: str, db: DBSession) -> Dict[str, Any]:
         "events": canonical_events,
         "chain_of_custody": {
             "export_authority": session.ingestion_service_id,
-            "export_timestamp": datetime.utcnow().isoformat() + "Z",
+            "export_timestamp": export_timestamp,  # Same timestamp for determinism
             "canonical_format": "RFC 8785 (JCS)"
         }
     }
