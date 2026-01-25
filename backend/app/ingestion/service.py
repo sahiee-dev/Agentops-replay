@@ -151,10 +151,11 @@ class IngestService:
         """
         db = SessionLocal()
         try:
-            # Get session
+            # CRITICAL: Acquire row-level lock to prevent race conditions
+            # FOR UPDATE ensures last_seq cannot change between validation and insert
             session = db.query(Session).filter(
                 Session.session_id_str == uuid.UUID(session_id)
-            ).first()
+            ).with_for_update().first()
             
             if not session:
                 raise ValueError(f"Session {session_id} not found")
@@ -162,7 +163,7 @@ class IngestService:
             if session.status != SessionStatus.ACTIVE:
                 raise ValueError(f"Session {session_id} is not active (status: {session.status})")
             
-            # Validate sequence continuity
+            # Validate sequence continuity (session is locked, no races possible)
             self._validate_sequence(db, session, events)
             
             # Recompute hashes and store events
@@ -430,9 +431,17 @@ class IngestService:
         
         CONSTITUTIONAL REQUIREMENT: Record sequence ranges for forensic traceability.
         
+        AUDIT GUARANTEE: This function commits immediately to ensure LOG_DROP is
+        persisted even when the batch is subsequently rejected via SequenceViolation.
+        This is INTENTIONAL for audit integrity - we must record WHY a batch was
+        rejected, not just silently discard it.
+        
+        The session row lock (acquired via with_for_update() in append_events)
+        prevents race conditions during concurrent writes.
+        
         Args:
-            db: Database session
-            session: Session model
+            db: Database session (with row lock held on session)
+            session: Session model (locked)
             reason: Drop reason (DUPLICATE_SEQUENCE, SEQUENCE_GAP, etc.)
             dropped_count: Number of events dropped
             first_missing_seq: First sequence number in gap (if known)
