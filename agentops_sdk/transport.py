@@ -87,9 +87,9 @@ def send_batch_with_retry(
                 raise RetryExhausted(
                     f"Client error (4xx) - {last_error}",
                     error_class=error_class,
-                    attempts=attempt + 1, # This is the attempt number that failed
+                    attempts=attempt + 1,
                     last_error=last_error
-                )
+                ) from e
             else: # 5xx errors
                 # Server errors (5xx) - will retry
                 error_class = "SERVER_ERROR"
@@ -108,5 +108,8 @@ def send_batch_with_retry(
     
     # All retries exhausted
     raise RetryExhausted(
-        f"Failed after {max_retries} attempts. Last error: {error_class} - {last_error}"
+        f"Failed after {max_retries} attempts. Last error: {error_class} - {last_error}",
+        error_class=error_class,
+        attempts=attempt,
+        last_error=last_error
     )
