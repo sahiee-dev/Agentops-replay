@@ -542,7 +542,8 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         **kwargs: Any,
     ) -> None:
         """Called when chain ends."""
-        pass  # We rely on tool/llm callbacks for detailed tracking
+        # Clean up run_id_map to prevent memory leak
+        self._run_id_map.pop(str(run_id), None)
     
     def on_chain_error(
         self,
@@ -564,6 +565,9 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         }
         
         self.client.record(EventType.ERROR, payload)
+        
+        # Clean up run_id_map to prevent memory leak
+        self._run_id_map.pop(str(run_id), None)
     
     # =========================================================================
     # Helper Methods
