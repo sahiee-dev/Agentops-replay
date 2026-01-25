@@ -108,9 +108,11 @@ def detect_pii(payload: Dict[str, Any], path: str = "$") -> List[PIIMatch]:
     elif isinstance(payload, (int, float)) and not isinstance(payload, bool):
         # CRITICAL: Numeric PII detection (SSNs, phones, credit cards stored as numbers)
         payload_str = str(payload)
+        # Strip all non-digits for reliable matching
+        digits = re.sub(r"\D", "", payload_str)
         
-        # Check for SSN pattern (9 digits)
-        if SSN_PATTERN.match(payload_str):
+        # Check for SSN pattern (exactly 9 digits)
+        if re.fullmatch(r"\d{9}", digits):
             matches.append(PIIMatch(
                 pattern_type="ssn",
                 matched_text=payload_str,
@@ -118,8 +120,8 @@ def detect_pii(payload: Dict[str, Any], path: str = "$") -> List[PIIMatch]:
                 confidence="high"
             ))
         
-        # Check for phone patterns
-        if PHONE_US_PATTERN.match(payload_str):
+        # Check for phone patterns (10-11 digits)
+        if re.fullmatch(r"\d{10,11}", digits):
             matches.append(PIIMatch(
                 pattern_type="phone_us",
                 matched_text=payload_str,
@@ -127,9 +129,8 @@ def detect_pii(payload: Dict[str, Any], path: str = "$") -> List[PIIMatch]:
                 confidence="medium"
             ))
         
-        # Check for credit card (13-19 digits with Luhn)
-        cleaned = payload_str.replace('-', '').replace(' ', '')
-        if CREDIT_CARD_PATTERN.match(cleaned) and _luhn_check(cleaned):
+        # Check for credit card (13-19 digits with Luhn validation)
+        if re.fullmatch(r"\d{13,19}", digits) and _luhn_check(digits):
             matches.append(PIIMatch(
                 pattern_type="credit_card",
                 matched_text=payload_str,

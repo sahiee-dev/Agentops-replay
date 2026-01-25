@@ -12,6 +12,12 @@ const Replay = () => {
     const [currentEventIndex, setCurrentEventIndex] = useState(0);
     const [sessionDetails, setSessionDetails] = useState(null);
     const replayIntervalRef = useRef(null);  // Store interval ID
+    const eventsRef = useRef(events);  // Track current events to prevent stale closure
+
+    // Keep eventsRef in sync with events state
+    useEffect(() => {
+        eventsRef.current = events;
+    }, [events]);
 
     useEffect(() => {
         fetchSessions();
@@ -71,7 +77,8 @@ const Replay = () => {
 
         const interval = setInterval(() => {
             setCurrentEventIndex(prevIndex => {
-                if (prevIndex >= events.length - 1) {
+                // Use eventsRef to get current events (prevent stale closure)
+                if (prevIndex >= eventsRef.current.length - 1) {
                     setIsPlaying(false);
                     clearInterval(interval);
                     replayIntervalRef.current = null;
