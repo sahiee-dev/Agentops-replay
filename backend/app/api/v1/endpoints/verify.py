@@ -11,6 +11,7 @@ import os
 import uuid
 import json
 import tempfile
+import logging
 
 # Add verifier to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../verifier'))
@@ -20,6 +21,7 @@ from app.database import get_db
 from app.models import Session, EventChain, ChainSeal
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/verify")

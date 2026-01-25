@@ -9,7 +9,7 @@ Adds event_chains, chain_seals tables with append-only enforcement.
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID, JSONB, TIMESTAMP
+from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
@@ -87,11 +87,12 @@ def upgrade():
     op.create_index('idx_chain_seals_session', 'chain_seals', ['session_id'], unique=True)
     
     # Alter sessions table
-    op.add_column('sessions', sa.Column('session_id_str', UUID(as_uuid=True), nullable=True))
+    op.add_column('sessions', sa.Column('session_id_str', postgresql.UUID(as_uuid=True), nullable=True))
     op.add_column('sessions', sa.Column('chain_authority', sa.Enum('server', 'sdk', name='chain_authority_enum'), nullable=True))
-    op.add_column('sessions', sa.Column('status_new', sa.Enum('active', 'sealed', 'failed', name='session_status_enum'), nullable=True))
+    # Migrate existing status column to enum type
+    op.execute("ALTER TABLE sessions ALTER COLUMN status TYPE session_status_enum USING status::session_status_enum")
     op.add_column('sessions', sa.Column('evidence_class', sa.String(50), nullable=True))
-    op.add_column('sessions', sa.Column('sealed_at', TIMESTAMP(timezone=True), nullable=True))
+    op.add_column('sessions', sa.Column('sealed_at', postgresql.TIMESTAMP(timezone=True), nullable=True))
     op.add_column('sessions', sa.Column('total_drops', sa.Integer, nullable=False, server_default='0'))
     op.add_column('sessions', sa.Column('ingestion_service_id', sa.String(100), nullable=True))
     
