@@ -324,6 +324,9 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         }
         
         self.client.record(EventType.MODEL_RESPONSE, payload)
+        
+        # Clean up run_id_map to prevent memory leak
+        self._run_id_map.pop(str(run_id), None)
     
     def on_llm_error(
         self,
@@ -345,6 +348,9 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         }
         
         self.client.record(EventType.ERROR, payload)
+        
+        # Clean up run_id_map
+        self._run_id_map.pop(str(run_id), None)
     
     # =========================================================================
     # Tool Callbacks
@@ -420,6 +426,9 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         }
         
         self.client.record(EventType.TOOL_RESULT, payload)
+        
+        # Clean up run_id_map
+        self._run_id_map.pop(str(run_id), None)
     
     def on_tool_error(
         self,
@@ -443,6 +452,9 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         }
         
         self.client.record(EventType.ERROR, payload)
+        
+        # Clean up run_id_map
+        self._run_id_map.pop(str(run_id), None)
     
     # =========================================================================
     # Agent Callbacks
