@@ -69,12 +69,26 @@ def send_batch_with_retry(
             last_error = str(e)
             
         except httpx.HTTPStatusError as e:
-            if e.response.status_code >= 500:
+            if 400 <= e.response.status_code < 500:
+                # Client errors (4xx) - don't retry, convert to RetryExhausted for fail-open
+                error_class = "CLIENT_ERROR"
+                try:
+                    error_body = e.response.json()
+                    error_msg = error_body.get("detail", str(e))
+                except Exception:
+                    error_msg = str(e)
+                
+                last_error = f"HTTP {e.response.status_code}: {error_msg}"
+                raise RetryExhausted(
+                    f"Client error (4xx) - {last_error}",
+                    error_class=error_class,
+                    attempts=attempt + 1, # This is the attempt number that failed
+                    last_error=last_error
+                )
+            else: # 5xx errors
+                # Server errors (5xx) - will retry
                 error_class = "SERVER_ERROR"
                 last_error = f"HTTP {e.response.status_code}"
-            else:
-                # 4xx errors are not retryable
-                raise
         
         except Exception as e:
             error_class = "UNKNOWN_ERROR"

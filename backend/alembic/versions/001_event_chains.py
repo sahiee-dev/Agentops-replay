@@ -26,22 +26,24 @@ def upgrade():
     # Create session_status enum
     op.execute("CREATE TYPE session_status_enum AS ENUM ('active', 'sealed', 'failed')")
     
-    # Create event_chains table
+    # Create event_chains table with constitutional guarantees
     op.create_table(
         'event_chains',
-        sa.Column('event_id', UUID(as_uuid=True), primary_key=True, nullable=False),
-        sa.Column('session_id', sa.Integer, sa.ForeignKey('sessions.id'), nullable=False),
-        sa.Column('sequence_number', sa.BigInteger, nullable=False),
-        sa.Column('timestamp_wall', TIMESTAMP(timezone=True), nullable=False),
-        sa.Column('timestamp_monotonic', sa.BigInteger, nullable=False),
+        sa.Column('event_id', postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
+        sa.Column('session_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('sessions.id'), nullable=False),
+        sa.Column('session_id_str', sa.String(36), nullable=False),  # Denormalized for queries
+        sa.Column('sequence_number', sa.BigInteger(), nullable=False),
+        sa.Column('timestamp_wall', postgresql.TIMESTAMP(timezone=True), nullable=False),
+        sa.Column('timestamp_monotonic', sa.BigInteger(), nullable=False),
         sa.Column('event_type', sa.String(50), nullable=False),
         sa.Column('source_sdk_ver', sa.String(20), nullable=True),
         sa.Column('schema_ver', sa.String(10), nullable=False, server_default='v0.6'),
-        sa.Column('payload_canonical', sa.Text, nullable=False),
+        sa.Column('payload_canonical', sa.Text(), nullable=False),
         sa.Column('payload_hash', sa.String(64), nullable=False),
-        sa.Column('payload_jsonb', JSONB, nullable=True),
+        sa.Column('payload_jsonb', postgresql.JSONB(), nullable=True),
         sa.Column('prev_event_hash', sa.String(64), nullable=True),
         sa.Column('event_hash', sa.String(64), nullable=False),
+        sa.Column('chain_authority', sa.String(20), nullable=False),
     )
     
     # Create indexes

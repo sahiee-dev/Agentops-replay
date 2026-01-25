@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { apiService } from '../services/api';
 
@@ -11,6 +11,7 @@ const Replay = () => {
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentEventIndex, setCurrentEventIndex] = useState(0);
     const [sessionDetails, setSessionDetails] = useState(null);
+    const replayIntervalRef = useRef(null);  // Store interval ID
 
     useEffect(() => {
         fetchSessions();
@@ -73,22 +74,41 @@ const Replay = () => {
                 if (prevIndex >= events.length - 1) {
                     setIsPlaying(false);
                     clearInterval(interval);
+                    replayIntervalRef.current = null;
                     return prevIndex;
                 }
                 return prevIndex + 1;
             });
         }, 1000); // 1 second between events
+
+        replayIntervalRef.current = interval;  // Store interval ID
     };
 
     const stopReplay = () => {
+        if (replayIntervalRef.current) {
+            clearInterval(replayIntervalRef.current);
+            replayIntervalRef.current = null;
+        }
+        setIsPlaying(false);
+    };
+
+    const resetReplay = () => {
+        if (replayIntervalRef.current) {
+            clearInterval(replayIntervalRef.current);
+            replayIntervalRef.current = null;
+        }
         setIsPlaying(false);
         setCurrentEventIndex(0);
     };
 
-    const resetReplay = () => {
-        setIsPlaying(false);
-        setCurrentEventIndex(0);
-    };
+    // Cleanup interval on unmount
+    useEffect(() => {
+        return () => {
+            if (replayIntervalRef.current) {
+                clearInterval(replayIntervalRef.current);
+            }
+        };
+    }, []);
 
     const EventItem = ({ event, index, isActive, isCompleted }) => (
         <div className={`event-item ${isActive ? 'border-primary' : ''} ${isCompleted ? 'opacity-50' : ''}`}>

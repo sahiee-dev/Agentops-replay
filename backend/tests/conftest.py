@@ -29,19 +29,19 @@ def setup_test_database():
     Base.metadata.drop_all(bind=engine)
 
 
-@pytest.fixture(autouse=True)
-def clean_tables():
-    """Clean tables between tests."""
+@pytest.fixture(scope="function")
+def db():
+    """Database session fixture with automatic cleanup."""
+    from sqlalchemy import text
     from app.database import SessionLocal
     
     db = SessionLocal()
     try:
-        # Clear all tables (but don't drop schema)
-        db.execute("TRUNCATE TABLE chain_seals CASCADE")
-        db.execute("TRUNCATE TABLE event_chains CASCADE")
-        db.execute("TRUNCATE TABLE sessions CASCADE")
-        db.commit()
+        yield db
     finally:
+        # Clean up tables in reverse dependency order
+        db.execute(text("TRUNCATE TABLE chain_seals CASCADE"))
+        db.execute(text("TRUNCATE TABLE event_chains CASCADE"))
+        db.execute(text("TRUNCATE TABLE sessions CASCADE"))
+        db.commit()
         db.close()
-    
-    yield

@@ -105,6 +105,38 @@ def detect_pii(payload: Dict[str, Any], path: str = "$") -> List[PIIMatch]:
                         confidence="high"
                     ))
     
+    elif isinstance(payload, (int, float)) and not isinstance(payload, bool):
+        # CRITICAL: Numeric PII detection (SSNs, phones, credit cards stored as numbers)
+        payload_str = str(payload)
+        
+        # Check for SSN pattern (9 digits)
+        if SSN_PATTERN.match(payload_str):
+            matches.append(PIIMatch(
+                pattern_type="ssn",
+                matched_text=payload_str,
+                location=path,
+                confidence="high"
+            ))
+        
+        # Check for phone patterns
+        if PHONE_US_PATTERN.match(payload_str):
+            matches.append(PIIMatch(
+                pattern_type="phone_us",
+                matched_text=payload_str,
+                location=path,
+                confidence="medium"
+            ))
+        
+        # Check for credit card (13-19 digits with Luhn)
+        cleaned = payload_str.replace('-', '').replace(' ', '')
+        if CREDIT_CARD_PATTERN.match(cleaned) and _luhn_check(cleaned):
+            matches.append(PIIMatch(
+                pattern_type="credit_card",
+                matched_text=payload_str,
+                location=path,
+                confidence="high"
+            ))
+    
     return matches
 
 

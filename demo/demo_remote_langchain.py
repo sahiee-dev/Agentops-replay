@@ -60,7 +60,7 @@ def main():
     
     # LLM calls
     print("  LLM call: GPT-4")
-    client.record(EventType.LLM_CALL, {
+    client.record(EventType.MODEL_CALL, {  # Use MODEL_CALL not LLM_CALL
         "model": "gpt-4",
         "prompt_tokens": 150,
         "completion_tokens": 75,
@@ -69,7 +69,7 @@ def main():
     
     # Agent output
     print("  Agent output generated")
-    client.record(EventType.AGENT_OUTPUT, {
+    client.record(EventType.MODEL_RESPONSE, {  # Use MODEL_RESPONSE not AGENT_OUTPUT
         "output": "Based on the search results, here is my answer...",
         "confidence": 0.95
     })

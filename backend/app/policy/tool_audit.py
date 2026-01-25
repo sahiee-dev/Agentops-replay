@@ -49,12 +49,24 @@ def generate_tool_audit(events: List[Dict[str, Any]], session_id: str) -> ToolAu
             tool_name = payload.get('tool_name', 'unknown')
             unique_tools.add(tool_name)
             
-            # Redact large or potentially sensitive args
+            # Build redacted args summary (NEVER include actual content)
             args = payload.get('args', {})
             if isinstance(args, dict):
-                args_summary = f"{len(args)} arguments"
+                args_summary = f"<{len(args)} arguments>"
+            elif isinstance(args, (list, tuple)):
+                args_summary = f"<{len(args)} items>"
+            elif isinstance(args, str):
+                args_summary = f"<string of length {len(args)}>"
+            elif isinstance(args, bytes):
+                args_summary = f"<bytes of length {len(args)}>"
+            elif args is None:
+                args_summary = "<no arguments>"
             else:
-                args_summary = str(args)[:50]  # Truncate
+                # For other types, show type and try to get length
+                try:
+                    args_summary = f"<{type(args).__name__} (length {len(args)})>"
+                except TypeError:
+                    args_summary = f"<{type(args).__name__}>"
             
             tool_calls.append(ToolCallSummary(
                 sequence_number=event.get('sequence_number'),

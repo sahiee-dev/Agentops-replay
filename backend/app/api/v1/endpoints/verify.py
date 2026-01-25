@@ -50,23 +50,23 @@ async def verify_session_api(session_id: str, db: DBSession = Depends(get_db)):
         if not events:
             raise HTTPException(status_code=400, detail="Cannot verify empty session")
         
-        # 3. Convert to canonical event list
+        # 3. Convert    # Build canonical events list (MUST use payload_canonical, not payload_jsonb)
         canonical_events = []
         for event in events:
             canonical_event = {
-                "event_id": str(event.event_id),
-                "session_id": session_id,
-                "sequence_number": int(event.sequence_number),
-                "timestamp_wall": event.timestamp_wall.isoformat().replace('+00:00', 'Z'),
-                "timestamp_monotonic": int(event.timestamp_monotonic),
+                "event_id": str(event.id),
+                "session_id": str(event.session_id),
+                "sequence_number": event.sequence_number,
+                "timestamp_wall": event.timestamp_wall,
+                "timestamp_monotonic": event.timestamp_monotonic,
                 "event_type": event.event_type,
                 "source_sdk_ver": event.source_sdk_ver,
                 "schema_ver": event.schema_ver,
+                "payload": event.payload_canonical,  # AUTHORITATIVE: canonical text
                 "payload_hash": event.payload_hash,
                 "prev_event_hash": event.prev_event_hash,
                 "event_hash": event.event_hash,
-                "payload": event.payload_jsonb,
-                "chain_authority": session.chain_authority.value
+                "chain_authority": event.chain_authority,
             }
             canonical_events.append(canonical_event)
         
@@ -98,6 +98,11 @@ async def verify_session_api(session_id: str, db: DBSession = Depends(get_db)):
         }
     
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))    
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Verification error: {str(e)}")
+        # Log full exception server-side for debugging
+        logger.exception("Verification error for session %s", session_id)
+        raise HTTPException(
+            status_code=500, 
+            detail="Internal server error during verification"
+        )
