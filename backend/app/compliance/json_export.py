@@ -34,9 +34,15 @@ def generate_json_export(session_id: str, db: DBSession) -> Dict[str, Any]:
     Raises:
         ValueError: If session not found
     """
+    # Validate session_id format
+    try:
+        uuid.UUID(session_id)
+    except ValueError:
+        raise ValueError(f"Invalid session ID format: {session_id}")
+
     # Get session
     session = db.query(Session).filter(
-        Session.session_id_str == uuid.UUID(session_id)
+        Session.session_id_str == session_id
     ).first()
     
     if not session:
