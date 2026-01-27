@@ -28,11 +28,11 @@ class EventChain(Base):
     __tablename__ = "event_chains"
     
     # Primary fields
+    # Primary fields
     event_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
     session_id = Column(Integer, ForeignKey("sessions.id"), nullable=False, index=True)
     session_id_str = Column(String(36), nullable=False)  # Denormalized for queries
     sequence_number = Column(BigInteger, nullable=False, index=True)
-    
     # Timestamps
     timestamp_wall = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
     timestamp_monotonic = Column(BigInteger, nullable=False)
