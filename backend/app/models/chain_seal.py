@@ -21,7 +21,7 @@ class ChainSeal(Base):
     __tablename__ = "chain_seals"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=False, unique=True, index=True)
+    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=False, unique=True, index=True)
     
     # Required metadata per EVENT_LOG_SPEC.md v0.6
     ingestion_service_id = Column(String(100), nullable=False)  # e.g., "prod-ingest-01"

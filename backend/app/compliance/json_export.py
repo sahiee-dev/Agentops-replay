@@ -11,11 +11,6 @@ from typing import Dict, Any
 from datetime import datetime
 from sqlalchemy.orm import Session as DBSession
 
-# Add verifier to path for JCS canonicalization
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../verifier'))
-import jcs
-import verifier_core
-
 from app.models import Session, EventChain, ChainSeal
 
 
