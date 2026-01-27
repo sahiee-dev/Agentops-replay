@@ -61,10 +61,10 @@ def generate_json_export(session_id: str, db: DBSession) -> Dict[str, Any]:
     canonical_events = []
     for event in events:
         canonical_event = {
-            "event_id": str(event.id),
-            "session_id": str(event.session_id),
+            "event_id": str(event.event_id),
+            "session_id": str(session.session_id_str),
             "sequence_number": event.sequence_number,
-            "timestamp_wall": event.timestamp_wall,
+            "timestamp_wall": event.timestamp_wall.isoformat(),
             "timestamp_monotonic": event.timestamp_monotonic,
             "event_type": event.event_type,
             "source_sdk_ver": event.source_sdk_ver,

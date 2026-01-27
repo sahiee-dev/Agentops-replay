@@ -8,7 +8,7 @@ CRITICAL GUARANTEES:
 4. Immutable per CONSTITUTION.md
 """
 
-from sqlalchemy import Column, String, BigInteger, Text, ForeignKey, Index, DDL, event
+from sqlalchemy import Column, Integer, String, BigInteger, Text, ForeignKey, Index, DDL, event
 from sqlalchemy.dialects.postgresql import UUID, JSONB, TIMESTAMP
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -29,7 +29,7 @@ class EventChain(Base):
     
     # Primary fields
     event_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=False, index=True)
+    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=False, index=True)
     sequence_number = Column(BigInteger, nullable=False, index=True)
     
     # Timestamps

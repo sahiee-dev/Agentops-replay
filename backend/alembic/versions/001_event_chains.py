@@ -30,7 +30,7 @@ def upgrade():
     op.create_table(
         'event_chains',
         sa.Column('event_id', postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
-        sa.Column('session_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('sessions.id'), nullable=False),
+        sa.Column('session_id', sa.Integer, sa.ForeignKey('sessions.id'), nullable=False),
         sa.Column('session_id_str', sa.String(36), nullable=False),  # Denormalized for queries
         sa.Column('sequence_number', sa.BigInteger(), nullable=False),
         sa.Column('timestamp_wall', postgresql.TIMESTAMP(timezone=True), nullable=False),
@@ -77,7 +77,7 @@ def upgrade():
         sa.Column('id', sa.Integer, primary_key=True, autoincrement=True),
         sa.Column('session_id', sa.Integer, sa.ForeignKey('sessions.id'), nullable=False, unique=True),
         sa.Column('ingestion_service_id', sa.String(100), nullable=False),
-        sa.Column('seal_timestamp', TIMESTAMP(timezone=True), nullable=False),
+        sa.Column('seal_timestamp', postgresql.TIMESTAMP(timezone=True), nullable=False),
         sa.Column('session_digest', sa.String(64), nullable=False),
         sa.Column('final_event_hash', sa.String(64), nullable=False),
         sa.Column('event_count', sa.Integer, nullable=False),
@@ -116,12 +116,14 @@ def downgrade():
     op.drop_constraint('non_negative_drops', 'sessions')
     op.drop_constraint('valid_chain_authority', 'sessions')
     
+    # Revert session status column type
+    op.execute("ALTER TABLE sessions ALTER COLUMN status TYPE VARCHAR(50) USING status::text")
+    
     # Drop columns from sessions
     op.drop_column('sessions', 'ingestion_service_id')
     op.drop_column('sessions', 'total_drops')
     op.drop_column('sessions', 'sealed_at')
     op.drop_column('sessions', 'evidence_class')
-    op.drop_column('sessions', 'status_new')
     op.drop_column('sessions', 'chain_authority')
     op.drop_column('sessions', 'session_id_str')
     
