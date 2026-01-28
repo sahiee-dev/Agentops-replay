@@ -21,8 +21,12 @@ SUPPORTED_MAX = (0, 3, 0)  # Exclusive upper bound
 
 def get_langchain_version() -> Optional[Tuple[int, int, int]]:
     """
-    Get installed LangChain version as tuple.
-    Returns None if LangChain is not installed or parse error.
+    Retrieve the installed LangChain version as a (major, minor, patch) integer tuple.
+    
+    Prerelease suffixes like "a", "b", and "rc" in version components are stripped before conversion. Returns None if LangChain is not installed.
+    
+    Returns:
+        version_tuple (Optional[Tuple[int, int, int]]): A 3-tuple of integers (major, minor, patch) when installed, or `None` if the package is not present.
     """
     try:
         version_str = importlib.metadata.version("langchain")
@@ -38,7 +42,12 @@ def get_langchain_version() -> Optional[Tuple[int, int, int]]:
 
 
 def get_langchain_version_string() -> str:
-    """Get LangChain version as string."""
+    """
+    Retrieve the installed LangChain package version string.
+    
+    Returns:
+        str: The installed LangChain version string, or "not_installed" if LangChain is not installed.
+    """
     try:
         return importlib.metadata.version("langchain")
     except importlib.metadata.PackageNotFoundError:
@@ -47,13 +56,13 @@ def get_langchain_version_string() -> str:
 
 def check_compatibility() -> dict:
     """
-    Check if installed LangChain version is compatible.
+    Determine whether the installed LangChain version is compatible with this integration.
     
     Returns:
-        dict with:
-            - compatible: bool
-            - version: str
-            - warning: Optional[str]
+        dict: A mapping with keys:
+            - compatible (bool): `True` if the installed LangChain version is within the supported range, `False` otherwise.
+            - version (str): The installed LangChain version string or `"not_installed"` if LangChain is not present.
+            - warning (Optional[str]): A human-readable warning when `compatible` is `False`, or `None` when compatible.
     """
     version = get_langchain_version()
     version_str = get_langchain_version_string()
@@ -87,7 +96,11 @@ def check_compatibility() -> dict:
 
 
 def warn_if_incompatible():
-    """Emit warning if LangChain version is not fully compatible."""
+    """
+    Issue a runtime warning when the installed LangChain version is incompatible.
+    
+    If an incompatibility is detected, emits a UserWarning whose message is prefixed with "AgentOps Replay: " and is raised with stacklevel=3.
+    """
     compat = check_compatibility()
     if not compat["compatible"] and compat["warning"]:
         warnings.warn(
