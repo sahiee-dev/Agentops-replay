@@ -47,17 +47,10 @@ class IngestService:
     
     def __init__(self, service_id: Optional[str] = None):
         """
-        Initialize ingestion service.
+        Create an IngestService and set its immutable service identifier used for CHAIN_SEAL records.
         
-        CONSTITUTIONAL REQUIREMENT: service_id is IMMUTABLE.
-        - Set once at service startup
-        - NOT configurable per request
-        - Ideally derived from deployment identity
-        
-        Args:
-            service_id: Static ingestion service identifier for CHAIN_SEAL.
-                       If not provided, reads from INGESTION_SERVICE_ID env var.
-                       Defaults to "default-ingest-01" if neither provided.
+        Parameters:
+            service_id (Optional[str]): Static ingestion service identifier set at startup. If omitted, the value is read from the INGESTION_SERVICE_ID environment variable or defaults to "default-ingest-01". This identifier is immutable for the lifetime of the service.
         """
         # Freeze service identity at startup
         if service_id:
@@ -131,23 +124,18 @@ class IngestService:
         events: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        Append events to session with constitutional validation.
+        Append a batch of events to an active session while enforcing server-side hash recomputation, strict sequence validation, and atomic commit semantics.
         
-        CRITICAL OPERATIONS:
-        1. Server-side hash recomputation (ignore SDK hashes)
-        2. Strict sequence validation (hard rejection)
-        3. Atomic commit (all or none)
-        
-        Args:
-            session_id: Session UUID string
-            events: List of event dictionaries from SDK
-            
         Returns:
-            dict with 'status', 'accepted_count', 'final_hash'
-            
+            dict: {
+                'status': 'success',
+                'accepted_count': int,   # number of events persisted
+                'final_hash': Optional[str]  # event hash of the last persisted event or None if no prior events
+            }
+        
         Raises:
-            SequenceViolation: On sequence gaps/duplicates
-            ValueError: On validation failures
+            SequenceViolation: If incoming events contain duplicate sequence numbers or gaps.
+            ValueError: If the session is not found, not active, or a database integrity error occurs.
         """
         db = SessionLocal()
         try:
@@ -236,25 +224,23 @@ class IngestService:
     
     def seal_session(self, session_id: str) -> Dict[str, Any]:
         """
-        Seal session with CHAIN_SEAL event.
+        Create a ChainSeal for the given session and mark the session as sealed.
         
-        AUTHORITY GATE (MANDATORY):
-        - Only server authority sessions can be sealed
-        - Seal is idempotent (returns existing seal if already sealed)
+        If the session is already sealed, return the existing seal metadata; sealing is allowed only for sessions with server authority and requires a prior SESSION_END event.
         
-        SESSION_END ENFORCEMENT (CONSTITUTIONAL):
-        - Seal FAILS if SESSION_END event not present
-        - This is a HARD requirement for AUTHORITATIVE_EVIDENCE
+        Parameters:
+            session_id (str): Session UUID string.
         
-        Args:
-            session_id: Session UUID string
-            
         Returns:
-            dict with seal metadata
-            
+            dict: Seal metadata with keys:
+                - "status": "sealed" or "already_sealed"
+                - "seal_timestamp": ISO 8601 UTC timestamp of the seal
+                - "session_digest": final event hash used as the session digest
+                - "event_count": number of events in the session
+        
         Raises:
-            AuthorityViolation: If session is not server authority
-            ValueError: If SESSION_END not present or session empty
+            AuthorityViolation: If the session's authority is not SERVER.
+            ValueError: If the session does not exist, is empty, or lacks a SESSION_END event.
         """
         db = SessionLocal()
         try:
@@ -346,7 +332,12 @@ class IngestService:
     # --- Private helper methods ---
     
     def _get_last_event_hash(self, db: DBSession, session: Session) -> Optional[str]:
-        """Get hash of last event in session, or None if no events."""
+        """
+        Return the `event_hash` of the most recent EventChain for the given session, or `None` if the session has no events.
+        
+        Returns:
+            str | None: The `event_hash` of the last event for the session, or `None` when no events exist.
+        """
         last_event = db.query(EventChain).filter(
             EventChain.session_id == session.id
         ).order_by(EventChain.sequence_number.desc()).first()
@@ -354,7 +345,12 @@ class IngestService:
         return last_event.event_hash if last_event else None
     
     def _get_last_sequence(self, db: DBSession, session: Session) -> int:
-        """Get last sequence number in session, or -1 if no events."""
+        """
+        Return the highest sequence number recorded for the given session.
+        
+        Returns:
+            int: The highest sequence number present for the session, or -1 if the session has no events.
+        """
         last_event = db.query(EventChain).filter(
             EventChain.session_id == session.id
         ).order_by(EventChain.sequence_number.desc()).first()
@@ -368,16 +364,15 @@ class IngestService:
         events: List[Dict[str, Any]]
     ):
         """
-        Validate sequence continuity with HARD REJECTION RULES.
+        Enforce strict sequence continuity for a batch of incoming events and raise on any violation.
         
-        Rules:
-        - Next sequence MUST equal (last_sequence + 1)
-        - Duplicate → emit LOG_DROP + reject
-        - Gap → emit LOG_DROP with sequence range + reject
-        - NO auto-heal, NO reordering
+        Validates that each event's `sequence_number` equals the previous stored sequence plus one. On a duplicate or gap, records a corresponding `LOG_DROP` event and raises `SequenceViolation`. If an event is missing `sequence_number`, raises `SequenceViolation`.
+        
+        Parameters:
+            events (List[Dict[str, Any]]): Incoming events; each dict must include a `sequence_number` key.
         
         Raises:
-            SequenceViolation: On any violation
+            SequenceViolation: If an event is missing `sequence_number`, if a duplicate sequence is detected, or if a sequence gap is detected.
         """
         last_seq = self._get_last_sequence(db, session)
         
@@ -427,10 +422,17 @@ class IngestService:
         last_missing_seq: Optional[int] = None
     ):
         """
-        Emit LOG_DROP meta-event and increment session drop counter.
+        Create and persist a LOG_DROP meta-event and update the session's drop counter.
         
-        CONSTITUTIONAL REQUIREMENT: Record sequence ranges for forensic traceability.
+        This records a forensics-friendly representation of dropped or duplicate sequences, consumes the next sequence number for the session, increments session.total_drops by `dropped_count`, and persists the LOG_DROP EventChain to the database.
         
+        Parameters:
+            db (DBSession): Active database session used for persistence.
+            session (Session): Session model to which the LOG_DROP belongs.
+            reason (str): Drop reason identifier (e.g., "DUPLICATE_SEQUENCE", "SEQUENCE_GAP").
+            dropped_count (int): Number of events that were dropped or considered missing.
+            first_missing_seq (Optional[int]): First sequence number in a missing range, if known.
+            last_missing_seq (Optional[int]): Last sequence number in a missing range, if known.
         AUDIT GUARANTEE: This function commits immediately to ensure LOG_DROP is
         persisted even when the batch is subsequently rejected via SequenceViolation.
         This is INTENTIONAL for audit integrity - we must record WHY a batch was

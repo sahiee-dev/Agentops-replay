@@ -27,7 +27,12 @@ import uuid
 
 @pytest.fixture
 def db_session():
-    """Test database session."""
+    """
+    Provide a database session for tests and ensure it is closed afterwards.
+    
+    Yields:
+        db (Session): A new SessionLocal instance connected to the test database; the session is closed when the fixture teardown runs.
+    """
     db = SessionLocal()
     yield db
     db.close()
@@ -35,7 +40,12 @@ def db_session():
 
 @pytest.fixture
 def ingest_service():
-    """Ingestion service instance."""
+    """
+    Provide a ready-to-use IngestService configured for tests.
+    
+    Returns:
+        IngestService: An IngestService instance initialized with service_id "test-ingest-01".
+    """
     return IngestService(service_id="test-ingest-01")
 
 
@@ -44,7 +54,9 @@ class TestConstitutionalGuarantees:
     
     def test_server_side_hash_recomputation(self, ingest_service):
         """
-        CRITICAL: Server MUST recompute hashes, ignoring SDK hashes.
+        Verify the server recomputes payload and event hashes and ignores hashes supplied by the SDK.
+        
+        Asserts that appending an event with intentionally incorrect `payload_hash`/`event_hash` succeeds, the persisted `payload_hash` is different from the supplied wrong value and has length 64 (SHA-256), and that `verifier_core.verify_payload_hash` validates the stored payload and hash.
         """
         # Start session
         session_id = ingest_service.start_session(authority="server")
@@ -159,7 +171,12 @@ class TestConstitutionalGuarantees:
     
     def test_seal_authority_gate(self, ingest_service):
         """
-        CRITICAL: Only SERVER authority sessions can be sealed.
+        Prevent sealing a session unless its authority is "server".
+        
+        Verifies that attempting to seal a session created with authority "sdk" raises an AuthorityViolation containing "server authority".
+        
+        Raises:
+            AuthorityViolation: if the session's authority is not "server".
         """
         # Create SDK authority session
         session_id = ingest_service.start_session(authority="sdk")
@@ -189,7 +206,11 @@ class TestConstitutionalGuarantees:
     
     def test_binary_evidence_classification(self, ingest_service):
         """
-        CRITICAL: Evidence MUST be AUTHORITATIVE or NON_AUTHORITATIVE only.
+        Verify that evidence is classified as authoritative only when authority is "server", the session is sealed, the session is complete, and there are no drops.
+        
+        Asserts that:
+        - `verifier_core.classify_evidence(...)` returns "AUTHORITATIVE_EVIDENCE" when authority="server", sealed=True, complete=True, has_drops=False.
+        - It returns "NON_AUTHORITATIVE_EVIDENCE" for each failing condition: authority="sdk"; sealed=False; has_drops=True; and complete=False.
         """
         # Test AUTHORITATIVE path (all conditions met)
         result = verifier_core.classify_evidence(

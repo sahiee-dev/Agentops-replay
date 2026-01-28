@@ -7,6 +7,11 @@ import Replay from './pages/Replay';
 import Compliance from './pages/Compliance';
 import LiveAgent from './pages/LiveAgent';
 
+/**
+ * Root application component that sets up client-side routing within the main layout.
+ *
+ * @returns {JSX.Element} The Router containing the Layout and app Routes for each page.
+ */
 function App() {
   return (
     <Router>

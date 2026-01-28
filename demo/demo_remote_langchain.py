@@ -17,9 +17,10 @@ import time
 
 def main():
     """
-    Run LangChain agent with remote AgentOps tracking.
+    Run a demo LangChain-style agent that records events to a remote AgentOps server.
     
-    Server must be running: uvicorn app.main:app --reload
+    Requires a running AgentOps server at http://localhost:8000 (start with: uvicorn app.main:app --reload).
+    Starts a remote session, records tool call/result events, an LLM call, and an agent output event, ends the session, and prints the remote session ID along with example curl commands for verification and export.
     """
     print("=" * 60)
     print("AgentOps Remote Mode Demo - LangChain Agent")

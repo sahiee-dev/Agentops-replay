@@ -30,7 +30,20 @@ ingest_service = IngestService(service_id="prod-ingest-01")
 
 @router.post("/sessions", response_model=SessionStartResponse, status_code=status.HTTP_201_CREATED)
 async def start_session(request: SessionStartRequest):
-    """Start new session with specified authority."""
+    """
+    Start a new ingestion session for the given authority.
+    
+    Creates a session and returns its identifying metadata. When the authority equals "server", the returned response includes the ingestion service identifier.
+    
+    Parameters:
+        request (SessionStartRequest): Payload containing session_id, authority, agent_name, and user_id.
+    
+    Returns:
+        SessionStartResponse: Contains session_id, authority, status ("active"), and ingestion_service_id when authority is "server".
+    
+    Raises:
+        HTTPException: Raised with status code 400 if the request is invalid (e.g., duplicate session or invalid fields).
+    """
     try:
         session_id = ingest_service.start_session(
             session_id_str=request.session_id,
@@ -51,7 +64,21 @@ async def start_session(request: SessionStartRequest):
 
 @router.post("/sessions/{session_id}/events", response_model=EventBatchResponse)
 async def append_events(session_id: str, batch: EventBatch):
-    """Append batch of events with constitutional guarantees."""
+    """
+    Append a batch of events to an ingestion session.
+    
+    Parameters:
+        session_id (str): Identifier of the session to append events to.
+        batch (EventBatch): Payload containing the events to append.
+    
+    Returns:
+        EventBatchResponse: Response containing `status`, `accepted_count`, and `final_hash` when present.
+    
+    Raises:
+        HTTPException: 409 if a sequence violation occurs.
+        HTTPException: 400 if the request is invalid.
+        HTTPException: 500 for unexpected internal errors.
+    """
     try:
         result = ingest_service.append_events(
             session_id=session_id,
@@ -76,7 +103,19 @@ async def append_events(session_id: str, batch: EventBatch):
 
 @router.post("/sessions/{session_id}/seal", response_model=SealResponse)
 async def seal_session(session_id: str):
-    """Seal session with CHAIN_SEAL (authority gate enforced)."""
+    """
+    Seal the ingestion session identified by `session_id`, enforcing the CHAIN_SEAL authority gate.
+    
+    Parameters:
+        session_id (str): Identifier of the session to seal (expected UUID string).
+    
+    Returns:
+        SealResponse: Object containing `status`, `seal_timestamp`, `session_digest`, and `event_count`.
+    
+    Raises:
+        HTTPException: 403 if the caller lacks CHAIN_SEAL authority.
+        HTTPException: 400 if `session_id` is invalid or sealing cannot proceed due to bad input.
+    """
     try:
         result = ingest_service.seal_session(session_id)
         return SealResponse(
@@ -93,7 +132,13 @@ async def seal_session(session_id: str):
 
 @router.get("/sessions/{session_id}", response_model=SessionMetadata)
 async def get_session(session_id: str, db: DBSession = Depends(get_db)):
-    """Retrieve session metadata."""
+    """
+    Return metadata for the ingestion session identified by session_id.
+    
+    @returns SessionMetadata: Contains session_id, authority, status, evidence_class, started_at, sealed_at, total_drops, and event_count.
+    @raises HTTPException: 400 if session_id is not a valid UUID string.
+    @raises HTTPException: 404 if no session exists for the given session_id.
+    """
     try:
         session = db.query(Session).filter(
             Session.session_id_str == uuid.UUID(session_id)

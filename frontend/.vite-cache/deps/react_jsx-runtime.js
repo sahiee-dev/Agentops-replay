@@ -10,6 +10,11 @@ var require_react_jsx_runtime_development = __commonJS({
   "node_modules/react/cjs/react-jsx-runtime.development.js"(exports) {
     "use strict";
     (function() {
+      /**
+       * Derives a human-readable component or element name for a React type.
+       * @param {*} type - A React type (component constructor/function, string tag, or React-specific object/symbol).
+       * @returns {string|null} The resolved display name (for example `"Fragment"`, `"ForwardRef(MyComp)"`, or `"MyComponent"`), or `null` if no name can be determined.
+       */
       function getComponentNameFromType(type) {
         if (null == type) return null;
         if ("function" === typeof type)
@@ -56,9 +61,20 @@ var require_react_jsx_runtime_development = __commonJS({
           }
         return null;
       }
+      /**
+       * Convert a value to its string representation.
+       * @param {*} value - The value to convert.
+       * @returns {string} The value converted to a string.
+       */
       function testStringCoercion(value) {
         return "" + value;
       }
+      /**
+       * Checks whether a key value can be coerced to a string and logs an error if it cannot.
+       *
+       * @param {*} value - The value to test for string coercion.
+       * @returns {*} The result returned by `testStringCoercion(value)` when coercion fails and an error is logged; otherwise `undefined`.
+       */
       function checkKeyStringCoercion(value) {
         try {
           testStringCoercion(value);
@@ -78,6 +94,11 @@ var require_react_jsx_runtime_development = __commonJS({
           return testStringCoercion(value);
         }
       }
+      /**
+       * Return a human-friendly task name for a React type.
+       * @param {any} type - A React type (e.g., a component constructor/function, string type, Fragment symbol, or a lazy wrapper).
+       * @returns {string} A display-style name: `"<>"` for Fragment, `"<...>"` for lazy or unknown types, or `"<Name>"` where `Name` is the component's resolved name.
+       */
       function getTaskName(type) {
         if (type === REACT_FRAGMENT_TYPE) return "<>";
         if ("object" === typeof type && null !== type && type.$$typeof === REACT_LAZY_TYPE)
@@ -89,13 +110,26 @@ var require_react_jsx_runtime_development = __commonJS({
           return "<...>";
         }
       }
+      /**
+       * Retrieve the current React owner from the shared internals.
+       * @returns {object|null} The current owner object, or `null` if no owner is set or internals are unavailable.
+       */
       function getOwner() {
         var dispatcher = ReactSharedInternals.A;
         return null === dispatcher ? null : dispatcher.getOwner();
       }
+      /**
+       * Create an Error that represents an unknown React owner frame for stack traces.
+       * @returns {Error} An Error with message "react-stack-top-frame" used to denote an unknown owner frame.
+       */
       function UnknownOwner() {
         return Error("react-stack-top-frame");
       }
+      /**
+       * Determines whether a props/config object contains a usable `key` property.
+       * @param {object} config - The props/config object to inspect.
+       * @returns {boolean} `true` if `config.key` is defined and is not the React key-warning getter, `false` otherwise.
+       */
       function hasValidKey(config) {
         if (hasOwnProperty.call(config, "key")) {
           var getter = Object.getOwnPropertyDescriptor(config, "key").get;
@@ -103,6 +137,12 @@ var require_react_jsx_runtime_development = __commonJS({
         }
         return void 0 !== config.key;
       }
+      /**
+       * Installs a getter on a props object that logs a React warning the first time `key` is accessed.
+       *
+       * @param {object} props - The props object on which to define the `key` getter.
+       * @param {string} displayName - Component display name included in the warning message.
+       */
       function defineKeyPropWarningGetter(props, displayName) {
         function warnAboutAccessingKey() {
           specialPropKeyWarningShown || (specialPropKeyWarningShown = true, console.error(
@@ -116,6 +156,12 @@ var require_react_jsx_runtime_development = __commonJS({
           configurable: true
         });
       }
+      /**
+       * Emit a per-component deprecation warning about element.ref removal and retrieve the element's ref value.
+       *
+       * Logs a single error per component name informing that `element.ref` was removed in React 19 and that `ref` is now a regular prop.
+       * @returns {any} The `ref` value from `this.props` if present, otherwise `null`.
+       */
       function elementRefGetterWithDeprecationWarning() {
         var componentName = getComponentNameFromType(this.type);
         didWarnAboutElementRef[componentName] || (didWarnAboutElementRef[componentName] = true, console.error(
@@ -124,6 +170,17 @@ var require_react_jsx_runtime_development = __commonJS({
         componentName = this.props.ref;
         return void 0 !== componentName ? componentName : null;
       }
+      /**
+       * Create a React element object with development debug metadata and a ref getter that emits deprecation warnings.
+       * @param {*} type - The component type (string, function, or React-specific object) to assign to the element.
+       * @param {string|null} key - The element key used to identify it within a list, or null.
+       * @param {*} self - Internal caller self reference (not used externally; preserved for legacy/stack info).
+       * @param {*} source - Source location information (e.g., file/line) for development tooling.
+       * @param {*} owner - The current owner (component) that created the element.
+       * @param {Object} props - The props object to attach to the element.
+       * @param {string|null} debugStack - A human-readable stack frame string for debugging.
+       * @param {string|null} debugTask - A human-readable task name for debugging (e.g., component display name).
+       * @returns {Object} A React element object with $$typeof set to REACT_ELEMENT_TYPE, the given type, key, props, non-enumerable `ref`, internal `_store` validation flag, and development-only `_debugInfo`, `_debugStack`, and `_debugTask` fields.
       function ReactElement(type, key, self, source, owner, props, debugStack, debugTask) {
         self = props.ref;
         type = {
@@ -165,6 +222,19 @@ var require_react_jsx_runtime_development = __commonJS({
         Object.freeze && (Object.freeze(type.props), Object.freeze(type));
         return type;
       }
+      /**
+       * Create a React element for development builds, normalizing keys, validating children, and attaching debug metadata.
+       *
+       * @param {*} type - The element type (string for host components or a component constructor/object).
+       * @param {object} config - The props/configuration object passed from JSX; may include a `key` property.
+       * @param {*} maybeKey - An explicit key value provided by the JSX transform (takes precedence over config).
+       * @param {boolean} isStaticChildren - If true, children are treated as a static array and validated/frozen.
+       * @param {?object} source - Source location information for debugging (e.g., filename/line number).
+       * @param {?object} self - The `this` value captured at element creation for developer tools.
+       * @param {?string} debugStack - A string representing the captured stack frame for debug purposes.
+       * @param {?string} debugTask - A human-readable task name used in development diagnostics.
+       * @returns {object} A React element object containing `type`, `props`, `key`, `_owner` and development-only debug fields.
+       */
       function jsxDEVImpl(type, config, maybeKey, isStaticChildren, source, self, debugStack, debugTask) {
         var children = config.children;
         if (void 0 !== children)
@@ -215,6 +285,11 @@ var require_react_jsx_runtime_development = __commonJS({
           debugTask
         );
       }
+      /**
+       * Marks a React element's child keys as validated for React's internal bookkeeping.
+       * Does nothing if the provided value is not a React element with an internal `_store`.
+       * @param {*} node - The potential React element whose `_store.validated` flag should be set.
+       */
       function validateChildKeys(node) {
         "object" === typeof node && null !== node && node.$$typeof === REACT_ELEMENT_TYPE && node._store && (node._store.validated = 1);
       }

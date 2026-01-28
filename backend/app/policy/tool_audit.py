@@ -26,19 +26,16 @@ class ToolAuditReport(BaseModel):
 
 def generate_tool_audit(events: List[Dict[str, Any]], session_id: str) -> ToolAuditReport:
     """
-    Generate tool access audit trail.
+    Create an audit report summarizing TOOL_CALL events from an event stream for a session.
     
-    Extracts all TOOL_CALL events and summarizes:
-    - Tool name
-    - Timestamp
-    - Arguments (redacted if PII detected)
+    This collects each TOOL_CALL event into a ToolCallSummary containing sequence number, wall timestamp, tool name, an abbreviated or redacted args summary, and a placeholder result summary ("See TOOL_RESULT event"). Unique tool names are accumulated and returned sorted.
     
-    Args:
-        events: List of event dictionaries
-        session_id: Session UUID
-        
+    Parameters:
+        events (List[Dict[str, Any]]): Ordered list of event dictionaries; TOOL_CALL events should contain a `payload` with `tool_name`, optional `args`, and top-level `sequence_number` and `timestamp_wall` keys.
+        session_id (str): Session identifier (UUID) to associate with the generated report.
+    
     Returns:
-        ToolAuditReport
+        ToolAuditReport: Aggregated audit report with `session_id`, `total_tool_calls`, `unique_tools` (sorted), and `tool_calls` (list of ToolCallSummary).
     """
     tool_calls = []
     unique_tools = set()

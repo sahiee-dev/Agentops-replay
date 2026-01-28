@@ -29,15 +29,22 @@ async def export_session(
     db: DBSession = Depends(get_db)
 ):
     """
-    Export session in JSON or PDF format.
+    Export a session as a downloadable JSON or PDF artifact.
     
-    Args:
-        session_id: Session UUID
-        format: "json" or "pdf"
-        db: Database session
+    Parameters:
+        session_id (str): Session UUID to export.
+        format (str): Export format, either "json" or "pdf". Defaults to "json".
         
     Returns:
-        JSON or PDF export
+        Response: A FastAPI Response containing either:
+            - JSON content (pretty-printed) with media type "application/json" and
+              filename "session_{session_id}_export.json", or
+            - PDF bytes with media type "application/pdf" and
+              filename "session_{session_id}_compliance.pdf".
+    
+    Raises:
+        HTTPException: 400 if `format` is invalid; 404 if the session is not found;
+                       500 for other export errors.
     """
     try:
         if format == "json":
@@ -75,6 +82,4 @@ async def export_session(
             # Invalid UUID format
             raise HTTPException(status_code=400, detail="Invalid session ID")
     except Exception as e:
-        # Log full exception server-side
-        logger.exception("Export error for session %s format %s", session_id, format)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Export error: {str(e)}")

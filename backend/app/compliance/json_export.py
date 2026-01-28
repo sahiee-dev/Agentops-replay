@@ -16,23 +16,19 @@ from app.models import Session, EventChain, ChainSeal
 
 def generate_json_export(session_id: str, db: DBSession) -> Dict[str, Any]:
     """
-    Generate RFC 8785 canonical JSON export.
+    Create an RFC 8785 canonical JSON export for the given session.
     
-    Includes:
-    - Full event chain
-    - Verification metadata
-    - Evidence class
-    - Chain-of-custody statement
+    The returned structure includes the full ordered event chain, session metadata, optional chain seal data, evidence classification, and a chain-of-custody block suitable for canonicalization.
     
-    Args:
-        session_id: Session UUID string
-        db: Database session
-        
+    Parameters:
+        session_id (str): UUID string of the session to export.
+        db (DBSession): Database session used to load Session, EventChain, and ChainSeal records.
+    
     Returns:
-        Canonical export dictionary
-        
+        dict: Export dictionary containing keys: `export_version`, `export_timestamp`, `session_id`, `evidence_class`, `chain_authority`, `session_metadata`, `seal`, `events`, and `chain_of_custody`.
+    
     Raises:
-        ValueError: If session not found
+        ValueError: If no Session exists for the provided `session_id`.
     """
     # Validate session_id format
     try:
