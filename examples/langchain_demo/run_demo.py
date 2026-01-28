@@ -45,11 +45,16 @@ DEMO_QUERIES = [
 
 def run_demo(use_agentops: bool = True, output_file: str = "session_output.jsonl"):
     """
-    Run the demo agent with sample queries.
+    Run a demonstration of the AgentOps Replay workflow using a LangChain-based agent.
     
-    Args:
-        use_agentops: Whether to use AgentOps callback handler
-        output_file: Path to export session JSONL
+    Runs a sequence of predefined demo queries against a customer-support agent, optionally records an AgentOps session via a callback handler, and may export session events to a JSONL file when AgentOps is enabled.
+    
+    Parameters:
+        use_agentops (bool): If True and AgentOps is available, attach an AgentOps callback handler and record a session.
+        output_file (str): Path to write exported session JSONL when AgentOps recording is active.
+    
+    Returns:
+        bool: `True` if the demo completed successfully, `False` if an error occurred or required configuration was missing.
     """
     print("=" * 60)
     print("AgentOps Replay - LangChain Demo")
@@ -173,8 +178,13 @@ def run_demo(use_agentops: bool = True, output_file: str = "session_output.jsonl
 
 def run_mock_demo(output_file: str = "session_output.jsonl"):
     """
-    Run a mock demo without requiring OpenAI API key.
-    Uses the SDK directly to create sample events.
+    Run a mock AgentOps Replay session and export generated events to a JSONL file.
+    
+    Parameters:
+        output_file (str): Path to write the exported JSONL session (default "session_output.jsonl").
+    
+    Returns:
+        success (bool): True if the mock session was created and exported successfully; False on import or runtime errors.
     """
     print("=" * 60)
     print("AgentOps Replay - Mock Demo (No API Key Required)")
