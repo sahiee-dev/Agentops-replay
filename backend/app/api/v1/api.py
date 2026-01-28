@@ -1,6 +1,7 @@
 from fastapi import APIRouter # type: ignore
 from app.api.v1.endpoints import sessions, events, replay, compliance, live_agent
-from app.api.v1.endpoints import sessions, events, replay, compliance
+from app.api.v1.endpoints import ingestion_sessions, verify
+from app.api.v1.endpoints import export as export_endpoints
 
 # Import event_generation only if the file exists
 try:
@@ -12,7 +13,12 @@ except ImportError:
 # Create the main API router
 router = APIRouter()
 
-# Include all endpoint routers
+# Constitutional ingestion endpoints (Day 4)
+router.include_router(ingestion_sessions.router, prefix="/ingest", tags=["ingestion"])
+router.include_router(verify.router, prefix="/verify", tags=["verification"])
+router.include_router(export_endpoints.router, prefix="/export", tags=["export"])
+
+# Legacy endpoints
 router.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
 router.include_router(events.router, prefix="/events", tags=["events"])
 router.include_router(replay.router, prefix="/replay", tags=["replay"])
@@ -22,3 +28,4 @@ router.include_router(live_agent.router, prefix="/live-agent", tags=["live-agent
 # Include event generation if available
 if HAS_EVENT_GENERATION:
     router.include_router(event_generation.router, prefix="/event-generation", tags=["event-generation"])
+

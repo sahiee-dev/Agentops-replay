@@ -1,0 +1,442 @@
+[
+    {
+        "file": "conversational_02.py",
+        "score": {
+            "struct": 0.8,
+            "maint": 0.6731512621424212,
+            "semantic": 0.9438779354095459,
+            "overall": 0.805676399183989
+        },
+        "original": "# demo-agents/test-samples/conversational_02.py\n\nclass Agent:\n    def __init__(self, name=\"Agent02\"):\n        self.name = name\n\n    def get_response(self, user_input):\n        if \"hello\" in user_input.lower():\n            return f\"{self.name}: Hello! How can I help you today?\"\n        return f\"{self.name}: I heard '{user_input}'. Tell me more.\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    while True:\n        user_input = input(\"You: \")\n        print(agent.get_response(user_input))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Agent02'):\n        self.name = name\n\n    def get_response(self, user_input):\n        if 'hello' in user_input.lower():\n            return f'{self.name}: Hello! How can I help you today?'\n        return f\"{self.name}: I heard '{user_input}'. Tell me more.\"\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    while True:\n        user_input = input('You: ')\n        print(agent.get_response(user_input))\n"
+    },
+    {
+        "file": "analytical_06.py",
+        "score": {
+            "struct": 0.7666666666666666,
+            "maint": 0.6735659052062805,
+            "semantic": 0.9618098139762878,
+            "overall": 0.8006807952830783
+        },
+        "original": "# demo-agents/test-samples/analytical_06.py\n\nclass Agent:\n    def __init__(self, name=\"Analytical06\"):\n        self.name = name\n\n    def analyze(self, data):\n        evens = [x for x in data if x % 2 == 0]\n        return f\"{self.name}: Even numbers = {evens}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    sample_data = [1, 2, 3, 4, 5, 6]\n    print(agent.analyze(sample_data))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Analytical06'):\n        self.name = name\n\n    def analyze(self, data):\n        evens = [x for x in data if x % 2 == 0]\n        return f'{self.name}: Even numbers = {evens}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    sample_data = [1, 2, 3, 4, 5, 6]\n    print(agent.analyze(sample_data))\n"
+    },
+    {
+        "file": "voice_06.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.7390483161137286,
+            "semantic": 0.9649881720542908,
+            "overall": 0.8569010516115619
+        },
+        "original": "\n# demo-agents/test-samples/voice_06.py\n\nclass Agent:\n    def __init__(self, name=\"Voice06\"):\n        self.name = name\n\n    def respond(self, message):\n        uppercase = message.upper()\n        return f\"{self.name}: {uppercase}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"please speak louder\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Voice06'):\n        self.name = name\n\n    def respond(self, message):\n        uppercase = message.upper()\n        return f'{self.name}: {uppercase}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('please speak louder'))\n"
+    },
+    {
+        "file": "conversational_06.py",
+        "score": {
+            "struct": 0.8,
+            "maint": 0.6731512621424212,
+            "semantic": 0.9221836924552917,
+            "overall": 0.7984449848659043
+        },
+        "original": "# demo-agents/test-samples/conversational_06.py\n\nclass Agent:\n    def __init__(self, name=\"Agent06\"):\n        self.name = name\n\n    def get_response(self, user_input):\n        if \"?\" in user_input:\n            return f\"{self.name}: That's an interesting question about '{user_input}'.\"\n        return f\"{self.name}: You said '{user_input}'.\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    while True:\n        user_input = input(\"You: \")\n        print(agent.get_response(user_input))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Agent06'):\n        self.name = name\n\n    def get_response(self, user_input):\n        if '?' in user_input:\n            return (\n                f\"{self.name}: That's an interesting question about '{user_input}'.\"\n                )\n        return f\"{self.name}: You said '{user_input}'.\"\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    while True:\n        user_input = input('You: ')\n        print(agent.get_response(user_input))\n"
+    },
+    {
+        "file": "analytical_02.py",
+        "score": {
+            "struct": 0.8,
+            "maint": 0.7017503824565665,
+            "semantic": 0.9676383137702942,
+            "overall": 0.8231295654089535
+        },
+        "original": "# demo-agents/test-samples/analytical_02.py\n\nclass Agent:\n    def __init__(self, name=\"Analytical02\"):\n        self.name = name\n\n    def analyze(self, data):\n        return f\"{self.name}: Average = {sum(data)/len(data) if data else 0}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    sample_data = [10, 20, 30, 40]\n    print(agent.analyze(sample_data))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Analytical02'):\n        self.name = name\n\n    def analyze(self, data):\n        return f'{self.name}: Average = {sum(data) / len(data) if data else 0}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    sample_data = [10, 20, 30, 40]\n    print(agent.analyze(sample_data))\n"
+    },
+    {
+        "file": "voice_02.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.750206708965386,
+            "semantic": 0.9516227841377258,
+            "overall": 0.8561653865899261
+        },
+        "original": "# demo-agents/test-samples/voice_02.py\n\nclass Agent:\n    def __init__(self, name=\"Voice02\"):\n        self.name = name\n\n    def respond(self, message):\n        return f\"{self.name}: I understand '{message}'\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"How are you?\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Voice02'):\n        self.name = name\n\n    def respond(self, message):\n        return f\"{self.name}: I understand '{message}'\"\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('How are you?'))\n"
+    },
+    {
+        "file": "support_08.py",
+        "score": {
+            "struct": 0.8,
+            "maint": 0.6827394744654153,
+            "semantic": 0.9626480340957642,
+            "overall": 0.8151291695203932
+        },
+        "original": "# demo-agents/test-samples/support_08.py\n\nclass Agent:\n    def __init__(self, name=\"Support08\"):\n        self.name = name\n\n    def respond(self, query):\n        greetings = [\"hello\", \"hi\", \"hey\"]\n        if query.lower() in greetings:\n            return f\"{self.name}: Hello! How can I help you today?\"\n        return f\"{self.name}: Your query has been noted.\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"Hi\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Support08'):\n        self.name = name\n\n    def respond(self, query):\n        greetings = ['hello', 'hi', 'hey']\n        if query.lower() in greetings:\n            return f'{self.name}: Hello! How can I help you today?'\n        return f'{self.name}: Your query has been noted.'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('Hi'))\n"
+    },
+    {
+        "file": "conversational_07.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.7277217643379578,
+            "semantic": 0.9160336256027222,
+            "overall": 0.8368073522024488
+        },
+        "original": "# demo-agents/test-samples/conversational_07.py\n\nclass Agent:\n    def __init__(self, name=\"Agent07\"):\n        self.name = name\n\n    def get_response(self, user_input):\n        return f\"{self.name}: Echo -> '{user_input.upper()}'\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    while True:\n        user_input = input(\"You: \")\n        print(agent.get_response(user_input))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Agent07'):\n        self.name = name\n\n    def get_response(self, user_input):\n        return f\"{self.name}: Echo -> '{user_input.upper()}'\"\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    while True:\n        user_input = input('You: ')\n        print(agent.get_response(user_input))\n"
+    },
+    {
+        "file": "analytical_03.py",
+        "score": {
+            "struct": 0.8,
+            "maint": 0.7277217643379578,
+            "semantic": 0.964392900466919,
+            "overall": 0.8307048882682923
+        },
+        "original": "# demo-agents/test-samples/analytical_03.py\n\nclass Agent:\n    def __init__(self, name=\"Analytical03\"):\n        self.name = name\n\n    def analyze(self, data):\n        max_val = max(data) if data else None\n        return f\"{self.name}: Max value = {max_val}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    sample_data = [5, 17, 2, 8]\n    print(agent.analyze(sample_data))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Analytical03'):\n        self.name = name\n\n    def analyze(self, data):\n        max_val = max(data) if data else None\n        return f'{self.name}: Max value = {max_val}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    sample_data = [5, 17, 2, 8]\n    print(agent.analyze(sample_data))\n"
+    },
+    {
+        "file": "voice_03.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.7019214923164533,
+            "semantic": 0.9655355215072632,
+            "overall": 0.8447078934967944
+        },
+        "original": "# demo-agents/test-samples/voice_03.py\n\nclass Agent:\n    def __init__(self, name=\"Voice03\"):\n        self.name = name\n\n    def respond(self, message):\n        reversed_msg = message[::-1]\n        return f\"{self.name}: Your message backwards -> {reversed_msg}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"Hello world\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Voice03'):\n        self.name = name\n\n    def respond(self, message):\n        reversed_msg = message[::-1]\n        return f'{self.name}: Your message backwards -> {reversed_msg}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('Hello world'))\n"
+    },
+    {
+        "file": "support_09.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.750206708965386,
+            "semantic": 0.948805034160614,
+            "overall": 0.8552261365975555
+        },
+        "original": "# demo-agents/test-samples/support_09.py\n\nclass Agent:\n    def __init__(self, name=\"Support09\"):\n        self.name = name\n\n    def respond(self, query):\n        return f\"{self.name}: Thank you for contacting support. Your ticket number is 12345.\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"Need help with installation\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Support09'):\n        self.name = name\n\n    def respond(self, query):\n        return (\n            f'{self.name}: Thank you for contacting support. Your ticket number is 12345.'\n            )\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('Need help with installation'))\n"
+    },
+    {
+        "file": "conversational_03.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.7277217643379578,
+            "semantic": 0.9032934308052063,
+            "overall": 0.8325606206032768
+        },
+        "original": "# demo-agents/test-samples/conversational_03.py\n\nclass Agent:\n    def __init__(self, name=\"Agent03\"):\n        self.name = name\n\n    def get_response(self, user_input):\n        return f\"{self.name}: Processing your input '{user_input}'...\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    while True:\n        user_input = input(\"You: \")\n        print(agent.get_response(user_input))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Agent03'):\n        self.name = name\n\n    def get_response(self, user_input):\n        return f\"{self.name}: Processing your input '{user_input}'...\"\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    while True:\n        user_input = input('You: ')\n        print(agent.get_response(user_input))\n"
+    },
+    {
+        "file": "analytical_07.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.7200374081225774,
+            "semantic": 0.9551500678062439,
+            "overall": 0.847284714198496
+        },
+        "original": "# demo-agents/test-samples/analytical_07.py\n\nclass Agent:\n    def __init__(self, name=\"Analytical07\"):\n        self.name = name\n\n    def analyze(self, data):\n        total_len = len(data)\n        unique_len = len(set(data))\n        return f\"{self.name}: Total items = {total_len}, Unique items = {unique_len}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    sample_data = [1, 2, 2, 3, 3, 3]\n    print(agent.analyze(sample_data))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Analytical07'):\n        self.name = name\n\n    def analyze(self, data):\n        total_len = len(data)\n        unique_len = len(set(data))\n        return (\n            f'{self.name}: Total items = {total_len}, Unique items = {unique_len}'\n            )\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    sample_data = [1, 2, 2, 3, 3, 3]\n    print(agent.analyze(sample_data))\n"
+    },
+    {
+        "file": "voice_07.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.7390483161137286,
+            "semantic": 0.9689492583274841,
+            "overall": 0.8582214137026264
+        },
+        "original": "# demo-agents/test-samples/voice_07.py\n\nclass Agent:\n    def __init__(self, name=\"Voice07\"):\n        self.name = name\n\n    def respond(self, message):\n        lowercase = message.lower()\n        return f\"{self.name}: {lowercase}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"SHOUTING TEXT\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Voice07'):\n        self.name = name\n\n    def respond(self, message):\n        lowercase = message.lower()\n        return f'{self.name}: {lowercase}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('SHOUTING TEXT'))\n"
+    },
+    {
+        "file": "conversational_08.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.7186923788828112,
+            "semantic": 0.9217672348022461,
+            "overall": 0.8357087601172414
+        },
+        "original": "# demo-agents/test-samples/conversational_08.py\n\nclass Agent:\n    def __init__(self, name=\"Agent08\"):\n        self.name = name\n\n    def get_response(self, user_input):\n        words = user_input.split()\n        return f\"{self.name}: Your input has {len(words)} words.\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    while True:\n        user_input = input(\"You: \")\n        print(agent.get_response(user_input))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Agent08'):\n        self.name = name\n\n    def get_response(self, user_input):\n        words = user_input.split()\n        return f'{self.name}: Your input has {len(words)} words.'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    while True:\n        user_input = input('You: ')\n        print(agent.get_response(user_input))\n"
+    },
+    {
+        "file": "support_06.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.750206708965386,
+            "semantic": 0.9511803388595581,
+            "overall": 0.8560179048305369
+        },
+        "original": "# demo-agents/test-samples/support_06.py\n\nclass Agent:\n    def __init__(self, name=\"Support06\"):\n        self.name = name\n\n    def respond(self, query):\n        return f\"{self.name}: I can help you with billing, orders, and technical issues. Please specify.\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"I have a billing problem.\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Support06'):\n        self.name = name\n\n    def respond(self, query):\n        return (\n            f'{self.name}: I can help you with billing, orders, and technical issues. Please specify.'\n            )\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('I have a billing problem.'))\n"
+    },
+    {
+        "file": "analytical_08.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.7290667935777241,
+            "semantic": 0.9605752825737,
+            "overall": 0.8521029142726969
+        },
+        "original": "# demo-agents/test-samples/analytical_08.py\n\nclass Agent:\n    def __init__(self, name=\"Analytical08\"):\n        self.name = name\n\n    def analyze(self, data):\n        sorted_data = sorted(data)\n        return f\"{self.name}: Sorted data = {sorted_data}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    sample_data = [5, 1, 4, 2, 3]\n    print(agent.analyze(sample_data))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Analytical08'):\n        self.name = name\n\n    def analyze(self, data):\n        sorted_data = sorted(data)\n        return f'{self.name}: Sorted data = {sorted_data}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    sample_data = [5, 1, 4, 2, 3]\n    print(agent.analyze(sample_data))\n"
+    },
+    {
+        "file": "voice_08.py",
+        "score": {
+            "struct": 0.7666666666666666,
+            "maint": 0.7004053532168004,
+            "semantic": 0.9616512060165405,
+            "overall": 0.809574408633336
+        },
+        "original": "# demo-agents/test-samples/voice_08.py\n\nclass Agent:\n    def __init__(self, name=\"Voice08\"):\n        self.name = name\n\n    def respond(self, message):\n        vowels = sum(1 for c in message if c.lower() in \"aeiou\")\n        return f\"{self.name}: Number of vowels = {vowels}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"This is a test\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Voice08'):\n        self.name = name\n\n    def respond(self, message):\n        vowels = sum(1 for c in message if c.lower() in 'aeiou')\n        return f'{self.name}: Number of vowels = {vowels}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('This is a test'))\n"
+    },
+    {
+        "file": "support_02.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.750206708965386,
+            "semantic": 0.9581701755523682,
+            "overall": 0.8583478503948069
+        },
+        "original": "# demo-agents/test-samples/support_02.py\n\nclass Agent:\n    def __init__(self, name=\"Support02\"):\n        self.name = name\n\n    def respond(self, query):\n        return f\"{self.name}: Thank you for your message: '{query}'. We will get back shortly.\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"How do I reset my password?\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Support02'):\n        self.name = name\n\n    def respond(self, query):\n        return (\n            f\"{self.name}: Thank you for your message: '{query}'. We will get back shortly.\"\n            )\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('How do I reset my password?'))\n"
+    },
+    {
+        "file": "analytical_09.py",
+        "score": {
+            "struct": 0.8,
+            "maint": 0.6917688599205618,
+            "semantic": 0.9622557163238525,
+            "overall": 0.8180081920814715
+        },
+        "original": "# demo-agents/test-samples/analytical_09.py\n\nclass Agent:\n    def __init__(self, name=\"Analytical09\"):\n        self.name = name\n\n    def analyze(self, data):\n        squared = [x**2 for x in data]\n        return f\"{self.name}: Squared values = {squared}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    sample_data = [1, 2, 3, 4]\n    print(agent.analyze(sample_data))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Analytical09'):\n        self.name = name\n\n    def analyze(self, data):\n        squared = [(x ** 2) for x in data]\n        return f'{self.name}: Squared values = {squared}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    sample_data = [1, 2, 3, 4]\n    print(agent.analyze(sample_data))\n"
+    },
+    {
+        "file": "voice_09.py",
+        "score": {
+            "struct": 0.7,
+            "maint": 0.6805269755290158,
+            "semantic": 0.9673654437065125,
+            "overall": 0.7826308064118427
+        },
+        "original": "# demo-agents/test-samples/voice_09.py\n\nclass Agent:\n    def __init__(self, name=\"Voice09\"):\n        self.name = name\n\n    def respond(self, message):\n        consonants = sum(1 for c in message if c.isalpha() and c.lower() not in \"aeiou\")\n        return f\"{self.name}: Number of consonants = {consonants}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"Count consonants in this\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Voice09'):\n        self.name = name\n\n    def respond(self, message):\n        consonants = sum(1 for c in message if c.isalpha() and c.lower() not in\n            'aeiou')\n        return f'{self.name}: Number of consonants = {consonants}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('Count consonants in this'))\n"
+    },
+    {
+        "file": "support_03.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.750206708965386,
+            "semantic": 0.9581518769264221,
+            "overall": 0.8583417508528249
+        },
+        "original": "# demo-agents/test-samples/support_03.py\n\nclass Agent:\n    def __init__(self, name=\"Support03\"):\n        self.name = name\n\n    def respond(self, query):\n        return f\"{self.name}: Please provide your order ID for faster support.\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"My order is delayed.\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Support03'):\n        self.name = name\n\n    def respond(self, query):\n        return f'{self.name}: Please provide your order ID for faster support.'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('My order is delayed.'))\n"
+    },
+    {
+        "file": "conversational_09.py",
+        "score": {
+            "struct": 0.7666666666666666,
+            "maint": 0.680049415985883,
+            "semantic": 0.9506335854530334,
+            "overall": 0.7991165560351944
+        },
+        "original": "# demo-agents/test-samples/conversational_09.py\n\nclass Agent:\n    def __init__(self, name=\"Agent09\"):\n        self.name = name\n\n    def get_response(self, user_input):\n        vowels = sum(1 for c in user_input.lower() if c in \"aeiou\")\n        return f\"{self.name}: Your input has {vowels} vowels.\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    while True:\n        user_input = input(\"You: \")\n        print(agent.get_response(user_input))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Agent09'):\n        self.name = name\n\n    def get_response(self, user_input):\n        vowels = sum(1 for c in user_input.lower() if c in 'aeiou')\n        return f'{self.name}: Your input has {vowels} vowels.'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    while True:\n        user_input = input('You: ')\n        print(agent.get_response(user_input))\n"
+    },
+    {
+        "file": "support_07.py",
+        "score": {
+            "struct": 0.8,
+            "maint": 0.6917688599205618,
+            "semantic": 0.9612665176391602,
+            "overall": 0.817678459186574
+        },
+        "original": "# demo-agents/test-samples/support_07.py\n\nclass Agent:\n    def __init__(self, name=\"Support07\"):\n        self.name = name\n\n    def respond(self, query):\n        if \"password\" in query.lower():\n            return f\"{self.name}: You can reset your password using the 'Forgot Password' link.\"\n        return f\"{self.name}: Could you provide more details?\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"I forgot my password\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Support07'):\n        self.name = name\n\n    def respond(self, query):\n        if 'password' in query.lower():\n            return (\n                f\"{self.name}: You can reset your password using the 'Forgot Password' link.\"\n                )\n        return f'{self.name}: Could you provide more details?'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('I forgot my password'))\n"
+    },
+    {
+        "file": "support_10.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.750206708965386,
+            "semantic": 0.9670478701591492,
+            "overall": 0.8613070819304006
+        },
+        "original": "# demo-agents/test-samples/support_10.py\n\nclass Agent:\n    def __init__(self, name=\"Support10\"):\n        self.name = name\n\n    def respond(self, query):\n        return f\"{self.name}: I am here 24/7 to help you. Please describe your problem.\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"Technical issue with my device\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Support10'):\n        self.name = name\n\n    def respond(self, query):\n        return (\n            f'{self.name}: I am here 24/7 to help you. Please describe your problem.'\n            )\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('Technical issue with my device'))\n"
+    },
+    {
+        "file": "support_04.py",
+        "score": {
+            "struct": 0.8,
+            "maint": 0.6917688599205618,
+            "semantic": 0.968024730682373,
+            "overall": 0.8199311968676449
+        },
+        "original": "# demo-agents/test-samples/support_04.py\n\nclass Agent:\n    def __init__(self, name=\"Support04\"):\n        self.name = name\n\n    def respond(self, query):\n        if \"refund\" in query.lower():\n            return f\"{self.name}: Refunds are processed within 5\u20137 business days.\"\n        return f\"{self.name}: We have received your request.\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"I want a refund\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Support04'):\n        self.name = name\n\n    def respond(self, query):\n        if 'refund' in query.lower():\n            return (\n                f'{self.name}: Refunds are processed within 5\u20137 business days.'\n                )\n        return f'{self.name}: We have received your request.'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('I want a refund'))\n"
+    },
+    {
+        "file": "support_05.py",
+        "score": {
+            "struct": 0.7666666666666666,
+            "maint": 0.6813944452256492,
+            "semantic": 0.9610472321510315,
+            "overall": 0.8030361146811158
+        },
+        "original": "# demo-agents/test-samples/support_05.py\n\nclass Agent:\n    def __init__(self, name=\"Support05\"):\n        self.name = name\n\n    def respond(self, query):\n        keywords = [\"delay\", \"late\", \"status\"]\n        if any(k in query.lower() for k in keywords):\n            return f\"{self.name}: Your order is being processed and will arrive soon.\"\n        return f\"{self.name}: Can you clarify your issue?\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"Where is my package?\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Support05'):\n        self.name = name\n\n    def respond(self, query):\n        keywords = ['delay', 'late', 'status']\n        if any(k in query.lower() for k in keywords):\n            return (\n                f'{self.name}: Your order is being processed and will arrive soon.'\n                )\n        return f'{self.name}: Can you clarify your issue?'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('Where is my package?'))\n"
+    },
+    {
+        "file": "support_01.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.7290667935777241,
+            "semantic": 0.9534474611282349,
+            "overall": 0.8497269737908751
+        },
+        "original": "# demo-agents/test-samples/support_01.py\n\nclass Agent:\n    def __init__(self, name=\"Support01\"):\n        self.name = name\n\n    def respond(self, query):\n        faq = {\n            \"hours\": \"Our working hours are 9am-6pm.\",\n            \"price\": \"The product costs $99.\"\n        }\n        return faq.get(query.lower(), f\"{self.name}: I am forwarding your query to support.\")\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"hours\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Support01'):\n        self.name = name\n\n    def respond(self, query):\n        faq = {'hours': 'Our working hours are 9am-6pm.', 'price':\n            'The product costs $99.'}\n        return faq.get(query.lower(),\n            f'{self.name}: I am forwarding your query to support.')\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('hours'))\n"
+    },
+    {
+        "file": "conversational_04.py",
+        "score": {
+            "struct": 0.7666666666666666,
+            "maint": 0.6642232395441094,
+            "semantic": 0.9452018141746521,
+            "overall": 0.7920305734618095
+        },
+        "original": "# demo-agents/test-samples/conversational_04.py\n\nclass Agent:\n    def __init__(self, name=\"Agent04\"):\n        self.name = name\n\n    def get_response(self, user_input):\n        greetings = [\"hi\", \"hello\", \"hey\"]\n        if any(greet in user_input.lower() for greet in greetings):\n            return f\"{self.name}: Hello! Nice to meet you.\"\n        return f\"{self.name}: I'm thinking about '{user_input}'...\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    while True:\n        user_input = input(\"You: \")\n        print(agent.get_response(user_input))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Agent04'):\n        self.name = name\n\n    def get_response(self, user_input):\n        greetings = ['hi', 'hello', 'hey']\n        if any(greet in user_input.lower() for greet in greetings):\n            return f'{self.name}: Hello! Nice to meet you.'\n        return f\"{self.name}: I'm thinking about '{user_input}'...\"\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    while True:\n        user_input = input('You: ')\n        print(agent.get_response(user_input))\n"
+    },
+    {
+        "file": "voice_10.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.750206708965386,
+            "semantic": 0.9580665826797485,
+            "overall": 0.8583133194372671
+        },
+        "original": "# demo-agents/test-samples/voice_10.py\n\nclass Agent:\n    def __init__(self, name=\"Voice10\"):\n        self.name = name\n\n    def respond(self, message):\n        return f\"{self.name}: Echo -> {message}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"Echo this message\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Voice10'):\n        self.name = name\n\n    def respond(self, message):\n        return f'{self.name}: Echo -> {message}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('Echo this message'))\n"
+    },
+    {
+        "file": "analytical_10.py",
+        "score": {
+            "struct": 0.7666666666666666,
+            "maint": 0.6686865367273931,
+            "semantic": 0.9670782089233398,
+            "overall": 0.8008104707724666
+        },
+        "original": "# demo-agents/test-samples/analytical_10.py\n\nclass Agent:\n    def __init__(self, name=\"Analytical10\"):\n        self.name = name\n\n    def analyze(self, data):\n        negative_sum = sum(x for x in data if x < 0)\n        return f\"{self.name}: Sum of negative numbers = {negative_sum}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    sample_data = [-5, 2, -3, 4]\n    print(agent.analyze(sample_data))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Analytical10'):\n        self.name = name\n\n    def analyze(self, data):\n        negative_sum = sum(x for x in data if x < 0)\n        return f'{self.name}: Sum of negative numbers = {negative_sum}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    sample_data = [-5, 2, -3, 4]\n    print(agent.analyze(sample_data))\n"
+    },
+    {
+        "file": "analytical_04.py",
+        "score": {
+            "struct": 0.8,
+            "maint": 0.7277217643379578,
+            "semantic": 0.9623872637748718,
+            "overall": 0.8300363427042766
+        },
+        "original": "# demo-agents/test-samples/analytical_04.py\n\nclass Agent:\n    def __init__(self, name=\"Analytical04\"):\n        self.name = name\n\n    def analyze(self, data):\n        min_val = min(data) if data else None\n        return f\"{self.name}: Min value = {min_val}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    sample_data = [5, 17, 2, 8]\n    print(agent.analyze(sample_data))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Analytical04'):\n        self.name = name\n\n    def analyze(self, data):\n        min_val = min(data) if data else None\n        return f'{self.name}: Min value = {min_val}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    sample_data = [5, 17, 2, 8]\n    print(agent.analyze(sample_data))\n"
+    },
+    {
+        "file": "voice_04.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.7390483161137286,
+            "semantic": 0.9628627300262451,
+            "overall": 0.8561925709355468
+        },
+        "original": "# demo-agents/test-samples/voice_04.py\n\nclass Agent:\n    def __init__(self, name=\"Voice04\"):\n        self.name = name\n\n    def respond(self, message):\n        words = message.split()\n        return f\"{self.name}: Number of words = {len(words)}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"This is a test message\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Voice04'):\n        self.name = name\n\n    def respond(self, message):\n        words = message.split()\n        return f'{self.name}: Number of words = {len(words)}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('This is a test message'))\n"
+    },
+    {
+        "file": "conversational_10.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.6833038945383124,
+            "semantic": 0.9275174140930176,
+            "overall": 0.8258293250993322
+        },
+        "original": "\n\n# demo-agents/test-samples/conversational_10.py\n\nclass Agent:\n    def __init__(self, name=\"Agent10\"):\n        self.name = name\n\n    def get_response(self, user_input):\n        reversed_text = user_input[::-1]\n        return f\"{self.name}: Reversed input -> '{reversed_text}'\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    while True:\n        user_input = input(\"You: \")\n        print(agent.get_response(user_input))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Agent10'):\n        self.name = name\n\n    def get_response(self, user_input):\n        reversed_text = user_input[::-1]\n        return f\"{self.name}: Reversed input -> '{reversed_text}'\"\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    while True:\n        user_input = input('You: ')\n        print(agent.get_response(user_input))\n"
+    },
+    {
+        "file": "conversational_01.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.7104491957995832,
+            "semantic": 0.9121863842010498,
+            "overall": 0.8297674155557666
+        },
+        "original": "# demo-agents/test-samples/conversational_01.py\n\nclass Agent:\n    def __init__(self, name=\"Agent01\"):\n        self.name = name\n        self.context = []\n\n    def get_response(self, user_input):\n        self.context.append(user_input)\n        return f\"{self.name}: You said '{user_input}'. Interesting!\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    while True:\n        user_input = input(\"You: \")\n        print(agent.get_response(user_input))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Agent01'):\n        self.name = name\n        self.context = []\n\n    def get_response(self, user_input):\n        self.context.append(user_input)\n        return f\"{self.name}: You said '{user_input}'. Interesting!\"\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    while True:\n        user_input = input('You: ')\n        print(agent.get_response(user_input))\n"
+    },
+    {
+        "file": "analytical_05.py",
+        "score": {
+            "struct": 0.7666666666666666,
+            "maint": 0.6686865367273931,
+            "semantic": 0.9601225852966309,
+            "overall": 0.7984919295635636
+        },
+        "original": "# demo-agents/test-samples/analytical_05.py\n\nclass Agent:\n    def __init__(self, name=\"Analytical05\"):\n        self.name = name\n\n    def analyze(self, data):\n        positives = [x for x in data if x > 0]\n        return f\"{self.name}: Positive numbers count = {len(positives)}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    sample_data = [-5, 2, 0, 7, -1]\n    print(agent.analyze(sample_data))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Analytical05'):\n        self.name = name\n\n    def analyze(self, data):\n        positives = [x for x in data if x > 0]\n        return f'{self.name}: Positive numbers count = {len(positives)}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    sample_data = [-5, 2, 0, 7, -1]\n    print(agent.analyze(sample_data))\n"
+    },
+    {
+        "file": "voice_05.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.750206708965386,
+            "semantic": 0.9531649351119995,
+            "overall": 0.8566794369146841
+        },
+        "original": "# demo-agents/test-samples/voice_05.py\n\nclass Agent:\n    def __init__(self, name=\"Voice05\"):\n        self.name = name\n\n    def respond(self, message):\n        return f\"{self.name}: Message length = {len(message)} characters\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"Count my characters!\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Voice05'):\n        self.name = name\n\n    def respond(self, message):\n        return f'{self.name}: Message length = {len(message)} characters'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('Count my characters!'))\n"
+    },
+    {
+        "file": "conversational_05.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.7104491957995832,
+            "semantic": 0.924006462097168,
+            "overall": 0.8337074415211393
+        },
+        "original": "# demo-agents/test-samples/conversational_05.py\n\nclass Agent:\n    def __init__(self, name=\"Agent05\"):\n        self.name = name\n        self.memory = []\n\n    def get_response(self, user_input):\n        self.memory.append(user_input)\n        return f\"{self.name}: Got it. You've told me {len(self.memory)} things so far.\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    while True:\n        user_input = input(\"You: \")\n        print(agent.get_response(user_input))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Agent05'):\n        self.name = name\n        self.memory = []\n\n    def get_response(self, user_input):\n        self.memory.append(user_input)\n        return (\n            f\"{self.name}: Got it. You've told me {len(self.memory)} things so far.\"\n            )\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    while True:\n        user_input = input('You: ')\n        print(agent.get_response(user_input))\n"
+    },
+    {
+        "file": "analytical_01.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.7390483161137286,
+            "semantic": 0.9630429744720459,
+            "overall": 0.8562526524174804
+        },
+        "original": "# demo-agents/test-samples/analytical_01.py\n\nclass Agent:\n    def __init__(self, name=\"Analytical01\"):\n        self.name = name\n\n    def analyze(self, data):\n        return f\"{self.name}: Sum of data = {sum(data)}\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    sample_data = [1, 2, 3, 4, 5]\n    print(agent.analyze(sample_data))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Analytical01'):\n        self.name = name\n\n    def analyze(self, data):\n        return f'{self.name}: Sum of data = {sum(data)}'\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    sample_data = [1, 2, 3, 4, 5]\n    print(agent.analyze(sample_data))\n"
+    },
+    {
+        "file": "voice_01.py",
+        "score": {
+            "struct": 0.8666666666666667,
+            "maint": 0.750206708965386,
+            "semantic": 0.960785448551178,
+            "overall": 0.8592196080610769
+        },
+        "original": "# demo-agents/test-samples/voice_01.py\n\nclass Agent:\n    def __init__(self, name=\"Voice01\"):\n        self.name = name\n\n    def respond(self, message):\n        return f\"{self.name}: You said '{message}'\"\n\nif __name__ == \"__main__\":\n    agent = Agent()\n    print(agent.respond(\"Hello there!\"))\n",
+        "refined": "class Agent:\n\n    def __init__(self, name='Voice01'):\n        self.name = name\n\n    def respond(self, message):\n        return f\"{self.name}: You said '{message}'\"\n\n\nif __name__ == '__main__':\n    agent = Agent()\n    print(agent.respond('Hello there!'))\n"
+    }
+]
