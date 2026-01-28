@@ -40,16 +40,21 @@ def clean_tables():
     
     This fixture clears the `chain_seals`, `event_chains`, and `sessions` tables and commits the transaction, ensuring tests run against an empty set of rows. It yields control to the test and closes the database session afterwards.
     """
+@pytest.fixture(scope="function")
+def db():
+    """Database session fixture with automatic cleanup."""
+    from sqlalchemy import text
     from app.database import SessionLocal
     
     db = SessionLocal()
     try:
-        # Clear all tables (but don't drop schema)
-        db.execute("TRUNCATE TABLE chain_seals CASCADE")
-        db.execute("TRUNCATE TABLE event_chains CASCADE")
-        db.execute("TRUNCATE TABLE sessions CASCADE")
-        db.commit()
+        yield db
     finally:
+        # Clean up tables in reverse dependency order
+        db.execute(text("TRUNCATE TABLE chain_seals CASCADE"))
+        db.execute(text("TRUNCATE TABLE event_chains CASCADE"))
+        db.execute(text("TRUNCATE TABLE sessions CASCADE"))
+        db.commit()
         db.close()
     
     yield

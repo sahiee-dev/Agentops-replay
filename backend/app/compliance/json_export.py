@@ -11,11 +11,6 @@ from typing import Dict, Any
 from datetime import datetime
 from sqlalchemy.orm import Session as DBSession
 
-# Add verifier to path for JCS canonicalization
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../verifier'))
-import jcs
-import verifier_core
-
 from app.models import Session, EventChain, ChainSeal
 
 
@@ -35,9 +30,15 @@ def generate_json_export(session_id: str, db: DBSession) -> Dict[str, Any]:
     Raises:
         ValueError: If no Session exists for the provided `session_id`.
     """
+    # Validate session_id format
+    try:
+        uuid.UUID(session_id)
+    except ValueError:
+        raise ValueError(f"Invalid session ID format: {session_id}")
+
     # Get session
     session = db.query(Session).filter(
-        Session.session_id_str == uuid.UUID(session_id)
+        Session.session_id_str == session_id
     ).first()
     
     if not session:
@@ -53,30 +54,32 @@ def generate_json_export(session_id: str, db: DBSession) -> Dict[str, Any]:
         ChainSeal.session_id == session.id
     ).first()
     
-    # Build canonical event list
+    # Build canonical events (MUST use payload_canonical)
     canonical_events = []
     for event in events:
         canonical_event = {
             "event_id": str(event.event_id),
-            "session_id": session_id,
-            "sequence_number": int(event.sequence_number),
-            "timestamp_wall": event.timestamp_wall.isoformat().replace('+00:00', 'Z'),
-            "timestamp_monotonic": int(event.timestamp_monotonic),
+            "session_id": str(session.session_id_str),
+            "sequence_number": event.sequence_number,
+            "timestamp_wall": event.timestamp_wall.isoformat(),
+            "timestamp_monotonic": event.timestamp_monotonic,
             "event_type": event.event_type,
             "source_sdk_ver": event.source_sdk_ver,
             "schema_ver": event.schema_ver,
+            "payload": event.payload_canonical,  # AUTHORITATIVE: canonical text for verification
             "payload_hash": event.payload_hash,
             "prev_event_hash": event.prev_event_hash,
             "event_hash": event.event_hash,
-            "payload": event.payload_jsonb,
-            "chain_authority": session.chain_authority.value
+            "chain_authority": event.chain_authority,
         }
         canonical_events.append(canonical_event)
     
-    # Build export metadata
+    # Build export metadata (use single timestamp for determinism)
+    export_timestamp = datetime.utcnow().isoformat() + "Z"
+    
     export = {
         "export_version": "1.0",
-        "export_timestamp": datetime.utcnow().isoformat() + "Z",
+        "export_timestamp": export_timestamp,
         "session_id": session_id,
         "evidence_class": session.evidence_class or "PENDING_VERIFICATION",
         "chain_authority": session.chain_authority.value,
@@ -92,7 +95,7 @@ def generate_json_export(session_id: str, db: DBSession) -> Dict[str, Any]:
         "events": canonical_events,
         "chain_of_custody": {
             "export_authority": session.ingestion_service_id,
-            "export_timestamp": datetime.utcnow().isoformat() + "Z",
+            "export_timestamp": export_timestamp,  # Same timestamp for determinism
             "canonical_format": "RFC 8785 (JCS)"
         }
     }

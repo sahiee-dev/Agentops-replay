@@ -95,7 +95,10 @@ async def append_events(session_id: str, batch: EventBatch):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+        # Log exception server-side for debugging
+        import logging
+        logging.getLogger(__name__).exception("Append events error for session %s", session_id)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sessions/{session_id}/seal", response_model=SealResponse)

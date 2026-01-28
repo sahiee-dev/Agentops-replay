@@ -11,6 +11,7 @@ import os
 import uuid
 import json
 import tempfile
+import logging
 
 # Add verifier to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../verifier'))
@@ -20,6 +21,7 @@ from app.database import get_db
 from app.models import Session, EventChain, ChainSeal
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/verify")
@@ -65,23 +67,23 @@ async def verify_session_api(session_id: str, db: DBSession = Depends(get_db)):
         if not events:
             raise HTTPException(status_code=400, detail="Cannot verify empty session")
         
-        # 3. Convert to canonical event list
+        # 3. Convert    # Build canonical events list (MUST use payload_canonical, not payload_jsonb)
         canonical_events = []
         for event in events:
             canonical_event = {
-                "event_id": str(event.event_id),
-                "session_id": session_id,
-                "sequence_number": int(event.sequence_number),
-                "timestamp_wall": event.timestamp_wall.isoformat().replace('+00:00', 'Z'),
-                "timestamp_monotonic": int(event.timestamp_monotonic),
+                "event_id": str(event.event_id),  # Use event_id not id
+                "session_id": str(session.session_id_str),  # Use session's UUID
+                "sequence_number": event.sequence_number,
+                "timestamp_wall": event.timestamp_wall.isoformat(),  # Serialize to string
+                "timestamp_monotonic": event.timestamp_monotonic,
                 "event_type": event.event_type,
                 "source_sdk_ver": event.source_sdk_ver,
                 "schema_ver": event.schema_ver,
+                "payload": event.payload_canonical,  # AUTHORITATIVE: canonical text
                 "payload_hash": event.payload_hash,
                 "prev_event_hash": event.prev_event_hash,
                 "event_hash": event.event_hash,
-                "payload": event.payload_jsonb,
-                "chain_authority": session.chain_authority.value
+                "chain_authority": event.chain_authority,
             }
             canonical_events.append(canonical_event)
         
@@ -113,6 +115,6 @@ async def verify_session_api(session_id: str, db: DBSession = Depends(get_db)):
         }
     
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Verification error: {str(e)}")

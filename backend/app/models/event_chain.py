@@ -3,12 +3,12 @@ event_chain.py - Constitutional event storage model.
 
 CRITICAL GUARANTEES:
 1. Append-only enforcement via PostgreSQL trigger
-2. NO authority fields on events (authority lives on session)
+2. Authority sourced from session, denormalized to events for queries
 3. Split payload storage: canonical + hash + queryable
 4. Immutable per CONSTITUTION.md
 """
 
-from sqlalchemy import Column, String, BigInteger, Text, ForeignKey, Index, DDL, event
+from sqlalchemy import Column, Integer, String, BigInteger, Text, ForeignKey, Index, DDL, event
 from sqlalchemy.dialects.postgresql import UUID, JSONB, TIMESTAMP
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -28,10 +28,11 @@ class EventChain(Base):
     __tablename__ = "event_chains"
     
     # Primary fields
+    # Primary fields
     event_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=False, index=True)
+    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=False, index=True)
+    session_id_str = Column(String(36), nullable=False)  # Denormalized for queries
     sequence_number = Column(BigInteger, nullable=False, index=True)
-    
     # Timestamps
     timestamp_wall = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
     timestamp_monotonic = Column(BigInteger, nullable=False)
@@ -53,6 +54,7 @@ class EventChain(Base):
     # Hash chain
     prev_event_hash = Column(String(64), nullable=True)  # Null for first event
     event_hash = Column(String(64), nullable=False, index=True)
+    chain_authority = Column(String(20), nullable=False)
     
     # Relationship back to session
     session = relationship("Session", back_populates="event_chains")
