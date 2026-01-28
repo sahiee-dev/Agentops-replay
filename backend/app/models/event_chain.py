@@ -1,9 +1,10 @@
 """
 event_chain.py - Constitutional event storage model.
 
+"""
 CRITICAL GUARANTEES:
 1. Append-only enforcement via PostgreSQL trigger
-2. NO authority fields on events (authority lives on session)
+2. Authority sourced from session, denormalized to events for queries
 3. Split payload storage: canonical + hash + queryable
 4. Immutable per CONSTITUTION.md
 """
