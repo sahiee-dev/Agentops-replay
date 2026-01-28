@@ -139,9 +139,19 @@ def run_demo(use_agentops: bool = True, output_file: str = "session_output.jsonl
     # End session and export
     if handler:
         print("[+] Ending session and exporting...")
-        handler.end_session(status="success")
+        
+        # Derive session status from results
+        if all(r['success'] for r in results):
+            status = "success"
+        elif any(r['success'] for r in results):
+            status = "partial_failure"
+        else:
+            status = "failure"
+        
+        handler.end_session(status=status)
         handler.export_to_jsonl(output_file)
         print(f"    Session exported to: {output_file}")
+
     
     # Summary
     print()
@@ -159,7 +169,7 @@ def run_demo(use_agentops: bool = True, output_file: str = "session_output.jsonl
         print("Session data exported to:", output_file)
         print()
         print("To verify the session, run:")
-        print(f"  python verify_session.py")
+        print("  python verify_session.py")
         print("  # or")
         print(f"  python ../../verifier/agentops_verify.py {output_file}")
     
@@ -253,7 +263,7 @@ def run_mock_demo(output_file: str = "session_output.jsonl"):
     print("=" * 60)
     print()
     print("To verify the session, run:")
-    print(f"  python verify_session.py")
+    print("  python verify_session.py")
     
     return True
 
