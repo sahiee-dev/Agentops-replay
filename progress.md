@@ -7,12 +7,12 @@
 
 ## Current Status
 
-| Metric           | Value                              |
-| ---------------- | ---------------------------------- |
-| **Phase**        | Phase 6 — Ingestion Service (Core) |
-| **Spec Version** | v0.6                               |
-| **Status**       | In Progress                        |
-| **Last Updated** | January 29, 2026                   |
+| Metric           | Value                   |
+| ---------------- | ----------------------- |
+| **Phase**        | Phase 7 — Replay System |
+| **Spec Version** | v0.6                    |
+| **Status**       | Completed               |
+| **Last Updated** | January 29, 2026        |
 
 ---
 

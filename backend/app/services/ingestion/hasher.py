@@ -36,6 +36,9 @@ class RejectionReason(Enum):
     INVALID_GENESIS = "INVALID_GENESIS"
     SEQUENCE_GAP = "SEQUENCE_GAP"
     DUPLICATE_SEQUENCE = "DUPLICATE_SEQUENCE"
+    HASH_MISMATCH = "HASH_MISMATCH"
+    INVALID_PAYLOAD = "INVALID_PAYLOAD"
+    MISSING_REQUIRED_FIELD = "MISSING_REQUIRED_FIELD"
 
 
 # Genesis hash constant (all zeros - first event's prev_hash)
@@ -128,20 +131,43 @@ def recompute_chain(
             import json
             try:
                 payload = json.loads(payload)
-            except json.JSONDecodeError:
-                pass  # Keep as string if not valid JSON
+            except json.JSONDecodeError as e:
+                # Fail loudly on invalid JSON
+                return ChainResult(
+                    valid=False,
+                    rejection_reason=RejectionReason.INVALID_PAYLOAD,
+                    rejection_details=f"Event {idx} payload is invalid JSON: {e}. Payload length: {len(event.get('payload', ''))} chars"
+                )
         
         payload_canonical = canonicalize(payload)
         payload_hash = hashlib.sha256(payload_canonical).hexdigest()
+        
+        # Validate required fields before computing hash
+        event_type = event.get('event_type')
+        timestamp_monotonic = event.get('timestamp_monotonic')
+        sequence_number = event.get('sequence_number')
+        
+        if event_type is None:
+            return ChainResult(
+                valid=False,
+                rejection_reason=RejectionReason.MISSING_REQUIRED_FIELD,
+                rejection_details=f"Event {idx} missing required field 'event_type'"
+            )
+        if timestamp_monotonic is None:
+            return ChainResult(
+                valid=False,
+                rejection_reason=RejectionReason.MISSING_REQUIRED_FIELD,
+                rejection_details=f"Event {idx} missing required field 'timestamp_monotonic'"
+            )
         
         # Compute event hash
         # Hash includes: prev_hash + sequence + event_type + payload_hash
         event_data = {
             "prev_hash": prev_hash,
-            "sequence_number": event.get('sequence_number'),
-            "event_type": event.get('event_type'),
+            "sequence_number": sequence_number,
+            "event_type": event_type,
             "payload_hash": payload_hash,
-            "timestamp_monotonic": event.get('timestamp_monotonic'),
+            "timestamp_monotonic": timestamp_monotonic,
         }
         event_canonical = canonicalize(event_data)
         event_hash = hashlib.sha256(event_canonical).hexdigest()

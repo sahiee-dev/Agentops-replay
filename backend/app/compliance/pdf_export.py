@@ -195,10 +195,11 @@ def _render_pdf(export_data: Dict[str, Any]) -> bytes:
         if event_type == 'LOG_DROP':
             event_type = "⚠️ LOG_DROP"
         
+        timestamp = event.get('timestamp_wall') or ''
         timeline_data.append([
             str(event.get('sequence_number', '')),
             event_type,
-            event.get('timestamp_wall', '')[:23]  # Trim to milliseconds
+            timestamp[:23]  # Trim to milliseconds
         ])
     
     if len(events) > 50:

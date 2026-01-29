@@ -29,7 +29,7 @@ def _format_iso8601(dt: datetime) -> str:
     No local offsets. No truncated seconds. Always UTC with Z suffix.
     """
     if dt is None:
-        return None
+        raise ValueError("Timestamp is required but was None. Caller must handle optional timestamps explicitly.")
     # Ensure UTC
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)

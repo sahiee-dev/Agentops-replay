@@ -97,8 +97,9 @@ def seal_chain(
         event_count=chain_result.event_count
     )
     
-    seal_timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.') + \
-                     f'{datetime.now(timezone.utc).microsecond // 1000:03d}Z'
+    # Capture timestamp once for consistency
+    now = datetime.now(timezone.utc)
+    seal_timestamp = now.strftime('%Y-%m-%dT%H:%M:%S.') + f'{now.microsecond // 1000:03d}Z'
     
     return SealResult(
         status=SealStatus.SEALED,

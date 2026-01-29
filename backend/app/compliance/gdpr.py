@@ -13,6 +13,7 @@ Severity Levels:
 """
 
 import re
+import json
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Dict, Any
@@ -76,7 +77,26 @@ def validate_redactions(events: List[Dict[str, Any]]) -> List[Finding]:
         payload = event.get('payload', {})
         
         if isinstance(payload, str):
-            # payload might be canonical string, skip deep inspection
+            # Parse canonical JSON string and inspect
+            try:
+                parsed_payload = json.loads(payload)
+            except json.JSONDecodeError as e:
+                findings.append(Finding(
+                    severity=Severity.ERROR,
+                    event_index=idx,
+                    event_id=event_id,
+                    field_path="payload",
+                    message=f"Payload is invalid JSON: {e}"
+                ))
+                continue
+            
+            _check_redactions_recursive(
+                data=parsed_payload,
+                path="payload",
+                event_index=idx,
+                event_id=event_id,
+                findings=findings
+            )
             continue
         
         _check_redactions_recursive(
@@ -179,8 +199,8 @@ def _check_string_for_pii(
 ) -> None:
     """Check a string value for PII patterns."""
     
-    # Skip if already redacted
-    if REDACTION_MARKER in value:
+    # Skip ONLY if the entire value is exactly the redaction marker
+    if value.strip() == REDACTION_MARKER:
         return
     
     for pii_type, pattern in PII_PATTERNS.items():

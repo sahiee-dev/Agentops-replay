@@ -208,9 +208,14 @@ def build_replay(chain: VerifiedChain) -> ReplayResult:
     if 'PARTIAL' in chain.evidence_class:
         warnings.append(ReplayWarning.partial_evidence())
     
-    # Build result
-    first_ts = chain.events[0].get('timestamp') if chain.events else None
-    last_ts = chain.events[-1].get('timestamp') if chain.events else None
+    # Build result - fallback to timestamp_wall if timestamp is missing
+    first_ts = None
+    last_ts = None
+    if chain.events:
+        first_event = chain.events[0]
+        last_event = chain.events[-1]
+        first_ts = first_event.get('timestamp') or first_event.get('timestamp_wall')
+        last_ts = last_event.get('timestamp') or last_event.get('timestamp_wall')
     
     return ReplayResult(
         session_id=chain.session_id,

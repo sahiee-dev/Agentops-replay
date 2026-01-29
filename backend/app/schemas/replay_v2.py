@@ -40,7 +40,7 @@ class ReplayFrameSchema(BaseModel):
     sequence_number: Optional[int] = None
     timestamp: Optional[str] = None
     event_type: Optional[str] = None
-    payload: Optional[Dict[str, Any]] = None  # VERBATIM canonical JSON
+    payload: Optional[str] = None  # VERBATIM RFC-8785 canonical JSON string
     event_hash: Optional[str] = None
     
     # GAP fields

@@ -76,13 +76,33 @@ class ReplayFrame:
     redaction_hash: Optional[str] = None
     
     def validate_single_origin(self) -> bool:
-        """Validate that this frame has exactly one origin."""
+        """
+        Validate that this frame has exactly one origin.
+        
+        INVARIANT: Exactly one origin group must be populated.
+        Returns False if more than one group is present.
+        """
+        # Compute presence flags for each origin group
+        event_present = self.event_type is not None and self.event_hash is not None
+        gap_present = self.gap_start is not None and self.gap_end is not None
+        log_drop_present = self.dropped_count is not None
+        redaction_present = self.redaction_hash is not None
+        
+        # Count how many origin groups are present
+        origin_count = sum([event_present, gap_present, log_drop_present, redaction_present])
+        
+        # Exactly one origin must be present
+        if origin_count != 1:
+            return False
+        
+        # Validate that the declared frame_type matches the present origin
         if self.frame_type == FrameType.EVENT:
-            return self.event_type is not None and self.event_hash is not None
+            return event_present
         elif self.frame_type == FrameType.GAP:
-            return self.gap_start is not None and self.gap_end is not None
+            return gap_present
         elif self.frame_type == FrameType.LOG_DROP:
-            return self.dropped_count is not None
+            return log_drop_present
         elif self.frame_type == FrameType.REDACTION:
-            return self.redaction_hash is not None
+            return redaction_present
+        
         return False
