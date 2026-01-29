@@ -168,9 +168,29 @@ def build_replay(chain: VerifiedChain) -> ReplayResult:
         
         # Handle LOG_DROP events
         if event_type == 'LOG_DROP':
-            payload = event.get('payload', {})
-            dropped_count = payload.get('dropped_count', 0)
-            drop_reason = payload.get('reason', 'UNKNOWN')
+            # Payload MUST be payload_canonical (string), parse with json.loads
+            payload_canonical = event.get('payload')
+            if payload_canonical is None:
+                raise ValueError(
+                    f"LOG_DROP event at sequence {seq} missing payload_canonical. "
+                    f"This is a data integrity violation."
+                )
+            if not isinstance(payload_canonical, str):
+                raise ValueError(
+                    f"LOG_DROP event at sequence {seq} has non-string payload. "
+                    f"Expected canonical JSON string, got {type(payload_canonical).__name__}."
+                )
+            
+            try:
+                import json
+                payload_dict = json.loads(payload_canonical)
+            except json.JSONDecodeError as e:
+                raise ValueError(
+                    f"LOG_DROP event at sequence {seq} has invalid JSON payload: {e}"
+                )
+            
+            dropped_count = payload_dict.get('dropped_count', 0)
+            drop_reason = payload_dict.get('reason', 'UNKNOWN')
             
             frames.append(ReplayFrame(
                 frame_type=FrameType.LOG_DROP,
@@ -178,7 +198,7 @@ def build_replay(chain: VerifiedChain) -> ReplayResult:
                 sequence_number=seq,
                 timestamp=timestamp,
                 event_type=event_type,
-                payload=payload,
+                payload=payload_canonical,  # Keep as canonical string
                 event_hash=event.get('event_hash'),
                 dropped_count=dropped_count,
                 drop_reason=drop_reason
@@ -186,14 +206,14 @@ def build_replay(chain: VerifiedChain) -> ReplayResult:
             warnings.append(ReplayWarning.events_dropped(dropped_count, drop_reason, position))
             total_drops += dropped_count
         else:
-            # Normal EVENT frame
+            # Normal EVENT frame - payload is already canonical string
             frames.append(ReplayFrame(
                 frame_type=FrameType.EVENT,
                 position=position,
                 sequence_number=seq,
                 timestamp=timestamp,
                 event_type=event_type,
-                payload=event.get('payload'),
+                payload=event.get('payload'),  # Already canonical JSON string
                 event_hash=event.get('event_hash')
             ))
         

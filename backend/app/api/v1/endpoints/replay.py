@@ -62,7 +62,7 @@ def _get_event_dicts(db: Session, session_id: int) -> List[Dict[str, Any]]:
             "timestamp": e.timestamp_wall.isoformat() if e.timestamp_wall else None,
             "timestamp_wall": e.timestamp_wall.isoformat() if e.timestamp_wall else None,
             "timestamp_monotonic": e.timestamp_monotonic,
-            "payload": e.payload_jsonb,  # Queryable copy
+            "payload": e.payload_canonical,  # AUTHORITATIVE: canonical JSON string
             "payload_canonical": e.payload_canonical,
             "event_hash": e.event_hash,
             "prev_event_hash": e.prev_event_hash,
@@ -278,13 +278,22 @@ def _frame_to_schema(frame) -> ReplayFrameSchema:
     from app.replay.frames import FrameType
     import json
     
-    # Convert payload to canonical JSON string if it's a dict
+    # Payload MUST be a canonical JSON string, not a dict
+    # Raise explicit error if dict is passed - this indicates a bug upstream
     payload_str = None
     if frame.payload is not None:
-        if isinstance(frame.payload, str):
+        if isinstance(frame.payload, dict):
+            raise ValueError(
+                f"Frame payload must be a canonical JSON string, not dict. "
+                f"Frame position={frame.position}, type={frame.frame_type}. "
+                f"This indicates a bug in event processing - payloads should be "
+                f"canonicalized before reaching _frame_to_schema."
+            )
+        elif isinstance(frame.payload, str):
             payload_str = frame.payload
         else:
-            payload_str = json.dumps(frame.payload, separators=(',', ':'), ensure_ascii=False)
+            # Coerce other types to canonical JSON string
+            payload_str = json.dumps(frame.payload, separators=(',', ':'), sort_keys=True, ensure_ascii=False)
     
     return ReplayFrameSchema(
         frame_type=FrameTypeSchema(frame.frame_type.value),

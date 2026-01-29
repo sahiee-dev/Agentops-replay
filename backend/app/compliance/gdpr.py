@@ -90,22 +90,50 @@ def validate_redactions(events: List[Dict[str, Any]]) -> List[Finding]:
                 ))
                 continue
             
+            if isinstance(parsed_payload, dict):
+                _check_redactions_recursive(
+                    data=parsed_payload,
+                    path="payload",
+                    event_index=idx,
+                    event_id=event_id,
+                    findings=findings
+                )
+            elif isinstance(parsed_payload, list):
+                for i, item in enumerate(parsed_payload):
+                    _check_redactions_recursive(
+                        data=item,
+                        path=f"payload[{i}]",
+                        event_index=idx,
+                        event_id=event_id,
+                        findings=findings
+                    )
+            continue
+        elif isinstance(payload, dict):
             _check_redactions_recursive(
-                data=parsed_payload,
+                data=payload,
                 path="payload",
                 event_index=idx,
                 event_id=event_id,
                 findings=findings
             )
-            continue
-        
-        _check_redactions_recursive(
-            data=payload,
-            path="payload",
-            event_index=idx,
-            event_id=event_id,
-            findings=findings
-        )
+        elif isinstance(payload, list):
+            for i, item in enumerate(payload):
+                _check_redactions_recursive(
+                    data=item,
+                    path=f"payload[{i}]",
+                    event_index=idx,
+                    event_id=event_id,
+                    findings=findings
+                )
+        else:
+            # Unexpected payload type - report as ERROR
+            findings.append(Finding(
+                severity=Severity.ERROR,
+                event_index=idx,
+                event_id=event_id,
+                field_path="payload",
+                message=f"Unexpected payload type: {type(payload).__name__}. Expected str, dict, or list."
+            ))
     
     return findings
 
@@ -153,7 +181,7 @@ def check_pii_exposure(events: List[Dict[str, Any]]) -> List[Finding]:
         events: List of event dictionaries from export
         
     Returns:
-        List of Finding objects (WARNING severity only)
+        List of Finding objects (WARNING severity only, ERROR for unexpected types)
     """
     findings = []
     
@@ -179,6 +207,17 @@ def check_pii_exposure(events: List[Dict[str, Any]]) -> List[Finding]:
             _check_pii_recursive(payload, "payload", idx, event_id, findings)
         elif isinstance(payload, list):
             _check_pii_in_list(payload, "payload", idx, event_id, findings)
+        else:
+            # Unexpected payload type - report as ERROR and coerce to string for PII scan
+            findings.append(Finding(
+                severity=Severity.ERROR,
+                event_index=idx,
+                event_id=event_id,
+                field_path="payload",
+                message=f"Unexpected payload type: {type(payload).__name__}. Expected str, dict, or list."
+            ))
+            # Still scan the coerced string for PII
+            _check_string_for_pii(str(payload), "payload", idx, event_id, findings)
     
     return findings
 

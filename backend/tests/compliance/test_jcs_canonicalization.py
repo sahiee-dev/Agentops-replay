@@ -4,15 +4,15 @@ test_jcs_canonicalization.py - Adversarial tests for JCS canonicalization.
 CRITICAL TEST: Proves canonicalization is real, not cosmetic.
 
 Test strategy:
-1. Generate valid JSON export
-2. Modify one whitespace character
-3. Re-run verification
-4. Expect FAIL
+1. Generate valid JSON with varying whitespace
+2. Canonicalize the JSON
+3. Verify whitespace differences in INPUT do NOT change canonical OUTPUT
+4. Expect PASS (all inputs produce same canonical form)
 
 If this test passes, we have proof that:
-- Canonicalization is deterministic
-- Any modification is detectable
-- The verifier is working correctly
+- Canonicalization normalizes whitespace
+- Input format variations produce identical hashes
+- The verifier is deterministic
 """
 
 import sys
