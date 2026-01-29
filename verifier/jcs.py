@@ -93,10 +93,10 @@ def canonicalize(data) -> bytes:
         return _float_to_string(data).encode('utf-8')
     
     if isinstance(data, str):
-        # Strings: UTF-8 NFC normalization (Spec v0.5 requirement)
-        import unicodedata
-        normalized = unicodedata.normalize('NFC', data)
-        return json.dumps(normalized, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+        # RFC 8785: Strings MUST be preserved verbatim - NO Unicode normalization
+        # RFC 8785 explicitly states: "Parsed JSON string data MUST NOT be 
+        # altered during subsequent serializations."
+        return json.dumps(data, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
     
     if isinstance(data, list):
         # Array: preserve order

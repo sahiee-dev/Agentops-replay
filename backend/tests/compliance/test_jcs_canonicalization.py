@@ -118,13 +118,15 @@ class TestJCSCanonicalization:
         assert canonical_positive == canonical_negative, \
             "RFC 8785: -0 must serialize as 0 (sign not preserved)"
     
-    def test_unicode_normalization(self):
+    def test_unicode_preserved_verbatim(self):
         """
-        Test that Unicode is handled consistently.
+        RFC 8785 compliance: Strings MUST be preserved verbatim.
         
-        Note: RFC 8785 does not mandate NFC normalization, but our project
-        spec (v0.5) requires NFC normalization for consistency. This is a
-        project-specific extension, not RFC 8785 compliance.
+        RFC 8785 explicitly states: "Parsed JSON string data MUST NOT be 
+        altered during subsequent serializations."
+        
+        This means NFC and NFD representations of the same character
+        will produce DIFFERENT hashes, which is correct behavior.
         """
         # é can be represented as:
         # - U+00E9 (single codepoint, NFC)
@@ -136,10 +138,9 @@ class TestJCSCanonicalization:
         hash_composed = hashlib.sha256(canonicalize(payload_composed)).hexdigest()
         hash_decomposed = hashlib.sha256(canonicalize(payload_decomposed)).hexdigest()
         
-        # Project spec v0.5 requires NFC normalization for determinism
-        # (This is stricter than RFC 8785 which preserves strings verbatim)
-        assert hash_composed == hash_decomposed, \
-            "Project spec: Unicode should be NFC normalized for determinism"
+        # RFC 8785: Strings are preserved verbatim, so these MUST differ
+        assert hash_composed != hash_decomposed, \
+            "RFC 8785: NFC and NFD representations must produce different hashes"
     
     def test_chain_integrity_on_tampering(self):
         """
