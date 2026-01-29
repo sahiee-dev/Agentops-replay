@@ -236,9 +236,9 @@ class TestHasherIntegration:
         from hasher import recompute_chain
         
         events = [
-            {"sequence_number": 0, "event_type": "SESSION_START", "payload": {"agent": "test"}},
-            {"sequence_number": 1, "event_type": "LLM_CALL", "payload": {"prompt": "Hello"}},
-            {"sequence_number": 2, "event_type": "SESSION_END", "payload": {}},
+            {"sequence_number": 0, "event_type": "SESSION_START", "timestamp_monotonic": 1, "payload": {"agent": "test"}},
+            {"sequence_number": 1, "event_type": "LLM_CALL", "timestamp_monotonic": 2, "payload": {"prompt": "Hello"}},
+            {"sequence_number": 2, "event_type": "SESSION_END", "timestamp_monotonic": 3, "payload": {}},
         ]
         
         result = recompute_chain(events)
