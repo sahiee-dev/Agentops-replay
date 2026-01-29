@@ -51,6 +51,10 @@ class ReplayFrameSchema(BaseModel):
     dropped_count: Optional[int] = None
     drop_reason: Optional[str] = None
     
+    # REDACTION fields
+    redaction_hash: Optional[str] = None
+    redacted_fields: Optional[List[str]] = None
+    
     class Config:
         use_enum_values = True
 

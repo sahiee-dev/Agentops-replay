@@ -245,16 +245,24 @@ def get_frame_at_sequence(
     - MUST return GAP frame if missing
     - Is NOT a "fast path" that skips replay logic
     """
-    # First check for exact match
+    # First check for exact match on sequence_number
     for frame in replay.frames:
         if frame.sequence_number == sequence:
             return frame
     
-    # Not found - determine if it's a gap
+    # Check if sequence falls within an existing GAP frame
+    for frame in replay.frames:
+        if frame.frame_type == FrameType.GAP:
+            if frame.gap_start is not None and frame.gap_end is not None:
+                if frame.gap_start <= sequence <= frame.gap_end:
+                    # Return the original GAP frame with its real position and range
+                    return frame
+    
+    # Not in an existing gap - determine if we need a synthetic gap
     all_sequences = [f.sequence_number for f in replay.frames if f.sequence_number is not None]
     
     if not all_sequences:
-        # No events - return gap frame
+        # No events at all - return synthetic gap frame
         return ReplayFrame(
             frame_type=FrameType.GAP,
             position=-1,
@@ -262,19 +270,7 @@ def get_frame_at_sequence(
             gap_end=sequence
         )
     
-    min_seq = min(all_sequences)
-    max_seq = max(all_sequences)
-    
-    if min_seq <= sequence <= max_seq:
-        # Within range but missing - it's in a gap
-        return ReplayFrame(
-            frame_type=FrameType.GAP,
-            position=-1,
-            gap_start=sequence,
-            gap_end=sequence
-        )
-    
-    # Outside range - still return gap frame
+    # Outside any existing frame range - return synthetic gap
     return ReplayFrame(
         frame_type=FrameType.GAP,
         position=-1,

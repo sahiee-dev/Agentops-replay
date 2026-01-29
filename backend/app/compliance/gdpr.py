@@ -162,12 +162,43 @@ def check_pii_exposure(events: List[Dict[str, Any]]) -> List[Finding]:
         payload = event.get('payload', {})
         
         if isinstance(payload, str):
-            # Check string payload for PII
-            _check_string_for_pii(payload, "payload", idx, event_id, findings)
+            # Attempt to parse JSON string into structured data
+            try:
+                parsed = json.loads(payload)
+                if isinstance(parsed, dict):
+                    _check_pii_recursive(parsed, "payload", idx, event_id, findings)
+                elif isinstance(parsed, list):
+                    _check_pii_in_list(parsed, "payload", idx, event_id, findings)
+                else:
+                    # Parsed to a primitive - check as string
+                    _check_string_for_pii(str(parsed), "payload", idx, event_id, findings)
+            except json.JSONDecodeError:
+                # Not valid JSON - check as raw text
+                _check_string_for_pii(payload, "payload", idx, event_id, findings)
         elif isinstance(payload, dict):
             _check_pii_recursive(payload, "payload", idx, event_id, findings)
+        elif isinstance(payload, list):
+            _check_pii_in_list(payload, "payload", idx, event_id, findings)
     
     return findings
+
+
+def _check_pii_in_list(
+    data: list,
+    path: str,
+    event_index: int,
+    event_id: str,
+    findings: List[Finding]
+) -> None:
+    """Check list items for potential PII."""
+    for i, item in enumerate(data):
+        item_path = f"{path}[{i}]"
+        if isinstance(item, dict):
+            _check_pii_recursive(item, item_path, event_index, event_id, findings)
+        elif isinstance(item, list):
+            _check_pii_in_list(item, item_path, event_index, event_id, findings)
+        elif isinstance(item, str):
+            _check_string_for_pii(item, item_path, event_index, event_id, findings)
 
 
 def _check_pii_recursive(

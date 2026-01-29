@@ -41,17 +41,14 @@ def _float_to_string(f: float) -> str:
     
     # Specific JCS Checks:
     # "2.0" -> "2"
-    # "-0.0" -> "0"  (JCS: says -0 is 0? RFC: "Negative zero is serialized as -0")
-    # WAIT: RFC 8785 Section 3.2.2.3 says:
-    #   " -0 MUST be serialized as "-0" "
-    # Python's json dump might normalize -0.0 to 0.0 in some versions?
+    # "-0.0" -> "0" per RFC 8785 Section 3.2.2.3
+    # 
+    # NOTE: RFC 8785 Section 3.2.2.3 states:
+    #   "Minus zero is serialized as 0"
+    # This means the sign is NOT preserved for negative zero.
     
-    # Let's perform a check.
     if f == 0.0:
-        # Check sign bit
-        packed = struct.pack('>d', f)
-        if packed[0] & 0x80:
-            return "-0"
+        # Both 0.0 and -0.0 serialize as "0" per RFC 8785
         return "0"
 
     # For other numbers, standard Python string representation usually follows 

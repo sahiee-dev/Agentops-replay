@@ -297,5 +297,7 @@ def _frame_to_schema(frame) -> ReplayFrameSchema:
         gap_start=frame.gap_start,
         gap_end=frame.gap_end,
         dropped_count=frame.dropped_count,
-        drop_reason=frame.drop_reason
+        drop_reason=frame.drop_reason,
+        redaction_hash=frame.redaction_hash,
+        redacted_fields=frame.redacted_fields
     )

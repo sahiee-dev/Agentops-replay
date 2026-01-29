@@ -102,7 +102,10 @@ class TestJCSCanonicalization:
     
     def test_negative_zero_handling(self):
         """
-        RFC 8785 specific: -0 must serialize as -0.
+        RFC 8785 specific: -0 must serialize as 0 (sign not preserved).
+        
+        Per RFC 8785 Section 3.2.2.3, IEEE-754 "minus zero" serializes
+        as the number 0 (without the minus sign).
         """
         payload_positive = {"value": 0.0}
         payload_negative = {"value": -0.0}
@@ -110,19 +113,22 @@ class TestJCSCanonicalization:
         canonical_positive = canonicalize(payload_positive)
         canonical_negative = canonicalize(payload_negative)
         
-        # These SHOULD differ per RFC 8785 Section 3.2.2.3
-        # "-0 MUST be serialized as -0"
-        # Check the actual byte representation
-        assert b'"-0"' in canonical_negative or b'-0' in canonical_negative, \
-            "Negative zero must be preserved in canonical form"
+        # Per RFC 8785, both 0.0 and -0.0 serialize as "0"
+        # The outputs should be identical
+        assert canonical_positive == canonical_negative, \
+            "RFC 8785: -0 must serialize as 0 (sign not preserved)"
     
     def test_unicode_normalization(self):
         """
-        Test that Unicode is NFC normalized.
+        Test that Unicode is handled consistently.
+        
+        Note: RFC 8785 does not mandate NFC normalization, but our project
+        spec (v0.5) requires NFC normalization for consistency. This is a
+        project-specific extension, not RFC 8785 compliance.
         """
         # é can be represented as:
-        # - U+00E9 (single codepoint)
-        # - U+0065 U+0301 (e + combining acute)
+        # - U+00E9 (single codepoint, NFC)
+        # - U+0065 U+0301 (e + combining acute, NFD)
         
         payload_composed = {"name": "café"}  # Using NFC
         payload_decomposed = {"name": "cafe\u0301"}  # Using NFD
@@ -130,9 +136,10 @@ class TestJCSCanonicalization:
         hash_composed = hashlib.sha256(canonicalize(payload_composed)).hexdigest()
         hash_decomposed = hashlib.sha256(canonicalize(payload_decomposed)).hexdigest()
         
-        # After NFC normalization, these should be equal
+        # Project spec v0.5 requires NFC normalization for determinism
+        # (This is stricter than RFC 8785 which preserves strings verbatim)
         assert hash_composed == hash_decomposed, \
-            "Unicode should be NFC normalized"
+            "Project spec: Unicode should be NFC normalized for determinism"
     
     def test_chain_integrity_on_tampering(self):
         """
@@ -176,8 +183,15 @@ class TestJCSCanonicalization:
         assert event_1_hash != tampered_hash, \
             "Tampering with event content must invalidate chain"
         
-        # And event_2's hash would be invalid if we used the original prev_hash
-        # (This is what the verifier catches)
+        # Complete the chain integrity proof by showing event_2 verification fails
+        # If we link event_2 to the tampered event_1, we get a different hash
+        event_2_with_tampered_prev = hashlib.sha256(
+            tampered_hash.encode() + event_2_canonical
+        ).hexdigest()
+        
+        # The chain hash for event_2 differs when linked to tampered vs original
+        assert event_2_hash != event_2_with_tampered_prev, \
+            "Chain integrity: event_2 hash differs when prev event is tampered"
 
 
 class TestHasherIntegration:
