@@ -1,9 +1,12 @@
 """
-pdf_export.py - Compliance-grade PDF export with verbatim disclaimer.
+pdf_export.py - Compliance-grade PDF export from VERIFIED JSON.
 
-CRITICAL: Disc
-
-laimer MUST be verbatim per PRD §8.7 - no paraphrasing allowed.
+CRITICAL CONSTRAINTS (per user review):
+1. PDF is NOT a canonical artifact - JSON is the only verifiable artifact
+2. PDF MUST consume a verified JSON file, not raw DB rows
+3. PDF MUST explicitly state it is a rendering of a verified JSON export
+4. All hashes are copied VERBATIM from JSON - no recomputation
+5. Disclaimer MUST be verbatim per PRD §8.7
 """
 
 from reportlab.lib.pagesizes import letter
@@ -13,18 +16,22 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, 
 from reportlab.lib import colors
 from io import BytesIO
 from typing import Dict, Any
-import uuid
+import json
 from datetime import datetime
-from sqlalchemy.orm import Session as DBSession
-
-from app.models import Session, EventChain, ChainSeal
-from app.compliance.json_export import generate_json_export
 
 
 # MANDATORY DISCLAIMER (VERBATIM - NO CHANGES ALLOWED)
 EVIDENCE_DISCLAIMER = """EVIDENCE SUPPORT STATEMENT
 
-This report provides cryptographic evidence to support audit and investigation activities. It does not certify compliance with any legal, regulatory, or contractual standard.
+This report is a RENDERING of a verified JSON export. It is not the primary evidence artifact.
+
+The source JSON file is the only verifiable artifact. This PDF is provided as a human-readable aid only.
+
+This export is provided as EVIDENCE ONLY. It is not:
+• A certification of compliance
+• A guarantee of agent correctness
+• Legal or regulatory advice
+• A complete record (if evidence class is PARTIAL)
 
 Evidence Class: {evidence_class}
 Verification Status: {verification_status}
@@ -32,30 +39,49 @@ Export Date: {export_date}
 Export Authority: {export_authority}"""
 
 
-def generate_pdf_export(session_id: str, db: DBSession) -> bytes:
+def generate_pdf_from_verified_json(verified_json_path: str) -> bytes:
     """
-    Generate compliance-grade PDF export.
+    Generate compliance-grade PDF from a VERIFIED JSON export.
     
-    Sections:
-    1. Executive Summary
-    2. Session Timeline  
-    3. Technical Verification Details
-    4. MANDATORY Disclaimer (verbatim)
-    5. Chain-of-Custody Statement
+    CRITICAL: This function takes a path to a verified JSON file, NOT a session_id.
+    The JSON must have already passed verification before being passed here.
+    
+    Structure (per user specification):
+    1. Cover Page (Evidence Class, Verification Status, Session ID, Disclaimer)
+    2. Executive Summary (Non-technical, no hashes)
+    3. Event Timeline (Seq, Type, Timestamp; explicit LOG_DROP markers)
+    4. Verification Annex (Hash chain, Session digest, CHAIN_SEAL, Verifier version)
     
     Args:
-        session_id: Session UUID string
-        db: Database session
+        verified_json_path: Absolute path to a verified JSON export file
         
     Returns:
         PDF bytes
         
     Raises:
-        ValueError: If session not found
+        FileNotFoundError: If JSON file not found
+        ValueError: If JSON is malformed
     """
-    # Get canonical export
-    export_data = generate_json_export(session_id, db)
+    # Load verified JSON
+    with open(verified_json_path, 'r', encoding='utf-8') as f:
+        export_data = json.load(f)
     
+    return _render_pdf(export_data)
+
+
+def generate_pdf_from_verified_dict(export_data: Dict[str, Any]) -> bytes:
+    """
+    Generate PDF from an already-loaded verified JSON dict.
+    
+    Use this when you have the verified data in memory.
+    """
+    return _render_pdf(export_data)
+
+
+def _render_pdf(export_data: Dict[str, Any]) -> bytes:
+    """
+    Internal: Render PDF from export data.
+    """
     # Create PDF buffer
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter,
@@ -66,9 +92,9 @@ def generate_pdf_export(session_id: str, db: DBSession) -> bytes:
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Title'],
-        fontSize=18,
+        fontSize=20,
         textColor=colors.HexColor('#1a1a1a'),
-        spaceAfter=12
+        spaceAfter=6
     )
     heading_style = ParagraphStyle(
         'CustomHeading',
@@ -80,122 +106,186 @@ def generate_pdf_export(session_id: str, db: DBSession) -> bytes:
     )
     body_style = styles['BodyText']
     
-    # Build PDF content
     story = []
     
-    # --- 1. HEADER ---
+    # === 1. COVER PAGE ===
     story.append(Paragraph("AgentOps Replay", title_style))
-    story.append(Paragraph("Compliance Evidence Export", styles['Heading2']))
-    story.append(Spacer(1, 0.2*inch))
-    
-    # --- 2. EXECUTIVE SUMMARY ---
-    story.append(Paragraph("Executive Summary", heading_style))
-    
-    summary_text = f"""
-    <b>Session ID:</b> {export_data['session_id']}<br/>
-    <b>Evidence Class:</b> {export_data['evidence_class']}<br/>
-    <b>Authority:</b> {export_data['chain_authority']}<br/>
-    <b>Session Status:</b> {export_data['session_metadata']['status']}<br/>
-    <b>Event Count:</b> {export_data['session_metadata']['event_count']}<br/>
-    <b>Total Drops:</b> {export_data['session_metadata']['total_drops']}<br/>
-    <b>Started:</b> {export_data['session_metadata']['started_at']}<br/>
-    <b>Sealed:</b> {export_data['session_metadata']['sealed_at'] or 'Not sealed'}
-    """
-    story.append(Paragraph(summary_text, body_style))
+    story.append(Paragraph("Evidence Export Report", styles['Heading2']))
     story.append(Spacer(1, 0.3*inch))
     
-    # --- 3. SESSION TIMELINE ---
-    story.append(Paragraph("Session Timeline", heading_style))
-    
-    # Create event timeline table
-    timeline_data = [["Seq", "Event Type", "Timestamp"]]
-    for event in export_data['events'][:20]:  # Limit to first 20 for PDF
-        timeline_data.append([
-            str(event['sequence_number']),
-            event['event_type'],
-            event['timestamp_wall'][:19]  # Trim microseconds
-        ])
-    
-    if len(export_data['events']) > 20:
-        timeline_data.append(["...", f"({len(export_data['events']) - 20} more events)", "..."])
-    
-    timeline_table = Table(timeline_data)
-    timeline_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    # Cover page key info
+    cover_data = [
+        ["Evidence Class", export_data.get('evidence_class', 'UNKNOWN')],
+        ["Verification Status", _get_verification_status(export_data)],
+        ["Session ID", export_data.get('session_id', 'N/A')],
+        ["Export Timestamp", export_data.get('export_timestamp', 'N/A')],
+    ]
+    cover_table = Table(cover_data, colWidths=[2*inch, 4*inch])
+    cover_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#e0e0e0')),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('PADDING', (0, 0), (-1, -1), 8),
     ]))
-    story.append(timeline_table)
-    story.append(Spacer(1, 0.3*inch))
+    story.append(cover_table)
+    story.append(Spacer(1, 0.4*inch))
     
-    # --- 4. TECHNICAL VERIFICATION DETAILS ---
-    story.append(PageBreak())
-    story.append(Paragraph("Technical Verification Details", heading_style))
-    
-    # Seal information
-    seal_info = export_data.get('seal', {})
-    if seal_info.get('present'):
-        seal_text = f"""
-        <b>CHAIN_SEAL Present:</b> Yes<br/>
-        <b>Ingestion Service ID:</b> {seal_info.get('ingestion_service_id')}<br/>
-        <b>Seal Timestamp:</b> {seal_info.get('seal_timestamp')}<br/>
-        <b>Session Digest:</b> {seal_info.get('session_digest')[:16]}...<br/>
-        <b>Final Event Hash:</b> {seal_info.get('final_event_hash')[:16]}...
-        """
-    else:
-        seal_text = "<b>CHAIN_SEAL Present:</b> No (session not sealed)"
-    
-    story.append(Paragraph(seal_text, body_style))
-    story.append(Spacer(1, 0.2*inch))
-    
-    # --- 5. MANDATORY DISCLAIMER (VERBATIM) ---
-    story.append(PageBreak())
+    # Disclaimer on cover page
     disclaimer_text = EVIDENCE_DISCLAIMER.format(
-        evidence_class=export_data['evidence_class'],
-        verification_status="VERIFIED" if export_data['evidence_class'] == "AUTHORITATIVE_EVIDENCE" else "PARTIAL",
-        export_date=datetime.utcnow().isoformat() + "Z",
-        export_authority=export_data['chain_of_custody']['export_authority'] or "AgentOps Replay System"
+        evidence_class=export_data.get('evidence_class', 'UNKNOWN'),
+        verification_status=_get_verification_status(export_data),
+        export_date=export_data.get('export_timestamp', 'N/A'),
+        export_authority=export_data.get('chain_of_custody', {}).get('export_authority') or "AgentOps Replay System"
     )
     
     disclaimer_style = ParagraphStyle(
         'Disclaimer',
         parent=body_style,
-        fontSize=10,
-        leading=14,
+        fontSize=9,
+        leading=12,
         textColor=colors.HexColor('#333333'),
         borderWidth=1,
         borderColor=colors.black,
         borderPadding=10,
-        backColor=colors.HexColor('#f5f5f5')
+        backColor=colors.HexColor('#fff3cd')  # Warning yellow
     )
     story.append(Paragraph(disclaimer_text.replace('\n', '<br/>'), disclaimer_style))
+    
+    # === 2. EXECUTIVE SUMMARY (No hashes) ===
+    story.append(PageBreak())
+    story.append(Paragraph("Executive Summary", heading_style))
+    
+    session_meta = export_data.get('session_metadata', {})
+    summary_text = f"""
+    <b>Agent:</b> {session_meta.get('agent_name', 'Unknown')}<br/>
+    <b>Session Started:</b> {session_meta.get('started_at', 'N/A')}<br/>
+    <b>Session Sealed:</b> {session_meta.get('sealed_at') or 'Not sealed'}<br/>
+    <b>Status:</b> {session_meta.get('status', 'UNKNOWN')}<br/>
+    <b>Total Events:</b> {session_meta.get('event_count', 0)}<br/>
+    <b>Events Dropped:</b> {session_meta.get('total_drops', 0)}
+    """
+    story.append(Paragraph(summary_text, body_style))
+    
+    if session_meta.get('total_drops', 0) > 0:
+        story.append(Spacer(1, 0.1*inch))
+        warning_style = ParagraphStyle(
+            'Warning',
+            parent=body_style,
+            fontSize=10,
+            textColor=colors.red,
+            fontName='Helvetica-Bold'
+        )
+        story.append(Paragraph(
+            f"⚠️ WARNING: {session_meta.get('total_drops')} events were dropped due to buffer overflow.",
+            warning_style
+        ))
+    
     story.append(Spacer(1, 0.3*inch))
     
-    # --- 6. CHAIN-OF-CUSTODY STATEMENT ---
-    story.append(Paragraph("Chain-of-Custody Statement", heading_style))
+    # === 3. EVENT TIMELINE ===
+    story.append(Paragraph("Event Timeline", heading_style))
     
+    timeline_data = [["Seq", "Event Type", "Timestamp"]]
+    events = export_data.get('events', [])
+    
+    for event in events[:50]:  # Limit for PDF readability
+        event_type = event.get('event_type', '')
+        # Explicit LOG_DROP marker
+        if event_type == 'LOG_DROP':
+            event_type = "⚠️ LOG_DROP"
+        
+        timeline_data.append([
+            str(event.get('sequence_number', '')),
+            event_type,
+            event.get('timestamp_wall', '')[:23]  # Trim to milliseconds
+        ])
+    
+    if len(events) > 50:
+        timeline_data.append(["...", f"({len(events) - 50} more events)", "..."])
+    
+    timeline_table = Table(timeline_data, colWidths=[0.6*inch, 2.5*inch, 2.5*inch])
+    timeline_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a4a4a')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f5f5')),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0f0f0')]),
+    ]))
+    story.append(timeline_table)
+    
+    # === 4. VERIFICATION ANNEX ===
+    story.append(PageBreak())
+    story.append(Paragraph("Verification Annex", heading_style))
+    story.append(Paragraph(
+        "<i>All hashes below are copied verbatim from the verified JSON export.</i>",
+        body_style
+    ))
+    story.append(Spacer(1, 0.2*inch))
+    
+    seal = export_data.get('seal', {})
+    if seal.get('present'):
+        annex_data = [
+            ["CHAIN_SEAL", "PRESENT"],
+            ["Ingestion Service", seal.get('ingestion_service_id', 'N/A')],
+            ["Seal Timestamp", seal.get('seal_timestamp', 'N/A')],
+            ["Session Digest", seal.get('session_digest', 'N/A')],
+            ["Final Event Hash", seal.get('final_event_hash', 'N/A')],
+            ["Sealed Event Count", str(seal.get('event_count', 'N/A'))],
+        ]
+    else:
+        annex_data = [
+            ["CHAIN_SEAL", "NOT PRESENT"],
+            ["Reason", "Session was not sealed by ingestion service"],
+        ]
+    
+    annex_table = Table(annex_data, colWidths=[2*inch, 4*inch])
+    annex_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#e8e8e8')),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (1, 0), (1, -1), 'Courier'),
+        ('FONTSIZE', (1, 0), (1, -1), 8),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('PADDING', (0, 0), (-1, -1), 6),
+    ]))
+    story.append(annex_table)
+    story.append(Spacer(1, 0.3*inch))
+    
+    # Chain-of-custody
+    story.append(Paragraph("Chain-of-Custody", heading_style))
+    custody = export_data.get('chain_of_custody', {})
     custody_text = f"""
-    This export was generated from the AgentOps Replay immutable event store using RFC 8785 (JCS) canonical JSON serialization.
-    <br/><br/>
-    <b>Export Authority:</b> {export_data['chain_of_custody']['export_authority']}<br/>
-    <b>Export Timestamp:</b> {export_data['chain_of_custody']['export_timestamp']}<br/>
-    <b>Canonical Format:</b> {export_data['chain_of_custody']['canonical_format']}<br/>
-    <b>Session Authority:</b> {export_data['chain_authority']}<br/>
+    <b>Export Authority:</b> {custody.get('export_authority', 'N/A')}<br/>
+    <b>Export Timestamp:</b> {custody.get('export_timestamp', 'N/A')}<br/>
+    <b>Canonical Format:</b> {custody.get('canonical_format', 'N/A')}<br/>
     <br/>
-    All event hashes can be independently verified using the AgentOps Replay verifier tool.
+    <i>This PDF is a rendering of the verified JSON export. For cryptographic verification, 
+    use the source JSON file with the AgentOps Replay verifier tool.</i>
     """
     story.append(Paragraph(custody_text, body_style))
     
     # Build PDF
     doc.build(story)
     
-    # Return bytes
     pdf_bytes = buffer.getvalue()
     buffer.close()
     
     return pdf_bytes
+
+
+def _get_verification_status(export_data: Dict[str, Any]) -> str:
+    """
+    Determine verification status display string.
+    """
+    evidence_class = export_data.get('evidence_class', '')
+    if evidence_class == 'AUTHORITATIVE_EVIDENCE':
+        return 'VERIFIED'
+    elif evidence_class == 'PARTIAL_AUTHORITATIVE_EVIDENCE':
+        return 'PARTIAL (incomplete chain)'
+    else:
+        return 'NON-AUTHORITATIVE (development only)'
