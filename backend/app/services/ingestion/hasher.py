@@ -64,19 +64,16 @@ def recompute_chain(
     expected_genesis_hash: str = GENESIS_HASH
 ) -> ChainResult:
     """
-    Recompute hash chain from scratch, ignoring SDK-provided hashes.
+    Recomputes a canonical server-side hash chain from genesis and validates the provided event batch.
     
-    CRITICAL: This function establishes SERVER AUTHORITY.
-    - SDK hashes are logged as untrusted_hash, never used
-    - All hashes are recomputed from canonical payloads
-    - Any validation failure results in FULL REJECTION
+    Processes the given events in order, enforcing strict sequence monotonicity, canonicalizing payloads, recomputing payload and event hashes, and authoring the chain as SERVER. SDK-provided hashes are recorded as untrusted and never used for chain construction. If validation fails at any point, returns a ChainResult with valid=False and a concrete RejectionReason and rejection_details; on success returns a ChainResult containing the recomputed events, final_hash, event_count, and any collected untrusted_sdk_hashes.
     
-    Args:
-        events: List of raw events from SDK (untrusted)
-        expected_genesis_hash: Expected prev_hash for first event
-        
+    Parameters:
+        events (List[Dict[str, Any]]): List of raw events from the SDK (untrusted).
+        expected_genesis_hash (str): Expected prev_hash for the first event (defaults to GENESIS_HASH).
+    
     Returns:
-        ChainResult with validation outcome
+        ChainResult: Result of recomputation and validation. On success, contains recomputed_events, final_hash, event_count, and optional untrusted_sdk_hashes. On failure, contains valid=False with rejection_reason and rejection_details.
     """
     if not events:
         return ChainResult(
@@ -197,10 +194,19 @@ def recompute_chain(
 
 def _validate_sequences(events: List[Dict[str, Any]]) -> Tuple[bool, Optional[RejectionReason], Optional[str]]:
     """
-    Validate sequence numbers are strictly monotonic.
+    Verify that events' `sequence_number` values are strictly increasing by one and contain no duplicates.
+    
+    Checks each event for a present `sequence_number`, enforces that each sequence equals the previous sequence plus one, and detects duplicates. If a violation is found, returns the corresponding RejectionReason:
+    - missing `sequence_number` -> `NON_MONOTONIC_SEQUENCE`
+    - duplicate sequence -> `DUPLICATE_SEQUENCE`
+    - non-monotonic (<= previous) -> `NON_MONOTONIC_SEQUENCE`
+    - gap (not previous + 1) -> `SEQUENCE_GAP`
     
     Returns:
-        Tuple of (valid, rejection_reason, rejection_details)
+        tuple: (valid, rejection_reason, rejection_details)
+            valid (bool): True if sequences are valid, False otherwise.
+            rejection_reason (Optional[RejectionReason]): reason for rejection when invalid.
+            rejection_details (Optional[str]): brief human-readable details about the violation.
     """
     if not events:
         return (True, None, None)

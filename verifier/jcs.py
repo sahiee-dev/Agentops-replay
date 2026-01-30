@@ -22,9 +22,16 @@ import struct
 
 def _float_to_string(f: float) -> str:
     """
-    Format a float according to RFC 8785 rules.
-    This effectively means leveraging the underlying Grisu2/Dragon4/Ryu algorithms 
-    standard in modern languages, but checking specific edge cases.
+    Serialize a floating-point value to the canonical JSON number string required by RFC 8785.
+    
+    Parameters:
+        f (float): The floating-point value to serialize. NaN and infinities are not allowed.
+    
+    Returns:
+        str: The RFC 8785-compliant JSON representation of `f` (e.g., integers without ".0", minus zero as "0", no '+' in exponents).
+    
+    Raises:
+        ValueError: If `f` is NaN or infinite.
     """
     if math.isnan(f) or math.isinf(f):
         raise ValueError("NaN and Infinity are not permitted in JSON")
@@ -76,8 +83,25 @@ def _float_to_string(f: float) -> str:
 
 def canonicalize(data) -> bytes:
     """
-    Returns the RFC 8785 canonical bytes of the given Python object.
-    Recursive implementation to ensure strict sorting.
+    Produce RFC 8785 (JCS) canonical JSON bytes for the given Python value.
+    
+    Serializes the input to a compact, canonical JSON byte sequence (UTF-8) following RFC 8785 rules:
+    - None -> `null`
+    - bool -> `true` or `false`
+    - int -> decimal integer string
+    - float -> RFC 8785-compatible decimal string (handled by _float_to_string)
+    - str -> JSON string preserved verbatim (no Unicode normalization)
+    - list -> JSON array preserving element order
+    - dict -> JSON object with keys sorted by their UTF-16BE code unit sequence; keys must be `str`
+    
+    Parameters:
+        data: The Python value to canonicalize. Supported types: None, bool, int, float, str, list, and dict (with string keys). Nested structures of these types are supported.
+    
+    Returns:
+        Canonical UTF-8 encoded JSON bytes representing `data` according to RFC 8785.
+    
+    Raises:
+        TypeError: If `data` contains a type not representable in JCS (e.g., non-string dict keys or unsupported Python objects).
     """
     
     if data is None:
@@ -125,4 +149,3 @@ def canonicalize(data) -> bytes:
         return b'{' + b','.join(parts) + b'}'
         
     raise TypeError(f"Type {type(data)} not serializable to JCS")
-

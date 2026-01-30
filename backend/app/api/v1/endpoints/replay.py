@@ -44,9 +44,25 @@ router = APIRouter()
 
 def _get_event_dicts(db: Session, session_id: int) -> List[Dict[str, Any]]:
     """
-    Query EventChain table and build event dicts with all required fields.
+    Builds ordered event dictionaries from authoritative EventChain rows for a session.
     
-    Uses EventChain (authoritative) not Event (legacy).
+    Each returned dictionary represents a single EventChain row and contains canonical, replay-ready fields.
+    
+    Parameters:
+        session_id (int): Primary key of the session whose EventChain rows will be read.
+    
+    Returns:
+        List[dict]: Ordered (ascending by sequence_number) list of event dictionaries. Each dictionary contains:
+            - `event_id` (str): UUID string of the event.
+            - `sequence_number` (int): Monotonic sequence number within the session.
+            - `event_type` (str): Event type name.
+            - `timestamp` (str|None): ISO 8601 wall-clock timestamp or `None` if absent.
+            - `timestamp_wall` (str|None): ISO 8601 wall-clock timestamp (same as `timestamp`) or `None`.
+            - `timestamp_monotonic` (float|int|None): Monotonic timestamp value, if present.
+            - `payload` (str): Canonical JSON string of the event payload (authoritative).
+            - `payload_canonical` (str): Canonical JSON string of the event payload (same as `payload`).
+            - `event_hash` (str): Hex/string representation of the event's hash.
+            - `prev_event_hash` (str|None): Hash of the previous event in the chain or `None`.
     """
     event_chains = db.query(EventChain).filter(
         EventChain.session_id == session_id
@@ -73,9 +89,13 @@ def _get_event_dicts(db: Session, session_id: int) -> List[Dict[str, Any]]:
 
 def _get_seal_dict(db: Session, session_id: int) -> Optional[Dict[str, Any]]:
     """
-    Get chain seal by looking for CHAIN_SEAL event in EventChain.
+    Retrieve the chain seal information for a session if a CHAIN_SEAL event exists.
     
-    Returns seal dict if found, None otherwise.
+    Returns:
+        dict: A dictionary with keys:
+            - `session_digest` (str | None): Digest value from the seal payload, or `None` if missing.
+            - `sealed_at` (str | None): ISO 8601 string of the seal's wall-clock timestamp, or `None` if not available.
+        None: If no CHAIN_SEAL event is found for the given session.
     """
     chain_seal = db.query(EventChain).filter(
         EventChain.session_id == session_id,
@@ -94,7 +114,16 @@ def _get_seal_dict(db: Session, session_id: int) -> Optional[Dict[str, Any]]:
 
 @router.get("/")
 def replay_overview():
-    """Health check for replay service."""
+    """
+    Return basic health and constraint information for the replay service.
+    
+    Returns:
+        dict: A mapping containing:
+            - service (str): Service name.
+            - status (str): Availability status.
+            - version (str): Service version string.
+            - constraints (List[str]): Replay constraints (e.g., "READ_ONLY", "VERIFIED_FIRST", "NO_INFERENCE", "DETERMINISTIC").
+    """
     return {
         "service": "replay",
         "status": "available",
@@ -114,16 +143,19 @@ def replay_overview():
 )
 def get_replay(session_id: int, db: Session = Depends(get_db)):
     """
-    Get full replay for a session.
+    Retrieve the fully verified replay for a session.
     
-    Response includes:
-    - evidence_class
-    - verification_status (VALID/INVALID)
-    - frames (in sequence order, with GAPs for missing sequences)
-    - warnings (all detected issues)
+    Performs full verification of the session's event chain and, if verification succeeds, returns the complete replay (frames, warnings, metadata). If verification fails, returns a ReplayFailureSchema that contains only verification failure information and no frames or partial data.
     
-    INVARIANT: If verification fails, returns ReplayFailureSchema
-    with NO frames, NO partial data, NO metadata.
+    Parameters:
+        session_id (int): Database primary key of the session to retrieve.
+    
+    Returns:
+        ReplayResponseSchema: The assembled replay when verification is successful.
+        ReplayFailureSchema: A failure schema with `verification_status` set to INVALID, `error_code`, and `error_message` when verification fails.
+    
+    Raises:
+        HTTPException: 404 if the session does not exist.
     """
     # Check if session exists
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
@@ -161,10 +193,15 @@ def get_replay(session_id: int, db: Session = Depends(get_db)):
 @router.get("/session/{session_id}/verify", response_model=VerificationResponseSchema)
 def verify_session(session_id: int, db: Session = Depends(get_db)):
     """
-    Verify a session before replay.
+    Verify a recording session and return verification metadata.
     
-    Returns verification result without full replay data.
-    Use this to check if replay is available before fetching.
+    Validates the session exists, performs full chain verification using authoritative EventChain data and any chain seal, and reports verification results without returning full replay frames.
+    
+    Parameters:
+        session_id (int): Database primary key of the session to verify.
+    
+    Returns:
+        VerificationResponseSchema: If verification fails, contains `verification_status` set to INVALID and `error_code`/`error_message` with failure details. If verification succeeds, contains `verification_status` set to VALID and fields `evidence_class`, `seal_present`, `event_count`, and `warning_count`.
     """
     # Check if session exists
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
@@ -207,13 +244,20 @@ def verify_session(session_id: int, db: Session = Depends(get_db)):
 @router.get("/session/{session_id}/frame/{sequence}", response_model=FrameResponseSchema)
 def get_frame(session_id: int, sequence: int, db: Session = Depends(get_db)):
     """
-    Get a single frame by sequence number.
+    Retrieve a single replay frame by sequence after verifying the session's event chain.
     
-    CONSTRAINT: This endpoint:
-    - MUST go through full verification
-    - MUST NOT bypass gap logic
-    - MUST return GAP frame if missing
-    - Is NOT a "fast path" that skips replay logic
+    This endpoint enforces full verification of the session's authoritative EventChain and applies replay gap logic; it will not return partial or unverified data.
+    
+    Parameters:
+    	session_id (int): Database primary key of the session.
+    	sequence (int): Sequence number of the requested frame.
+    
+    Returns:
+    	FrameResponseSchema: Object containing `session_id`, `requested_sequence`, and the serialized frame.
+    
+    Raises:
+    	HTTPException(404): If the session does not exist.
+    	HTTPException(422): If chain verification fails.
     """
     # Get full replay first (enforces verification)
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
@@ -249,7 +293,15 @@ def get_frame(session_id: int, sequence: int, db: Session = Depends(get_db)):
 
 
 def _replay_to_response(replay: ReplayResult) -> ReplayResponseSchema:
-    """Convert internal ReplayResult to API response schema."""
+    """
+    Create a ReplayResponseSchema from an internal ReplayResult.
+    
+    Parameters:
+        replay (ReplayResult): Internal replay result containing verified session metadata, frames, warnings, counts, timestamps, and final hash.
+    
+    Returns:
+        replay_response (ReplayResponseSchema): API-ready representation of the replay including session_id, evidence_class, seal_present, verification_status, frames, warnings, event_count, total_drops, first_timestamp, last_timestamp, and final_hash.
+    """
     return ReplayResponseSchema(
         session_id=replay.session_id,
         evidence_class=replay.evidence_class,
@@ -274,7 +326,21 @@ def _replay_to_response(replay: ReplayResult) -> ReplayResponseSchema:
 
 
 def _frame_to_schema(frame) -> ReplayFrameSchema:
-    """Convert internal ReplayFrame to API response schema."""
+    """
+    Convert an internal ReplayFrame into a ReplayFrameSchema suitable for API responses.
+    
+    Parameters:
+        frame: Internal frame object with attributes used to populate the schema
+            (e.g., frame_type, position, sequence_number, timestamp, event_type,
+            payload, event_hash, gap_start, gap_end, dropped_count, drop_reason,
+            redaction_hash, redacted_fields).
+    
+    Returns:
+        ReplayFrameSchema: API-ready representation of the provided frame.
+    
+    Raises:
+        ValueError: If `frame.payload` is a `dict`; payloads must already be canonical JSON strings.
+    """
     from app.replay.frames import FrameType
     import json
     

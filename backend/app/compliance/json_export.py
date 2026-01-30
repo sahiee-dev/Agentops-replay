@@ -24,9 +24,18 @@ from app.models import Session, EventChain, ChainSeal
 
 def _format_iso8601(dt: datetime) -> str:
     """
-    Format datetime to strict ISO 8601: YYYY-MM-DDTHH:MM:SS.sssZ
+    Format a datetime as an ISO 8601 UTC timestamp with millisecond precision and a trailing 'Z'.
     
-    No local offsets. No truncated seconds. Always UTC with Z suffix.
+    Converts the input to UTC if it has a timezone; if naive, treats it as UTC. Always produces a string in the form YYYY-MM-DDTHH:MM:SS.sssZ.
+    
+    Parameters:
+        dt (datetime): The datetime to format. Must not be None.
+    
+    Returns:
+        str: The formatted ISO 8601 timestamp with millisecond precision and 'Z' suffix.
+    
+    Raises:
+        ValueError: If `dt` is None.
     """
     if dt is None:
         raise ValueError("Timestamp is required but was None. Caller must handle optional timestamps explicitly.")
@@ -41,23 +50,19 @@ def _format_iso8601(dt: datetime) -> str:
 
 def generate_json_export(session_id: str, db: DBSession) -> Dict[str, Any]:
     """
-    Generate RFC 8785 canonical JSON export.
+    Generate an RFC 8785 canonical JSON export for a session.
     
-    Includes:
-    - Full event chain
-    - Verification metadata
-    - Evidence class (AUTHORITATIVE/PARTIAL_AUTHORITATIVE/NON_AUTHORITATIVE)
-    - Chain-of-custody statement
+    Builds a deterministic export dictionary containing the full ordered event chain, session metadata, evidence class, optional chain seal, and a chain-of-custody statement suitable for JCS canonicalization.
     
-    Args:
-        session_id: Session UUID string
-        db: Database session
-        
+    Parameters:
+        session_id (str): Session UUID string identifying the session to export.
+        db (DBSession): Database session used to load Session, EventChain, and ChainSeal records.
+    
     Returns:
-        Canonical export dictionary
-        
+        export (Dict[str, Any]): Canonical export dictionary ready for RFC 8785 canonicalization.
+    
     Raises:
-        ValueError: If session not found
+        ValueError: If `session_id` is not a valid UUID string or if no matching session is found.
     """
     # Validate session_id format
     try:
@@ -150,12 +155,13 @@ def generate_json_export(session_id: str, db: DBSession) -> Dict[str, Any]:
 
 def _determine_evidence_class(session: Session, chain_seal: ChainSeal) -> str:
     """
-    Determine evidence class per CHAIN_AUTHORITY_INVARIANTS.md.
+    Classify the session's evidence as authoritative, partially authoritative, or non-authoritative based on presence of a chain seal and session completeness.
     
-    Returns one of:
-    - AUTHORITATIVE_EVIDENCE: Server-sealed, complete chain
-    - PARTIAL_AUTHORITATIVE_EVIDENCE: Server-sealed, incomplete chain
-    - NON_AUTHORITATIVE_EVIDENCE: SDK-only, no seal
+    Returns:
+        One of the string constants:
+        - "AUTHORITATIVE_EVIDENCE": chain is sealed by the server and contains no drops (complete).
+        - "PARTIAL_AUTHORITATIVE_EVIDENCE": chain is sealed by the server but is incomplete (has drops or not sealed).
+        - "NON_AUTHORITATIVE_EVIDENCE": no server seal is present (SDK-only evidence).
     """
     if chain_seal is None:
         return "NON_AUTHORITATIVE_EVIDENCE"
@@ -169,8 +175,12 @@ def _determine_evidence_class(session: Session, chain_seal: ChainSeal) -> str:
 
 def serialize_canonical(export: Dict[str, Any]) -> bytes:
     """
-    Serialize export to RFC 8785 canonical bytes.
+    Produce RFC 8785 canonical JSON bytes from an export dictionary.
     
-    Uses verifier's JCS implementation (LOCKED).
+    Parameters:
+        export (Dict[str, Any]): Export dictionary following this module's canonical export structure.
+    
+    Returns:
+        bytes: RFC 8785 canonical form of the provided export.
     """
     return canonicalize(export)

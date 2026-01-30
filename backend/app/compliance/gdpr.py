@@ -35,6 +35,13 @@ class Finding:
     message: str
     
     def to_dict(self) -> Dict[str, Any]:
+        """
+        Serialize the Finding into a plain dictionary for consumption by JSON serializers or logging.
+        
+        Returns:
+            dict: Dictionary with keys "severity", "event_index", "event_id", "field_path", and "message".
+                  "severity" contains the enum member's value; other keys contain the Finding's corresponding field values.
+        """
         return {
             "severity": self.severity.value,
             "event_index": self.event_index,
@@ -59,16 +66,19 @@ REDACTION_MARKER = "[REDACTED]"
 
 def validate_redactions(events: List[Dict[str, Any]]) -> List[Finding]:
     """
-    Validate that all redacted fields have corresponding hashes.
+    Verify that every "[REDACTED]" field in the provided events has a corresponding "<field>_hash" entry.
     
-    This is a STRUCTURAL check - ERROR severity.
-    A [REDACTED] field without a corresponding hash is a hard failure.
+    Performs a structural validation across event payloads and records ERROR-level findings for:
+    - Missing or empty "<field>_hash" entries for any field whose value is the REDACTION_MARKER.
+    - Invalid JSON payloads when payload is a string.
+    - Unexpected payload types (neither str, dict, nor list).
     
-    Args:
-        events: List of event dictionaries from export
-        
+    Parameters:
+        events (List[Dict[str, Any]]): Sequence of event objects; each event may include 'event_id' and a 'payload'
+            (which can be a dict, list, or a JSON-encoded string).
+    
     Returns:
-        List of Finding objects (ERROR severity only)
+        List[Finding]: A list of ERROR-severity Finding objects describing structural redaction violations.
     """
     findings = []
     
@@ -145,7 +155,18 @@ def _check_redactions_recursive(
     event_id: str,
     findings: List[Finding]
 ) -> None:
-    """Recursively check for [REDACTED] without corresponding hash."""
+    """
+    Recursively verify that any "[REDACTED]" value has a corresponding "<field>_hash" key present and non-empty.
+    
+    This function walks dictionaries and lists under `data` and, for each key whose value equals the module-level REDACTION_MARKER, appends a Severity.ERROR Finding to `findings` if the sibling key "<key>_hash" is missing or falsy. The `findings` list is mutated in place to record errors with the provided event context and field path.
+    
+    Parameters:
+        data (Any): The node to inspect (dict, list, or nested combinations).
+        path (str): Dotted/indexed path prefix for the current node (e.g., "payload.user" or "payload.items[0]").
+        event_index (int): Numeric index of the event being inspected, used in created Findings.
+        event_id (str): Identifier of the event being inspected, used in created Findings.
+        findings (List[Finding]): Mutable list that will be appended with ERROR Findings for missing redaction hashes.
+    """
     
     if isinstance(data, dict):
         for key, value in data.items():
@@ -172,16 +193,13 @@ def _check_redactions_recursive(
 
 def check_pii_exposure(events: List[Dict[str, Any]]) -> List[Finding]:
     """
-    Heuristic check for potential PII exposure in unredacted fields.
+    Heuristically detects potential PII in event payloads and records findings for suspected exposures.
     
-    This is a HEURISTIC check - WARNING severity only.
-    Does NOT claim completeness. Does NOT enforce policy.
+    Parameters:
+        events (List[Dict[str, Any]]): Sequence of event objects; each should include a 'payload' (string, dict, or list) and may include 'event_id'.
     
-    Args:
-        events: List of event dictionaries from export
-        
     Returns:
-        List of Finding objects (WARNING severity only, ERROR for unexpected types)
+        List[Finding]: WARNING-level findings for suspected PII matches. ERROR-level findings are produced only for unexpected payload types or invalid JSON payloads.
     """
     findings = []
     
@@ -247,7 +265,19 @@ def _check_pii_recursive(
     event_id: str,
     findings: List[Finding]
 ) -> None:
-    """Recursively check for potential PII in data."""
+    """
+    Recursively scan a value for potential personally identifiable information (PII) and append any findings.
+    
+    Scans strings for heuristic PII patterns, traverses dictionaries and lists, and constructs field paths using dot notation for dict keys and `[index]` for list elements (e.g., "root.field[0].subfield").
+    
+    Parameters:
+        data: The value to inspect; may be a str, dict, or list.
+        path: Current field path used in findings (use an empty string or a root identifier when starting).
+        event_index: Index of the event being inspected, recorded on any Finding.
+        event_id: Identifier of the event being inspected, recorded on any Finding.
+        findings: Mutable list to which discovered Finding instances will be appended.
+    
+    """
     
     if isinstance(data, str):
         _check_string_for_pii(data, path, event_index, event_id, findings)
@@ -267,7 +297,18 @@ def _check_string_for_pii(
     event_id: str,
     findings: List[Finding]
 ) -> None:
-    """Check a string value for PII patterns."""
+    """
+    Detect heuristic PII patterns in a string and record a WARNING finding when a pattern is matched.
+    
+    Skips scanning if the string is exactly the redaction marker. On the first matching PII pattern, appends a Finding with severity WARNING using the provided event context and field path, and stops further matching for that field (mutates the `findings` list).
+    
+    Parameters:
+        value (str): The string to scan for PII.
+        path (str): Dotted/indexed field path used in the resulting Finding.
+        event_index (int): Index of the event containing the value.
+        event_id (str): Identifier of the event containing the value.
+        findings (List[Finding]): Mutable list to which any detected Finding will be appended.
+    """
     
     # Skip ONLY if the entire value is exactly the redaction marker
     if value.strip() == REDACTION_MARKER:
@@ -288,10 +329,20 @@ def _check_string_for_pii(
 
 def check_compliance(events: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Run all compliance checks and return summary.
+    Run heuristic compliance checks (redactions and PII exposure) across a sequence of events and return aggregated findings.
+    
+    Parameters:
+        events (List[Dict[str, Any]]): Sequence of event objects to inspect. Each event may include an 'event_id' and a 'payload' (a dict, list, or a JSON-encoded string) that will be validated.
     
     Returns:
-        Dict with 'errors', 'warnings', and 'summary' keys
+        Dict[str, Any]: Aggregated results with keys:
+            - "errors": list of redaction findings (serialized dicts) with severity ERROR for structural redaction issues.
+            - "warnings": list of PII findings (serialized dicts) with severity WARNING for heuristic potential exposures.
+            - "summary": dict containing:
+                - "total_errors" (int): number of ERROR findings.
+                - "total_warnings" (int): number of WARNING findings.
+                - "passed" (bool): true if there are no errors.
+                - "note" (str): clarification that PII detection is heuristic and not a compliance certification.
     """
     redaction_findings = validate_redactions(events)
     pii_findings = check_pii_exposure(events)

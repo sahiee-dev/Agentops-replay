@@ -34,9 +34,10 @@ class TestJCSCanonicalization:
     
     def test_whitespace_modification_detected(self):
         """
-        ADVERSARIAL TEST: Modifying whitespace must change hash.
+        Verify that JCS canonicalization normalizes insignificant JSON whitespace.
         
-        This proves canonicalization is not cosmetic.
+        Asserts that canonicalizing the same payload represented with and without
+        insignificant whitespace produces identical SHA-256 hashes.
         """
         # Sample event payload
         original_payload = {
@@ -84,9 +85,9 @@ class TestJCSCanonicalization:
     
     def test_key_order_normalized(self):
         """
-        Test that different key orders produce same canonical form.
+        Verify that canonicalization produces identical output for objects whose keys are in different orders.
         
-        RFC 8785 requires lexicographic sorting.
+        Asserts that object key order is normalized (lexicographically per RFC 8785) by canonicalize so that the SHA-256 digest of the canonical form is identical for each permutation.
         """
         payload_a = {"zebra": 1, "apple": 2, "mango": 3}
         payload_b = {"apple": 2, "mango": 3, "zebra": 1}
@@ -120,13 +121,9 @@ class TestJCSCanonicalization:
     
     def test_unicode_preserved_verbatim(self):
         """
-        RFC 8785 compliance: Strings MUST be preserved verbatim.
+        Verify that JSON string values are preserved verbatim by JCS canonicalization.
         
-        RFC 8785 explicitly states: "Parsed JSON string data MUST NOT be 
-        altered during subsequent serializations."
-        
-        This means NFC and NFD representations of the same character
-        will produce DIFFERENT hashes, which is correct behavior.
+        Per RFC 8785, parsed JSON string data must not be altered during serialization; therefore composed (NFC) and decomposed (NFD) Unicode representations of the same visual character must produce different canonical outputs and different hashes.
         """
         # é can be represented as:
         # - U+00E9 (single codepoint, NFC)
@@ -144,9 +141,9 @@ class TestJCSCanonicalization:
     
     def test_chain_integrity_on_tampering(self):
         """
-        ADVERSARIAL TEST: Simulate chain tampering.
+        Verify that modifying a single event in a chained sequence changes its hash and causes downstream hashes to differ.
         
-        Modify one event in a chain, verify the chain becomes invalid.
+        Builds a two-event chain anchored to a genesis hash, computes canonical hashes, tampers with the first event, and asserts that the tampered event's hash differs from the original and that the second event's hash changes when linked to the tampered predecessor.
         """
         # Build a mini chain
         genesis_hash = "0" * 64

@@ -49,22 +49,19 @@ def seal_chain(
     total_drops: int = 0
 ) -> SealResult:
     """
-    Seal an event chain, establishing server authority.
+    Seal an event chain to establish server authority for a session.
     
-    CRITICAL INVARIANTS:
-    - A sealed chain can never be re-sealed
-    - A sealed chain can never be extended
-    - Missing events result in PARTIAL_AUTHORITATIVE
+    If the chain is not previously sealed and recomputation validates the events, returns a SEALED result containing evidence_class, session_digest, final_event_hash, seal_timestamp, event_count, and ingestion_service_id. If an existing seal is provided, returns ALREADY_SEALED and preserves the original seal_timestamp and session_digest. If recomputation fails, returns INVALID_CHAIN with a rejection_reason.
     
-    Args:
-        session_id: Session UUID
-        events: List of events to seal (will be recomputed)
-        ingestion_service_id: ID of the ingestion service issuing the seal
-        existing_seal: If not None, indicates chain was previously sealed → REJECT
-        total_drops: Number of LOG_DROP events (affects evidence class)
-        
+    Parameters:
+        session_id: Session UUID for which the chain is being sealed.
+        events: Events to be recomputed and validated as the chain to seal.
+        ingestion_service_id: Identifier of the ingestion service issuing the seal.
+        existing_seal: If provided, indicates the chain was already sealed and will cause an ALREADY_SEALED result.
+        total_drops: Number of LOG_DROP events observed; influences the evidence class (authoritative vs partial).
+    
     Returns:
-        SealResult with seal details or rejection reason
+        SealResult: A dataclass describing the outcome. For a successful seal, includes evidence_class, session_digest, final_event_hash, seal_timestamp, event_count, and ingestion_service_id. For rejections, includes status and rejection_reason.
     """
     # INVARIANT 1: No re-sealing
     if existing_seal is not None:
@@ -143,9 +140,15 @@ def _compute_session_digest(
     final_hash: str
 ) -> str:
     """
-    Compute session digest from all event hashes.
+    Compute a SHA-256 digest that represents the session by combining the session ID, the events' hashes, and the final hash.
     
-    Digest = SHA256(session_id + event_hash_0 + event_hash_1 + ... + final_hash)
+    Parameters:
+    	session_id (str): The session identifier to include in the digest.
+    	events (List[Dict[str, Any]]): Ordered list of event objects; each event's 'event_hash' value is concatenated if present (missing 'event_hash' is treated as an empty string).
+    	final_hash (str): The final hash of the recomputed chain to include in the digest.
+    
+    Returns:
+    	session_digest (str): Hexadecimal SHA-256 digest of the concatenated inputs.
     """
     digest_input = session_id
     
@@ -159,11 +162,14 @@ def _compute_session_digest(
 
 def _determine_evidence_class(total_drops: int, event_count: int) -> str:
     """
-    Determine evidence class based on chain completeness.
+    Classify the chain's evidence as authoritative or partial based on drops and event count.
+    
+    Parameters:
+        total_drops (int): Number of dropped events detected during ingestion.
+        event_count (int): Number of events present in the recomputed chain.
     
     Returns:
-        - AUTHORITATIVE_EVIDENCE: No drops, complete chain
-        - PARTIAL_AUTHORITATIVE_EVIDENCE: Has drops or incomplete
+        str: `"AUTHORITATIVE_EVIDENCE"` if `total_drops` is 0 and `event_count` is greater than 0, `"PARTIAL_AUTHORITATIVE_EVIDENCE"` otherwise.
     """
     if total_drops == 0 and event_count > 0:
         return "AUTHORITATIVE_EVIDENCE"
@@ -173,10 +179,23 @@ def _determine_evidence_class(total_drops: int, event_count: int) -> str:
 
 def create_chain_seal_event(seal_result: SealResult, session_id: str) -> Dict[str, Any]:
     """
-    Create a CHAIN_SEAL event from a seal result.
+    Create a CHAIN_SEAL event payload for a sealed session.
     
-    This is the event that gets persisted to mark chain finalization.
-    Only the INGESTION SERVICE can emit CHAIN_SEAL events.
+    Parameters:
+        seal_result (SealResult): A `SealResult` with status `SealStatus.SEALED` containing seal metadata.
+        session_id (str): Identifier of the session being sealed.
+    
+    Returns:
+        dict: A CHAIN_SEAL event dictionary with the following structure:
+            - event_id (str): UUID for the event.
+            - session_id (str): The provided session identifier.
+            - event_type (str): `"CHAIN_SEAL"`.
+            - timestamp_wall (str): Seal timestamp from `seal_result`.
+            - payload (dict): Contains `evidence_class`, `session_digest`, `final_event_hash`, `event_count`, and `ingestion_service_id`.
+            - chain_authority (str): `"SERVER"`.
+    
+    Raises:
+        ValueError: If `seal_result.status` is not `SealStatus.SEALED`.
     """
     if seal_result.status != SealStatus.SEALED:
         raise ValueError(f"Cannot create CHAIN_SEAL event from non-sealed result: {seal_result.status}")

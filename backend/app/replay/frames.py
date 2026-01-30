@@ -77,10 +77,16 @@ class ReplayFrame:
     
     def validate_single_origin(self) -> bool:
         """
-        Validate that this frame has exactly one origin.
+        Ensure the frame has exactly one origin group populated and that the populated origin corresponds to the frame's declared FrameType.
         
-        INVARIANT: Exactly one origin group must be populated.
-        Returns False if more than one group is present.
+        An origin is considered present if:
+        - EVENT: both `event_type` and `event_hash` are set.
+        - GAP: both `gap_start` and `gap_end` are set.
+        - LOG_DROP: `dropped_count` is set.
+        - REDACTION: `redaction_hash` is set.
+        
+        Returns:
+            True if exactly one origin group is present and that origin matches `frame_type`, False otherwise.
         """
         # Compute presence flags for each origin group
         event_present = self.event_type is not None and self.event_hash is not None
