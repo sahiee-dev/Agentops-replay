@@ -4,13 +4,13 @@ Ingestion service package.
 This package implements server-side authority for event chains.
 """
 
-from .hasher import recompute_chain, ChainResult, RejectionReason
-from .sealer import seal_chain, SealResult
+from .hasher import ChainResult, RejectionReason, recompute_chain
+from .sealer import SealResult, seal_chain
 
 __all__ = [
-    'recompute_chain',
     'ChainResult',
     'RejectionReason',
-    'seal_chain',
     'SealResult',
+    'recompute_chain',
+    'seal_chain',
 ]

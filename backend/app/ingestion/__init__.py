@@ -1,5 +1,5 @@
 """Ingestion service package."""
 
-from .service import IngestService, SequenceViolation, AuthorityViolation
+from .service import AuthorityViolation, IngestService, SequenceViolation
 
-__all__ = ["IngestService", "SequenceViolation", "AuthorityViolation"]
+__all__ = ["AuthorityViolation", "IngestService", "SequenceViolation"]

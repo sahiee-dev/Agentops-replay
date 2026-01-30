@@ -1,12 +1,13 @@
 # backend/app/schemas/session.py
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel
+
 
 # Define SessionBase FIRST
 class SessionBase(BaseModel):
-    agent_name: Optional[str] = None
-    status: Optional[str] = None
+    agent_name: str | None = None
+    status: str | None = None
 
 # Then define SessionCreate (which inherits from SessionBase)
 class SessionCreate(SessionBase):

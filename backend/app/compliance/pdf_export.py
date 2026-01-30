@@ -9,16 +9,22 @@ CRITICAL CONSTRAINTS (per user review):
 5. Disclaimer MUST be verbatim per PRD §8.7
 """
 
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
-from reportlab.lib import colors
-from io import BytesIO
-from typing import Dict, Any
 import json
-from datetime import datetime
+from io import BytesIO
+from typing import Any
 
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import (
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 # MANDATORY DISCLAIMER (VERBATIM - NO CHANGES ALLOWED)
 EVIDENCE_DISCLAIMER = """EVIDENCE SUPPORT STATEMENT
@@ -63,13 +69,13 @@ def generate_pdf_from_verified_json(verified_json_path: str) -> bytes:
         ValueError: If JSON is malformed
     """
     # Load verified JSON
-    with open(verified_json_path, 'r', encoding='utf-8') as f:
+    with open(verified_json_path, encoding='utf-8') as f:
         export_data = json.load(f)
-    
+
     return _render_pdf(export_data)
 
 
-def generate_pdf_from_verified_dict(export_data: Dict[str, Any]) -> bytes:
+def generate_pdf_from_verified_dict(export_data: dict[str, Any]) -> bytes:
     """
     Generate PDF from an already-loaded verified JSON dict.
     
@@ -78,7 +84,7 @@ def generate_pdf_from_verified_dict(export_data: Dict[str, Any]) -> bytes:
     return _render_pdf(export_data)
 
 
-def _render_pdf(export_data: Dict[str, Any]) -> bytes:
+def _render_pdf(export_data: dict[str, Any]) -> bytes:
     """
     Internal: Render PDF from export data.
     """
@@ -86,7 +92,7 @@ def _render_pdf(export_data: Dict[str, Any]) -> bytes:
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter,
                            topMargin=0.75*inch, bottomMargin=0.75*inch)
-    
+
     # Styles
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
@@ -105,14 +111,14 @@ def _render_pdf(export_data: Dict[str, Any]) -> bytes:
         spaceBefore=12
     )
     body_style = styles['BodyText']
-    
+
     story = []
-    
+
     # === 1. COVER PAGE ===
     story.append(Paragraph("AgentOps Replay", title_style))
     story.append(Paragraph("Evidence Export Report", styles['Heading2']))
     story.append(Spacer(1, 0.3*inch))
-    
+
     # Cover page key info
     cover_data = [
         ["Evidence Class", export_data.get('evidence_class', 'UNKNOWN')],
@@ -130,7 +136,7 @@ def _render_pdf(export_data: Dict[str, Any]) -> bytes:
     ]))
     story.append(cover_table)
     story.append(Spacer(1, 0.4*inch))
-    
+
     # Disclaimer on cover page
     disclaimer_text = EVIDENCE_DISCLAIMER.format(
         evidence_class=export_data.get('evidence_class', 'UNKNOWN'),
@@ -138,7 +144,7 @@ def _render_pdf(export_data: Dict[str, Any]) -> bytes:
         export_date=export_data.get('export_timestamp', 'N/A'),
         export_authority=export_data.get('chain_of_custody', {}).get('export_authority') or "AgentOps Replay System"
     )
-    
+
     disclaimer_style = ParagraphStyle(
         'Disclaimer',
         parent=body_style,
@@ -151,11 +157,11 @@ def _render_pdf(export_data: Dict[str, Any]) -> bytes:
         backColor=colors.HexColor('#fff3cd')  # Warning yellow
     )
     story.append(Paragraph(disclaimer_text.replace('\n', '<br/>'), disclaimer_style))
-    
+
     # === 2. EXECUTIVE SUMMARY (No hashes) ===
     story.append(PageBreak())
     story.append(Paragraph("Executive Summary", heading_style))
-    
+
     session_meta = export_data.get('session_metadata', {})
     summary_text = f"""
     <b>Agent:</b> {session_meta.get('agent_name', 'Unknown')}<br/>
@@ -166,7 +172,7 @@ def _render_pdf(export_data: Dict[str, Any]) -> bytes:
     <b>Events Dropped:</b> {session_meta.get('total_drops', 0)}
     """
     story.append(Paragraph(summary_text, body_style))
-    
+
     if session_meta.get('total_drops', 0) > 0:
         story.append(Spacer(1, 0.1*inch))
         warning_style = ParagraphStyle(
@@ -180,31 +186,31 @@ def _render_pdf(export_data: Dict[str, Any]) -> bytes:
             f"⚠️ WARNING: {session_meta.get('total_drops')} events were dropped due to buffer overflow.",
             warning_style
         ))
-    
+
     story.append(Spacer(1, 0.3*inch))
-    
+
     # === 3. EVENT TIMELINE ===
     story.append(Paragraph("Event Timeline", heading_style))
-    
+
     timeline_data = [["Seq", "Event Type", "Timestamp"]]
     events = export_data.get('events', [])
-    
+
     for event in events[:50]:  # Limit for PDF readability
         event_type = event.get('event_type', '')
         # Explicit LOG_DROP marker
         if event_type == 'LOG_DROP':
             event_type = "⚠️ LOG_DROP"
-        
+
         timestamp = event.get('timestamp_wall') or ''
         timeline_data.append([
             str(event.get('sequence_number', '')),
             event_type,
             timestamp[:23]  # Trim to milliseconds
         ])
-    
+
     if len(events) > 50:
         timeline_data.append(["...", f"({len(events) - 50} more events)", "..."])
-    
+
     timeline_table = Table(timeline_data, colWidths=[0.6*inch, 2.5*inch, 2.5*inch])
     timeline_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a4a4a')),
@@ -218,7 +224,7 @@ def _render_pdf(export_data: Dict[str, Any]) -> bytes:
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0f0f0')]),
     ]))
     story.append(timeline_table)
-    
+
     # === 4. VERIFICATION ANNEX ===
     story.append(PageBreak())
     story.append(Paragraph("Verification Annex", heading_style))
@@ -227,7 +233,7 @@ def _render_pdf(export_data: Dict[str, Any]) -> bytes:
         body_style
     ))
     story.append(Spacer(1, 0.2*inch))
-    
+
     seal = export_data.get('seal', {})
     if seal.get('present'):
         annex_data = [
@@ -243,7 +249,7 @@ def _render_pdf(export_data: Dict[str, Any]) -> bytes:
             ["CHAIN_SEAL", "NOT PRESENT"],
             ["Reason", "Session was not sealed by ingestion service"],
         ]
-    
+
     annex_table = Table(annex_data, colWidths=[2*inch, 4*inch])
     annex_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#e8e8e8')),
@@ -256,7 +262,7 @@ def _render_pdf(export_data: Dict[str, Any]) -> bytes:
     ]))
     story.append(annex_table)
     story.append(Spacer(1, 0.3*inch))
-    
+
     # Chain-of-custody
     story.append(Paragraph("Chain-of-Custody", heading_style))
     custody = export_data.get('chain_of_custody', {})
@@ -269,17 +275,17 @@ def _render_pdf(export_data: Dict[str, Any]) -> bytes:
     use the source JSON file with the AgentOps Replay verifier tool.</i>
     """
     story.append(Paragraph(custody_text, body_style))
-    
+
     # Build PDF
     doc.build(story)
-    
+
     pdf_bytes = buffer.getvalue()
     buffer.close()
-    
+
     return pdf_bytes
 
 
-def _get_verification_status(export_data: Dict[str, Any]) -> str:
+def _get_verification_status(export_data: dict[str, Any]) -> str:
     """
     Determine verification status display string.
     """

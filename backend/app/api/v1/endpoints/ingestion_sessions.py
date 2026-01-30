@@ -4,23 +4,22 @@ ingestion_sessions.py - Ingestion service API endpoints.
 Constitutional session management for event ingestion.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
-from sqlalchemy.orm import Session as DBSession
-from typing import List
 import uuid
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session as DBSession
+
 from app.database import get_db
-from app.ingestion import IngestService, SequenceViolation, AuthorityViolation
+from app.ingestion import AuthorityViolation, IngestService, SequenceViolation
+from app.models import EventChain, Session
 from app.schemas.ingestion import (
-    SessionStartRequest,
-    SessionStartResponse,
     EventBatch,
     EventBatchResponse,
-    SealRequest,
     SealResponse,
-    SessionMetadata
+    SessionMetadata,
+    SessionStartRequest,
+    SessionStartResponse,
 )
-from app.models import Session, EventChain
 
 router = APIRouter()
 
@@ -38,7 +37,7 @@ async def start_session(request: SessionStartRequest):
             agent_name=request.agent_name,
             user_id=request.user_id
         )
-        
+
         return SessionStartResponse(
             session_id=session_id,
             authority=request.authority.value,
@@ -57,17 +56,17 @@ async def append_events(session_id: str, batch: EventBatch):
             session_id=session_id,
             events=batch.events
         )
-        
+
         return EventBatchResponse(
             status=result["status"],
             accepted_count=result["accepted_count"],
             final_hash=result.get("final_hash")
         )
     except SequenceViolation as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Sequence violation: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Sequence violation: {e!s}")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         # Log exception server-side for debugging
         import logging
         logging.getLogger(__name__).exception("Append events error for session %s", session_id)
@@ -98,12 +97,12 @@ async def get_session(session_id: str, db: DBSession = Depends(get_db)):
         session = db.query(Session).filter(
             Session.session_id_str == uuid.UUID(session_id)
         ).first()
-        
+
         if not session:
             raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
-        
+
         event_count = db.query(EventChain).filter(EventChain.session_id == session.id).count()
-        
+
         return SessionMetadata(
             session_id=str(session.session_id_str),
             authority=session.chain_authority.value,
