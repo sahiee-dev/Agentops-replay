@@ -1,8 +1,10 @@
+
+from collections.abc import Generator
+from typing import Any
+
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-import os
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+
 from .config import settings
 
 # Database URL
@@ -18,9 +20,13 @@ engine = create_engine(
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-Base = declarative_base()
 
-def get_db():
+class Base(DeclarativeBase):
+    """SQLAlchemy declarative base with proper typing."""
+    pass
+
+
+def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         yield db

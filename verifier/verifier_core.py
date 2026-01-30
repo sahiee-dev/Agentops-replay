@@ -9,10 +9,9 @@ Any modification to hash computation MUST update golden vector tests.
 """
 
 import hashlib
-import json
-from typing import Dict, Any, List, Optional
-import jcs  # Local RFC 8785 canonical JSON serialization
+from typing import Any
 
+import jcs as jcs  # Re-export for downstream consumers  # noqa: PLC0414
 
 # --- Constants (from EVENT_LOG_SPEC.md v0.6) ---
 SPEC_VERSION = "v0.6"
@@ -32,7 +31,7 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def compute_payload_hash(payload: Dict[str, Any]) -> str:
+def compute_payload_hash(payload: dict[str, Any]) -> str:
     """
     Compute canonical hash of event payload per RFC 8785.
     
@@ -57,7 +56,7 @@ def compute_payload_hash(payload: Dict[str, Any]) -> str:
         raise ValueError(f"Failed to canonicalize payload: {e}")
 
 
-def compute_event_hash(event: Dict[str, Any]) -> str:
+def compute_event_hash(event: dict[str, Any]) -> str:
     """
     Compute event hash from signed fields per EVENT_LOG_SPEC.md.
     
@@ -80,13 +79,13 @@ def compute_event_hash(event: Dict[str, Any]) -> str:
         if field not in event:
             raise ValueError(f"Missing required signed field: {field}")
         signed_obj[field] = event[field]
-    
+
     # Canonicalize and hash
     canonical_envelope = jcs.canonicalize(signed_obj)
     return sha256(canonical_envelope)
 
 
-def verify_event_hash(event: Dict[str, Any]) -> bool:
+def verify_event_hash(event: dict[str, Any]) -> bool:
     """
     Verify that event_hash matches computed hash of signed fields.
     
@@ -104,7 +103,7 @@ def verify_event_hash(event: Dict[str, Any]) -> bool:
         return False
 
 
-def verify_payload_hash(event: Dict[str, Any]) -> bool:
+def verify_payload_hash(event: dict[str, Any]) -> bool:
     """
     Verify that payload_hash matches computed hash of payload.
     
@@ -125,27 +124,29 @@ def verify_payload_hash(event: Dict[str, Any]) -> bool:
         return False
 
 
-def classify_evidence(authority: str, sealed: bool, complete: bool, has_drops: bool = False) -> str:
+def classify_evidence(
+    authority: str, sealed: bool, complete: bool, has_drops: bool = False
+) -> str:
     """
     Classify session evidence per CHAIN_AUTHORITY_INVARIANTS.md.
-    
+
     CRITICAL: Binary classification only - no "partial" footgun.
-    
+
     AUTHORITATIVE_EVIDENCE requires ALL conditions:
     - Server authority
-    - Valid CHAIN_SEAL  
+    - Valid CHAIN_SEAL
     - Complete session (SESSION_END present)
     - No LOG_DROP events
     - Chain cryptographically valid
-    
+
     Everything else is NON_AUTHORITATIVE_EVIDENCE.
-    
+
     Args:
         authority: "server" or "sdk"
         sealed: Has valid CHAIN_SEAL
         complete: Has SESSION_END and no sequence gaps
         has_drops: Has LOG_DROP events
-        
+
     Returns:
         "AUTHORITATIVE_EVIDENCE" or "NON_AUTHORITATIVE_EVIDENCE"
     """
@@ -161,78 +162,85 @@ def classify_evidence(authority: str, sealed: bool, complete: bool, has_drops: b
         return "NON_AUTHORITATIVE_EVIDENCE"
 
 
-def validate_chain_continuity(events: List[Dict[str, Any]]) -> tuple[bool, Optional[str]]:
+def validate_chain_continuity(events: list[dict[str, Any]]) -> tuple[bool, str | None]:
     """
     Validate hash chain continuity.
-    
+
     Args:
         events: Ordered list of events
-        
+
     Returns:
         (is_valid, error_message) tuple
     """
     prev_hash = None
-    
+
     for i, event in enumerate(events):
         # First event must have null prev_event_hash
         if i == 0:
             if event.get("prev_event_hash") is not None:
                 return False, "First event must have null prev_event_hash"
-        else:
-            # Subsequent events must link to previous
-            if event.get("prev_event_hash") != prev_hash:
-                return False, f"Chain broken at event {i}: expected {prev_hash}, got {event.get('prev_event_hash')}"
-        
+        # Subsequent events must link to previous
+        elif event.get("prev_event_hash") != prev_hash:
+            return (
+                False,
+                f"Chain broken at event {i}: expected {prev_hash}, got {event.get('prev_event_hash')}",
+            )
+
         # Verify event hash
         if not verify_event_hash(event):
             return False, f"Invalid event hash at event {i}"
-        
+
         # Verify payload hash
         if not verify_payload_hash(event):
             return False, f"Invalid payload hash at event {i}"
-        
+
         prev_hash = event.get("event_hash")
-    
+
     return True, None
 
 
-def validate_sequence_monotonicity(events: List[Dict[str, Any]]) -> tuple[bool, Optional[str]]:
+def validate_sequence_monotonicity(
+    events: list[dict[str, Any]],
+) -> tuple[bool, str | None]:
     """
     Validate sequence numbers are strictly monotonic from 0.
-    
+
     Args:
         events: Ordered list of events
-        
+
     Returns:
         (is_valid, error_message) tuple
     """
     expected_seq = 0
-    
+
     for i, event in enumerate(events):
         actual_seq = event.get("sequence_number")
         if actual_seq != expected_seq:
-            return False, f"Sequence gap at event {i}: expected {expected_seq}, got {actual_seq}"
+            return (
+                False,
+                f"Sequence gap at event {i}: expected {expected_seq}, got {actual_seq}",
+            )
         expected_seq += 1
-    
+
     return True, None
 
 
-def check_mixed_authority(events: List[Dict[str, Any]]) -> tuple[bool, Optional[set]]:
+def check_mixed_authority(events: list[dict[str, Any]]) -> tuple[bool, set[str] | None]:
     """
     Check for mixed authority in session (constitutional violation).
-    
+
     Args:
         events: List of events
-        
+
     Returns:
         (has_mixed_authority, authorities_found) tuple
     """
-    authorities = set()
+    authorities: set[str] = set()
     for event in events:
         auth = event.get("chain_authority")
         if auth:
             authorities.add(auth)
-    
+
     has_mixed = len(authorities) > 1
     return has_mixed, authorities if has_mixed else None
 
@@ -244,22 +252,24 @@ GOLDEN_TEST_PAYLOAD = {
     "nested": {"key": "value"}
 }
 
-GOLDEN_PAYLOAD_HASH = "9c15b0e1e3c6c8f3a9c8e9b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"  # Placeholder - will be computed
+# Placeholder - will be computed
+GOLDEN_PAYLOAD_HASH = "9c15b0e1e3c6c8f3a9c8e9b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
+SHA_256_HEX_LEN = 64
 
 
 def test_golden_vector() -> bool:
     """
     Golden vector test for hash determinism.
-    
+
     CRITICAL: This test MUST pass identically in:
     - SDK
     - Ingestion Service
     - Verifier
-    
+
     Returns:
         True if hash matches golden vector
     """
     computed = compute_payload_hash(GOLDEN_TEST_PAYLOAD)
     # For now, we compute and accept
     # In production, this would be a fixed expected hash
-    return len(computed) == 64  # Valid SHA-256 hex length
+    return len(computed) == SHA_256_HEX_LEN
