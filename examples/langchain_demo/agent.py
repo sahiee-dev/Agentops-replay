@@ -69,11 +69,17 @@ if LANGCHAIN_INSTALLED:
     @tool
     def lookup_order(order_id: str) -> str:
         """
-        Look up an order by its ID. Returns order details including status,
-        items, total, and refund eligibility.
+        Retrieve order information by order ID.
         
-        Args:
-            order_id: The order ID (e.g., "ORD-001")
+        Returns:
+        	A JSON-formatted string. On success the JSON contains the fields:
+        	- `order_id`: the requested order identifier
+        	- `status`: current order status
+        	- `items`: list of items on the order
+        	- `total`: order total amount
+        	- `refund_eligible`: whether the order is eligible for refunds
+        	- `customer_email`: customer's email address (PII; will be captured)
+        	On failure the JSON contains an `error` field with an explanatory message.
         """
         order = ORDERS_DB.get(order_id)
         if not order:
@@ -92,12 +98,19 @@ if LANGCHAIN_INSTALLED:
     @tool
     def issue_refund(order_id: str, amount: float, reason: str) -> str:
         """
-        Issue a refund for an order.
+        Create and record a refund for an eligible order.
         
-        Args:
-            order_id: The order ID to refund
-            amount: Amount to refund in USD
-            reason: Reason for the refund
+        Parameters:
+            order_id (str): Identifier of the order to refund.
+            amount (float): Refund amount in USD.
+            reason (str): Reason for issuing the refund.
+        
+        Returns:
+            str: A JSON-encoded string describing the outcome.
+                 - Success: {"success": True, "refund_id": <id>, "amount_refunded": <amount>, "message": <text>}
+                 - Order not found: {"error": "Order <id> not found"}
+                 - Not eligible: {"error": "Order <id> is not eligible for refund", "status": <order_status>}
+                 - Amount exceeds total: {"error": "Refund amount $<amount> exceeds order total $<total>"}
         """
         order = ORDERS_DB.get(order_id)
         if not order:
@@ -133,12 +146,15 @@ if LANGCHAIN_INSTALLED:
     @tool
     def send_email(to_email: str, subject: str, body: str) -> str:
         """
-        Send an email to a customer.
+        Send an email record to the specified recipient and append it to the in-memory email store.
         
-        Args:
-            to_email: Recipient email address
-            subject: Email subject line
-            body: Email body content
+        Parameters:
+            to_email (str): Recipient email address (contains PII).
+            subject (str): Email subject line.
+            body (str): Email body content.
+        
+        Returns:
+            str: JSON string with keys `success` (`True` on success), `email_id` (the created email identifier), and `message` (human-readable confirmation).
         """
         email_record = {
             "email_id": f"EMAIL-{len(EMAILS_SENT) + 1:04d}",
@@ -157,7 +173,12 @@ if LANGCHAIN_INSTALLED:
 
 
 def get_tools():
-    """Return list of available tools."""
+    """
+    List the tool callables exposed for agent use.
+    
+    Returns:
+        A list of tool callables (lookup_order, issue_refund, send_email) when LangChain is installed, or an empty list if LangChain is not available.
+    """
     if not LANGCHAIN_INSTALLED:
         return []
     return [lookup_order, issue_refund, send_email]
@@ -165,11 +186,17 @@ def get_tools():
 
 def create_agent(api_key: str | None = None, callbacks=None):
     """
-    Create and return the customer support agent.
+    Create and return a configured customer support agent executor.
     
-    Args:
-        api_key: OpenAI API key (uses OPENAI_API_KEY env var if not provided)
-        callbacks: List of LangChain callbacks (e.g., AgentOpsCallbackHandler)
+    Parameters:
+        api_key (Optional[str]): OpenAI API key to use; if omitted, the `OPENAI_API_KEY` environment variable is used.
+        callbacks (optional): Iterable of LangChain callback handlers to attach to the LLM and agent.
+    
+    Returns:
+        AgentExecutor: A configured agent executor that exposes the customer support agent with the registered tools and prompt.
+    
+    Raises:
+        ImportError: If required LangChain components are not available.
     """
     if not LANGCHAIN_INSTALLED:
         raise ImportError("LangChain not installed")
@@ -226,10 +253,22 @@ Thought:{agent_scratchpad}"""
 
 
 def get_refunds():
-    """Return list of refunds issued."""
+    """
+    Retrieve a copy of all refund records issued by the agent.
+    
+    Each refund record is a dict containing keys such as `refund_id`, `order_id`, `amount`, `reason`, and `timestamp`.
+    
+    Returns:
+        list: A shallow copy of the list of refund record dictionaries; modifying the returned list does not affect the internal store.
+    """
     return REFUNDS_ISSUED.copy()
 
 
 def get_emails():
-    """Return list of emails sent."""
+    """
+    Retrieve a copy of all email records sent by the agent.
+    
+    Returns:
+        list: A list of email record dictionaries, each containing keys such as `email_id`, `to`, `subject`, `body`, and `timestamp`.
+    """
     return EMAILS_SENT.copy()

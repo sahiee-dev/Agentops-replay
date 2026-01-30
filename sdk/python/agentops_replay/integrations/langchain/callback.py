@@ -57,8 +57,20 @@ except ImportError:
 
 def _safe_serialize(obj: Any, max_depth: int = 5) -> Any:
     """
-    Safely serialize an object to JSON-compatible format.
-    Handles complex LangChain objects without crashing.
+    Safely convert arbitrary Python objects to JSON-compatible primitives for telemetry.
+    
+    Recursively serializes common primitive types, lists (up to 100 items), dicts (up to 50 entries),
+    UUIDs (to string), and datetimes (to ISO 8601). If an object exposes `dict()`, `to_dict()`,
+    or `__dict__`, those are used recursively. Stops recursion when `max_depth` is reached and
+    returns the sentinel "<max_depth_exceeded>". On other failures falls back to the object's
+    string representation truncated to 1000 characters, or "<unserializable>" if that fails.
+    
+    Parameters:
+        obj (Any): The object to serialize.
+        max_depth (int): Maximum recursion depth; when reached returns "<max_depth_exceeded>".
+    
+    Returns:
+        Any: A JSON-compatible representation of `obj`, or a sentinel/string fallback on failure.
     """
     if max_depth <= 0:
         return "<max_depth_exceeded>"
@@ -119,7 +131,15 @@ def _safe_serialize(obj: Any, max_depth: int = 5) -> Any:
 
 
 def _compute_content_hash(content: Any) -> str:
-    """Compute SHA-256 hash of content for redaction support."""
+    """
+    Compute a deterministic SHA-256 hex digest for the given content.
+    
+    Parameters:
+        content (Any): Value to be serialized and hashed; may be any JSON-serializable or complex object.
+    
+    Returns:
+        str: The SHA-256 hex digest of the safely serialized content, or the literal string "hash_error" if hashing fails.
+    """
     try:
         serialized = json.dumps(_safe_serialize(content), sort_keys=True)
         return hashlib.sha256(serialized.encode()).hexdigest()
@@ -168,6 +188,18 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         redact_pii: bool = False,
         tags: list[str] | None = None
     ):
+        """
+        Create a LangChain callback handler that records LangChain events to the AgentOps replay system.
+        
+        Initializes the handler and its internal AgentOps SDK client, session state, run correlation map, and framework metadata. Validates that LangChain and the AgentOps SDK are available and checks framework compatibility.
+        
+        Parameters:
+            agent_id (str): Identifier for the agent whose events will be recorded.
+            local_authority (bool): If True, seal chains locally (useful for testing); if False, rely on server-side sealing.
+            buffer_size (int): Size of the internal event buffer used by the AgentOps client.
+            redact_pii (bool): If True, redact sensitive fields in recorded payloads with placeholders.
+            tags (Optional[List[str]]): Optional list of tags to attach to the session metadata.
+        """
         super().__init__()
 
         if not LANGCHAIN_AVAILABLE:
@@ -211,9 +243,17 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
     # =========================================================================
     # Session Management
     # =========================================================================
-
-    def start_session(self, additional_tags: list[str] | None = None) -> None:
-        """Start a new recording session."""
+    
+    def start_session(self, additional_tags: Optional[List[str]] = None):
+        """
+        Start a new AgentOps recording session and register session tags.
+        
+        Parameters:
+            additional_tags (Optional[List[str]]): Extra tags to attach to the session; these are combined with the handler's configured tags and a LangChain version tag.
+        
+        Raises:
+            RuntimeError: If a session is already active.
+        """
         if self._session_active:
             raise RuntimeError("Session already active. Call end_session() first.")
 
@@ -229,9 +269,16 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         self._session_active = True
         self._session_start_time = time.time()
         self._run_id_map = {}
-
-    def end_session(self, status: str = "success") -> None:
-        """End the current session and seal the chain."""
+    
+    def end_session(self, status: str = "success"):
+        """
+        End the currently active session and record its final status.
+        
+        If no session is active this is a no-op. The handler reports the session duration and the provided status to the AgentOps client and marks the session inactive.
+        
+        Parameters:
+            status (str): Final status label for the session (e.g., "success", "failure").
+        """
         if not self._session_active:
             return
 
@@ -241,13 +288,17 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         if self.client:
             self.client.end_session(status=status, duration_ms=duration_ms)
         self._session_active = False
-
-    def export_to_jsonl(self, filename: str) -> None:
-        """Export session to JSONL file for verification."""
-        if self.client:
-            self.client.flush_to_jsonl(filename)
-
-    def _ensure_session(self) -> None:
+    
+    def export_to_jsonl(self, filename: str):
+        """
+        Export the current session's recorded events to a JSONL file.
+        
+        Parameters:
+            filename (str): Path to the output JSONL file where recorded session events will be written.
+        """
+        self.client.flush_to_jsonl(filename)
+    
+    def _ensure_session(self):
         """Auto-start session if not active."""
         if not self._session_active:
             self.start_session()
@@ -267,7 +318,17 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Called when LLM starts processing."""
+        """
+        Record the start of an LLM run and emit a MODEL_REQUEST event to the AgentOps client.
+        
+        Parameters:
+            serialized (Dict[str, Any]): The LLM's serialized configuration/metadata (used to derive model, model_class, and provider).
+            prompts (List[str]): The prompts sent to the LLM; may be redacted in the emitted payload depending on handler settings.
+            run_id (UUID): Unique identifier for this LLM run.
+            parent_run_id (Optional[UUID]): Optional parent run identifier for correlation.
+            tags (Optional[List[str]]): Optional tags to attach to the emitted event.
+            metadata (Optional[Dict[str, Any]]): Optional additional metadata to include in the event.
+        """
         self._ensure_session()
 
         # Store run info for correlation
@@ -300,7 +361,16 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
-        """Called when LLM finishes processing."""
+        """
+        Emit a MODEL_RESPONSE event summarizing an LLM run's output.
+        
+        Ensures a session is active, computes the run duration, and records a payload that includes run identifiers, the inferred model, a list of generations (each containing the text or a redacted placeholder, an optional content hash when PII redaction is enabled, and any generation metadata), and a safely serialized `llm_output` if present. The payload is sent to the AgentOps client as EventType.MODEL_RESPONSE.
+        
+        Parameters:
+            response (LLMResult): The LLM result object containing one or more generations and optional `llm_output`.
+            run_id (UUID): Identifier for the LLM run being finished.
+            parent_run_id (Optional[UUID]): Optional parent run identifier for correlation.
+        """
         self._ensure_session()
 
         run_info = self._run_id_map.get(str(run_id), {})
@@ -327,7 +397,10 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         }
 
         self.client.record(EventType.MODEL_RESPONSE, payload)
-
+        
+        # Clean up run_id_map to prevent memory leak
+        self._run_id_map.pop(str(run_id), None)
+    
     def on_llm_error(
         self,
         error: BaseException,
@@ -336,7 +409,16 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
-        """Called when LLM errors."""
+        """
+        Handle an LLM error by recording a standardized error event for the current session.
+        
+        Documents the error by emitting an error event containing the run correlation IDs, the error type, a trimmed error message (up to 500 characters), and no traceback.
+        
+        Parameters:
+            error (BaseException): The exception raised by the LLM.
+            run_id (UUID): The identifier of the LLM run associated with this error.
+            parent_run_id (Optional[UUID]): The parent run identifier, if any.
+        """
         self._ensure_session()
 
         payload = {
@@ -348,7 +430,10 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         }
 
         self.client.record(EventType.ERROR, payload)
-
+        
+        # Clean up run_id_map
+        self._run_id_map.pop(str(run_id), None)
+    
     # =========================================================================
     # Tool Callbacks
     # =========================================================================
@@ -365,7 +450,25 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         inputs: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Called when tool starts executing."""
+        """
+        Record the start of a tool invocation and emit a TOOL_CALL event to the AgentOps client.
+        
+        Ensures a session is active, registers run metadata for correlation, attempts to parse the tool input (falling back to a raw payload on JSON parse failure), and sends a payload containing tool identity, (possibly redacted) arguments, optional content hash, tags, and metadata to the client.
+        
+        Parameters:
+            serialized (Dict[str, Any]): Tool descriptor from LangChain (expected keys include "name" and "description").
+            input_str (str | Any): Raw tool input as provided by LangChain; if a JSON string, it will be parsed into an object, otherwise passed through or wrapped as {"raw_input": input_str}.
+            run_id (UUID): Unique identifier for this tool run.
+            parent_run_id (Optional[UUID]): Optional identifier of the parent run for correlation.
+            tags (Optional[List[str]]): Optional tags associated with this run.
+            metadata (Optional[Dict[str, Any]]): Additional arbitrary metadata for the run.
+            inputs (Optional[Dict[str, Any]]): (Not used by this handler) preserved for compatibility with LangChain callback signature.
+        
+        Side effects:
+            - Starts a session if none is active.
+            - Updates internal run mapping for the given run_id.
+            - Emits an EventType.TOOL_CALL event via the AgentOps client with the constructed payload.
+        """
         self._ensure_session()
 
         self._run_id_map[str(run_id)] = {
@@ -401,7 +504,16 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
-        """Called when tool finishes."""
+        """
+        Record a tool invocation result and emit a TOOL_RESULT event to the AgentOps client.
+        
+        Parses the tool `output` (attempting JSON), computes the run duration, and builds a payload containing `run_id`, optional `parent_run_id`, the tool name, the (possibly redacted) result, an integrity hash when redaction is enabled, and `duration_ms`; the payload is sent via the client.
+        
+        Parameters:
+            output (str | Any): The raw output produced by the tool; if a string containing JSON, it will be parsed into a structured object, otherwise recorded as `{"raw_output": "..."}`
+            run_id (UUID): Identifier for the tool run being recorded.
+            parent_run_id (Optional[UUID]): Optional identifier of the parent run, if any.
+        """
         self._ensure_session()
 
         run_info = self._run_id_map.get(str(run_id), {})
@@ -423,7 +535,10 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         }
 
         self.client.record(EventType.TOOL_RESULT, payload)
-
+        
+        # Clean up run_id_map
+        self._run_id_map.pop(str(run_id), None)
+    
     def on_tool_error(
         self,
         error: BaseException,
@@ -432,7 +547,17 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
-        """Called when tool errors."""
+        """
+        Handle a tool execution error by recording a structured ERROR event for the current session.
+        
+        Parameters:
+            error (BaseException): The exception raised by the tool.
+            run_id (UUID): The identifier for the tool run that errored.
+            parent_run_id (Optional[UUID]): The parent run identifier, if any.
+        
+        Notes:
+            Emits an event containing `run_id`, `parent_run_id`, `tool_name` (if known), `error_type`, and a trimmed `error_message`.
+        """
         self._ensure_session()
 
         run_info = self._run_id_map.get(str(run_id), {})
@@ -446,7 +571,10 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         }
 
         self.client.record(EventType.ERROR, payload)
-
+        
+        # Clean up run_id_map
+        self._run_id_map.pop(str(run_id), None)
+    
     # =========================================================================
     # Agent Callbacks
     # =========================================================================
@@ -459,7 +587,16 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
-        """Called when agent takes an action."""
+        """
+        Record an agent decision as a DECISION_TRACE event for the current session.
+        
+        Builds a payload describing the agent action (including the tool name, tool input —redacted if configured— and the agent log), associates it with the provided run and parent run IDs, and emits a DECISION_TRACE event to the AgentOps client.
+        
+        Parameters:
+            action (AgentAction): The LangChain agent action containing `tool`, `tool_input`, and `log` attributes.
+            run_id (UUID): Identifier for the current run.
+            parent_run_id (Optional[UUID]): Identifier for the parent run, if any.
+        """
         self._ensure_session()
 
         payload = {
@@ -484,7 +621,16 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
-        """Called when agent finishes."""
+        """
+        Record an agent finish decision trace and send it to the AgentOps client.
+        
+        Builds a payload containing the run identifiers, action_type "agent_finish", safely serialized (and optionally redacted) return values, and the agent log, then records it as a DECISION_TRACE event.
+        
+        Parameters:
+            finish (AgentFinish): Agent finish object; expected to provide `return_values` and `log`.
+            run_id (UUID): Identifier for the finished run.
+            parent_run_id (Optional[UUID]): Optional parent run identifier for correlation.
+        """
         self._ensure_session()
 
         payload = {
@@ -515,7 +661,19 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Called when chain starts."""
+        """
+        Record the start of a chain run and initialize internal run tracking.
+        
+        Ensures a session is active, then registers this run in the handler's run map with its type ("chain"), start time, and the chain name extracted from `serialized`.
+        
+        Parameters:
+            serialized (Dict[str, Any]): Chain metadata; may contain a "name" key used as the chain name.
+            inputs (Dict[str, Any]): Inputs provided to the chain run; retained for context and potential serialization.
+            run_id (UUID): Unique identifier for the chain run being started.
+            parent_run_id (Optional[UUID]): Optional identifier of the parent run, if any.
+            tags (Optional[List[str]]): Optional tags associated with the chain run.
+            metadata (Optional[Dict[str, Any]]): Optional additional metadata for the chain run.
+        """
         self._ensure_session()
 
         self._run_id_map[str(run_id)] = {
@@ -532,7 +690,11 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
-        """Called when chain ends."""
+        """
+        Handle the completion of a chain run.
+        
+        This callback intentionally performs no actions because detailed outputs and results are captured by LLM and tool callbacks; the method exists to satisfy the LangChain callback interface and preserve run correlation.
+        """
         pass  # We rely on tool/llm callbacks for detailed tracking
 
     def on_chain_error(
@@ -543,7 +705,16 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
-        """Called when chain errors."""
+        """
+        Record a chain-level error event to the AgentOps replay client.
+        
+        Ensures a session is active and emits an ERROR event containing the error type and a message (trimmed to 500 characters) correlated to the given run identifiers.
+        
+        Parameters:
+            error (BaseException): The exception raised by the chain to record.
+            run_id (UUID): Identifier of the chain run where the error occurred.
+            parent_run_id (Optional[UUID]): Optional identifier of the parent run for correlation.
+        """
         self._ensure_session()
 
         payload = {
@@ -555,13 +726,24 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         }
 
         self.client.record(EventType.ERROR, payload)
-
+        
+        # Clean up run_id_map to prevent memory leak
+        self._run_id_map.pop(str(run_id), None)
+    
     # =========================================================================
     # Helper Methods
     # =========================================================================
-
-    def _extract_provider(self, serialized: dict[str, Any]) -> str:
-        """Extract provider name from serialized LLM config."""
+    
+    def _extract_provider(self, serialized: Dict[str, Any]) -> str:
+        """
+        Infer a provider identifier from a serialized LLM configuration.
+        
+        Parameters:
+            serialized (Dict[str, Any]): Serialized LLM config expected to contain an "id" key with a list of identifier fragments.
+        
+        Returns:
+            str: A provider name such as "openai", "anthropic", "google", "azure", or "aws_bedrock"; if none match, returns the first element of the `id` list or "unknown" when no `id` is present.
+        """
         id_list = serialized.get("id", [])
         if not id_list:
             return "unknown"
@@ -583,7 +765,18 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         return id_list[0] if id_list else "unknown"
 
     def _maybe_redact(self, content: Any, field_name: str) -> Any:
-        """Redact content if PII redaction is enabled."""
+        """
+        Return a safe-serializable representation of content or a redaction placeholder.
+        
+        If PII redaction is disabled, returns a JSON-compatible serialization of `content` produced by _safe_serialize. If PII redaction is enabled, returns the placeholder string "[REDACTED:<field_name>]" where `<field_name>` identifies the redacted field.
+        
+        Parameters:
+            content (Any): The value to serialize or redact.
+            field_name (str): Identifier inserted into the redaction placeholder.
+        
+        Returns:
+            Any: The safe-serialized value when not redacted, or a redaction placeholder string when redaction is enabled.
+        """
         if not self.redact_pii:
             return _safe_serialize(content)
 

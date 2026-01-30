@@ -22,11 +22,14 @@ DEFAULT_SESSION_FILE = os.path.join(os.path.dirname(__file__), "session_output.j
 
 def verify_session(session_file: str = DEFAULT_SESSION_FILE, reject_local: bool = False):
     """
-    Verify a session file and display results.
+    Verify a captured session JSONL file and report cryptographic verification results.
     
-    Args:
-        session_file: Path to the session JSONL file
-        reject_local: If True, reject local authority sessions
+    Parameters:
+        session_file (str): Path to the session JSONL file to verify (defaults to DEFAULT_SESSION_FILE).
+        reject_local (bool): If True, instruct the verifier to reject sessions signed by a local authority.
+    
+    Returns:
+        bool: `True` if the external verifier reports success (verification passed), `False` otherwise.
     """
     print("=" * 60)
     print("AgentOps Replay - Session Verification")

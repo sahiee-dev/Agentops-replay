@@ -43,11 +43,16 @@ DEMO_QUERIES = [
 
 def run_demo(use_agentops: bool = True, output_file: str = "session_output.jsonl"):
     """
-    Run the demo agent with sample queries.
+    Run a demonstration of the AgentOps Replay workflow using a LangChain-based agent.
     
-    Args:
-        use_agentops: Whether to use AgentOps callback handler
-        output_file: Path to export session JSONL
+    Runs a sequence of predefined demo queries against a customer-support agent, optionally records an AgentOps session via a callback handler, and may export session events to a JSONL file when AgentOps is enabled.
+    
+    Parameters:
+        use_agentops (bool): If True and AgentOps is available, attach an AgentOps callback handler and record a session.
+        output_file (str): Path to write exported session JSONL when AgentOps recording is active.
+    
+    Returns:
+        bool: `True` if the demo completed successfully, `False` if an error occurred or required configuration was missing.
     """
     print("=" * 60)
     print("AgentOps Replay - LangChain Demo")
@@ -132,10 +137,20 @@ def run_demo(use_agentops: bool = True, output_file: str = "session_output.jsonl
     # End session and export
     if handler:
         print("[+] Ending session and exporting...")
-        handler.end_session(status="success")
+        
+        # Derive session status from results
+        if all(r['success'] for r in results):
+            status = "success"
+        elif any(r['success'] for r in results):
+            status = "partial_failure"
+        else:
+            status = "failure"
+        
+        handler.end_session(status=status)
         handler.export_to_jsonl(output_file)
         print(f"    Session exported to: {output_file}")
 
+    
     # Summary
     print()
     print("=" * 60)
@@ -161,8 +176,13 @@ def run_demo(use_agentops: bool = True, output_file: str = "session_output.jsonl
 
 def run_mock_demo(output_file: str = "session_output.jsonl"):
     """
-    Run a mock demo without requiring OpenAI API key.
-    Uses the SDK directly to create sample events.
+    Run a mock AgentOps Replay session and export generated events to a JSONL file.
+    
+    Parameters:
+        output_file (str): Path to write the exported JSONL session (default "session_output.jsonl").
+    
+    Returns:
+        success (bool): True if the mock session was created and exported successfully; False on import or runtime errors.
     """
     print("=" * 60)
     print("AgentOps Replay - Mock Demo (No API Key Required)")
@@ -263,5 +283,5 @@ if __name__ == "__main__":
         success = run_mock_demo(output_file=args.output)
     else:
         success = run_demo(use_agentops=not args.no_agentops, output_file=args.output)
-
+    
     sys.exit(0 if success else 1)

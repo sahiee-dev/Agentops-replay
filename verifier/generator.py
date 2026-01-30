@@ -69,7 +69,15 @@ def create_event(
 
     return event
 
-def generate_valid_session() -> list[dict[str, Any]]:
+def generate_valid_session():
+    """
+    Builds a complete valid session as a list of chained event dictionaries.
+    
+    The session contains four events in order: SESSION_START, TOOL_CALL, SESSION_END, and CHAIN_SEAL. Each event includes canonicalized payload and computed hashes so that each event's prev_event_hash links to the previous event's event_hash. The CHAIN_SEAL event includes server-authority metadata compatible with spec v0.6 (final_event_hash, ingestion_service_id, seal_timestamp, session_digest).
+    
+    Returns:
+        list[dict]: A list of four event dictionaries representing a valid, internally linked session.
+    """
     session_id = str(uuid.uuid4())
     events: list[dict[str, Any]] = []
     prev_hash = None
