@@ -9,14 +9,21 @@ class AgentSimulator:
     def __init__(self, base_url: str = "http://localhost:8000") -> None:
         self.base_url = base_url
         self.session_id: str | None = None
+        self._sequence_counter: int = 0
 
-    def create_session(self, agent_name: str, agent_type: str = "customer_support") -> str | None:
+    def _next_sequence(self) -> int:
+        """Get next monotonic sequence number."""
+        self._sequence_counter += 1
+        return self._sequence_counter
+
+    def create_session(
+        self, agent_name: str, agent_type: str = "customer_support"
+    ) -> str | None:
         """Create a new agent session"""
-        session_data = {
-            "user_id": 2,
-            "agent_name": agent_name,
-            "status": "running"
-        }
+        # Reset sequence counter for new session
+        self._sequence_counter = 0
+        
+        session_data = {"user_id": 2, "agent_name": agent_name, "status": "running"}
 
         response = requests.post(f"{self.base_url}/api/v1/sessions/", json=session_data)
         if response.status_code == 200:
@@ -27,7 +34,13 @@ class AgentSimulator:
             print(f"Failed to create session: {response.text}")
             return None
 
-    def log_event(self, event_type: str, tool_name: str | None = None, flags: list[str] | None = None, delay: float = 1.0) -> Any:
+    def log_event(
+        self,
+        event_type: str,
+        tool_name: str | None = None,
+        flags: list[str] | None = None,
+        delay: float = 1.0,
+    ) -> Any:
         """Log a single event with realistic timing"""
         if not self.session_id:
             print(" No active session. Create a session first.")
@@ -38,7 +51,7 @@ class AgentSimulator:
             "event_type": event_type,
             "tool_name": tool_name or "unknown",
             "flags": flags or [],
-            "sequence_number": int(time.time() * 1000) % 10000  # Simple sequence
+            "sequence_number": self._next_sequence(),
         }
 
         try:
@@ -71,8 +84,8 @@ class AgentSimulator:
                     ("database_lookup", "order_system", ["external_api"]),
                     ("llm_call", "gpt-4", ["high_cost"]),
                     ("response_generation", "text_processor", []),
-                    ("user_response", "chat_interface", [])
-                ]
+                    ("user_response", "chat_interface", []),
+                ],
             },
             {
                 "scenario": "Billing Issue Resolution",
@@ -80,12 +93,16 @@ class AgentSimulator:
                     ("user_message", "chat_interface", []),
                     ("sentiment_analysis", "emotion_detector", ["ml_inference"]),
                     ("escalation_check", "rule_engine", ["policy_check"]),
-                    ("billing_lookup", "payment_system", ["sensitive_data", "external_api"]),
+                    (
+                        "billing_lookup",
+                        "payment_system",
+                        ["sensitive_data", "external_api"],
+                    ),
                     ("llm_call", "gpt-4", ["high_cost"]),
                     ("refund_processing", "payment_gateway", ["financial_transaction"]),
                     ("confirmation_email", "email_service", ["external_api"]),
-                    ("session_summary", "knowledge_base", [])
-                ]
+                    ("session_summary", "knowledge_base", []),
+                ],
             },
             {
                 "scenario": "Product Recommendation",
@@ -96,9 +113,9 @@ class AgentSimulator:
                     ("recommendation_engine", "ml_recommender", ["ml_inference"]),
                     ("llm_call", "gpt-4", ["high_cost"]),
                     ("personalization", "user_preference_engine", ["user_data"]),
-                    ("response_generation", "text_processor", [])
-                ]
-            }
+                    ("response_generation", "text_processor", []),
+                ],
+            },
         ]
 
         # Pick a random scenario
@@ -133,7 +150,7 @@ class AgentSimulator:
             ("visualization_generation", "plotly_engine", ["chart_creation"]),
             ("insight_extraction", "pattern_detector", ["ml_inference"]),
             ("report_generation", "report_builder", ["document_creation"]),
-            ("quality_review", "validation_engine", ["compliance_check"])
+            ("quality_review", "validation_engine", ["compliance_check"]),
         ]
 
         for event_type, tool_name, flags in events:
@@ -161,7 +178,7 @@ class AgentSimulator:
             ("text_to_speech", "elevenlabs_api", ["voice_synthesis", "external_api"]),
             ("call_recording", "storage_system", ["audio_data"]),
             ("call_analysis", "sentiment_detector", ["ml_inference"]),
-            ("call_termination", "telephony_system", ["voice_call"])
+            ("call_termination", "telephony_system", ["voice_call"]),
         ]
 
         for event_type, tool_name, flags in events:
@@ -169,6 +186,7 @@ class AgentSimulator:
             self.log_event(event_type, tool_name, flags, delay)
 
         print(f" {agent_name} call completed!")
+
 
 def main():
     """Run multiple agent simulations"""
@@ -196,6 +214,7 @@ def main():
 
     print("\n All simulations completed!")
     print(" Check your frontend at http://localhost:3000 to see the results!")
+
 
 if __name__ == "__main__":
     main()

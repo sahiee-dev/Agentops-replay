@@ -43,11 +43,13 @@ INGESTION_SERVICE_ID = "ingestion-service-v1"
 
 class IngestionError(Exception):
     """Base exception for ingestion failures."""
+
     pass
 
 
 class StateConflictError(IngestionError):
     """409 Conflict - state conflicts (sealed session, sequence issues)."""
+
     def __init__(self, code: str, message: str, details: dict[str, Any] | None = None):
         self.code = code
         self.message = message
@@ -57,6 +59,7 @@ class StateConflictError(IngestionError):
 
 class BadRequestError(IngestionError):
     """400 Bad Request - invalid input (malformed, invalid seal)."""
+
     def __init__(self, code: str, message: str, details: dict[str, Any] | None = None):
         self.code = code
         self.message = message
@@ -67,6 +70,7 @@ class BadRequestError(IngestionError):
 @dataclass
 class IngestionResultData:
     """Internal result of batch ingestion."""
+
     accepted_count: int
     final_hash: str
     sealed: bool = False
@@ -78,7 +82,7 @@ class IngestionResultData:
 class IngestionService:
     """
     Authoritative ingestion service.
-    
+
     Establishes SERVER authority for all ingested events.
     Enforces constitutional invariants.
     """
@@ -87,28 +91,25 @@ class IngestionService:
         self.db = db
 
     def ingest_batch(
-        self,
-        session_id_str: str,
-        events: list[dict[str, Any]],
-        seal: bool = False
+        self, session_id_str: str, events: list[dict[str, Any]], seal: bool = False
     ) -> IngestionResultData:
         """
         Ingest a batch of events into a session.
-        
+
         INVARIANTS ENFORCED:
         - Session must exist and not be sealed
         - Sequence must be strictly monotonic and continuous with existing chain
         - seal=true requires SESSION_END as last event
         - All writes are atomic
-        
+
         Args:
             session_id_str: Session UUID string
             events: List of raw events (untrusted)
             seal: Whether to seal after ingestion
-            
+
         Returns:
             IngestionResultData on success
-            
+
         Raises:
             StateConflictError: 409 - sealed session or sequence conflict
             BadRequestError: 400 - invalid input or seal request
@@ -153,17 +154,21 @@ class IngestionService:
         if seal_data:
             final_hash = chain_result.final_hash
             if final_hash is None:
-                raise BadRequestError(code="MISSING_HASH", message="Chain result missing final hash")
+                raise BadRequestError(
+                    code="MISSING_HASH", message="Chain result missing final hash"
+                )
             logger.info(
                 "SESSION SEALED — session_id=%s, event_count=%d, final_hash=%s",
                 session_id_str,
                 chain_result.event_count,
-                final_hash[:16] + "..."
+                final_hash[:16] + "...",
             )
 
         final_hash = chain_result.final_hash
         if final_hash is None:
-            raise BadRequestError(code="MISSING_HASH", message="Chain result missing final hash")
+            raise BadRequestError(
+                code="MISSING_HASH", message="Chain result missing final hash"
+            )
 
         return IngestionResultData(
             accepted_count=chain_result.event_count,
@@ -171,7 +176,7 @@ class IngestionService:
             sealed=seal_data is not None,
             seal_timestamp=seal_data.seal_timestamp if seal_data else None,
             session_digest=seal_data.session_digest if seal_data else None,
-            evidence_class=seal_data.evidence_class if seal_data else None
+            evidence_class=seal_data.evidence_class if seal_data else None,
         )
 
     # =========================================================
@@ -189,8 +194,7 @@ class IngestionService:
 
         if session is None:
             raise BadRequestError(
-                code="SESSION_NOT_FOUND",
-                message=f"Session {session_id_str} not found"
+                code="SESSION_NOT_FOUND", message=f"Session {session_id_str} not found"
             )
 
         return session
@@ -201,7 +205,9 @@ class IngestionService:
             raise StateConflictError(
                 code="ALREADY_SEALED",
                 message="Session is already sealed. Sealed sessions cannot accept new events.",
-                details={"sealed_at": str(session.sealed_at) if session.sealed_at else None}
+                details={
+                    "sealed_at": str(session.sealed_at) if session.sealed_at else None
+                },
             )
 
     def _get_chain_state(self, session_id: int) -> tuple[int, str]:
@@ -221,26 +227,23 @@ class IngestionService:
         return result.sequence_number, result.event_hash
 
     def _validate_sequence_continuity(
-        self,
-        events: list[dict[str, Any]],
-        last_sequence: int
+        self, events: list[dict[str, Any]], last_sequence: int
     ) -> None:
         """
         INVARIANT: Sequence must be strictly monotonic and continuous.
-        
+
         New batch must start at last_sequence + 1.
         """
         if not events:
             raise BadRequestError(
-                code="MISSING_REQUIRED_FIELD",
-                message="Events list cannot be empty"
+                code="MISSING_REQUIRED_FIELD", message="Events list cannot be empty"
             )
 
         first_seq = events[0].get("sequence_number")
         if first_seq is None:
             raise BadRequestError(
                 code="MISSING_REQUIRED_FIELD",
-                message="First event missing sequence_number"
+                message="First event missing sequence_number",
             )
 
         expected_first = last_sequence + 1
@@ -249,20 +252,20 @@ class IngestionService:
             raise StateConflictError(
                 code="DUPLICATE_SEQUENCE",
                 message=f"Sequence {first_seq} already exists. Expected >= {expected_first}",
-                details={"first_event_sequence": first_seq, "expected": expected_first}
+                details={"first_event_sequence": first_seq, "expected": expected_first},
             )
 
         if first_seq > expected_first:
             raise StateConflictError(
                 code="SEQUENCE_GAP",
                 message=f"Sequence gap detected. Expected {expected_first}, got {first_seq}",
-                details={"first_event_sequence": first_seq, "expected": expected_first}
+                details={"first_event_sequence": first_seq, "expected": expected_first},
             )
 
     def _validate_seal_request(self, events: list[dict[str, Any]]) -> None:
         """
         INVARIANT: seal=true requires SESSION_END as last event.
-        
+
         This prevents:
         - Mid-stream sealing
         - Truncated evidence
@@ -271,7 +274,7 @@ class IngestionService:
         if not events:
             raise BadRequestError(
                 code="INVALID_SEAL_REQUEST",
-                message="Cannot seal with empty events batch"
+                message="Cannot seal with empty events batch",
             )
 
         last_event_type = events[-1].get("event_type")
@@ -280,17 +283,15 @@ class IngestionService:
             raise BadRequestError(
                 code="INVALID_SEAL_REQUEST",
                 message=f"Cannot seal: last event must be SESSION_END, got {last_event_type}",
-                details={"last_event_type": last_event_type, "required": "SESSION_END"}
+                details={"last_event_type": last_event_type, "required": "SESSION_END"},
             )
 
     def _recompute_and_validate(
-        self,
-        events: list[dict[str, Any]],
-        prev_hash: str
+        self, events: list[dict[str, Any]], prev_hash: str
     ) -> ChainResult:
         """
         Recompute hash chain server-side.
-        
+
         SDK hashes are logged but NEVER trusted.
         """
         chain_result = recompute_chain(events, expected_genesis_hash=prev_hash)
@@ -299,24 +300,26 @@ class IngestionService:
             # Map hasher rejection reasons to service errors
             reason = chain_result.rejection_reason
 
-            if reason in (RejectionReason.SEQUENCE_GAP, RejectionReason.DUPLICATE_SEQUENCE,
-                         RejectionReason.NON_MONOTONIC_SEQUENCE):
+            if reason in (
+                RejectionReason.SEQUENCE_GAP,
+                RejectionReason.DUPLICATE_SEQUENCE,
+                RejectionReason.NON_MONOTONIC_SEQUENCE,
+            ):
                 raise StateConflictError(
                     code=reason.value if reason else "SEQUENCE_ERROR",
-                    message=chain_result.rejection_details or "Sequence validation failed"
+                    message=chain_result.rejection_details
+                    or "Sequence validation failed",
                 )
             else:
                 raise BadRequestError(
                     code=reason.value if reason else "INVALID_PAYLOAD",
-                    message=chain_result.rejection_details or "Chain validation failed"
+                    message=chain_result.rejection_details or "Chain validation failed",
                 )
 
         return chain_result
 
     def _persist_events(
-        self,
-        session: Session,
-        recomputed_events: list[dict[str, Any]]
+        self, session: Session, recomputed_events: list[dict[str, Any]]
     ) -> None:
         """Persist all events atomically."""
 
@@ -344,11 +347,7 @@ class IngestionService:
 
             self.db.add(event)
 
-    def _seal_session(
-        self,
-        session: Session,
-        chain_result: ChainResult
-    ) -> Any:
+    def _seal_session(self, session: Session, chain_result: ChainResult) -> Any:
         """Seal the session and create ChainSeal record."""
 
         # Get all events for seal computation
@@ -369,10 +368,12 @@ class IngestionService:
         recomputed = chain_result.recomputed_events
         if recomputed is not None:
             for evt in recomputed:
-                event_dicts.append({
-                    "event_hash": evt["event_hash"],
-                    "sequence_number": evt["sequence_number"]
-                })
+                event_dicts.append(
+                    {
+                        "event_hash": evt["event_hash"],
+                        "sequence_number": evt["sequence_number"],
+                    }
+                )
 
         # Seal
         total_drops = int(session.total_drops) if session.total_drops else 0
@@ -381,29 +382,29 @@ class IngestionService:
             events=event_dicts,
             ingestion_service_id=INGESTION_SERVICE_ID,
             existing_seal=None,  # We already validated not sealed
-            total_drops=total_drops
+            total_drops=total_drops,
         )
 
         if seal_result.status != SealStatus.SEALED:
             raise BadRequestError(
                 code="SEAL_FAILED",
-                message=seal_result.rejection_reason or "Sealing failed"
+                message=seal_result.rejection_reason or "Sealing failed",
             )
 
         # Create ChainSeal record
         chain_seal = ChainSeal(
             session_id=session.id,
             ingestion_service_id=INGESTION_SERVICE_ID,
-            seal_timestamp=datetime.now(UTC),
+            seal_timestamp=seal_result.seal_timestamp,
             session_digest=seal_result.session_digest,
             final_event_hash=seal_result.final_event_hash,
-            event_count=seal_result.event_count
+            event_count=seal_result.event_count,
         )
         self.db.add(chain_seal)
 
         # Update session status
         session.status = SessionStatus.SEALED
-        session.sealed_at = datetime.now(UTC)  # type: ignore[assignment]
+        session.sealed_at = seal_result.seal_timestamp  # type: ignore[assignment]
         session.evidence_class = seal_result.evidence_class  # type: ignore[assignment]
 
         return seal_result

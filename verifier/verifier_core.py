@@ -178,10 +178,10 @@ def validate_chain_continuity(events: list[dict[str, Any]]) -> tuple[bool, str |
     prev_hash = None
 
     for i, event in enumerate(events):
-        # First event must have null prev_event_hash
+        # First event must have null prev_event_hash (per agentops_verify.py)
         if i == 0:
-            if event.get("prev_event_hash") != GENESIS_HASH:
-                return False, f"First event must have prev_event_hash={GENESIS_HASH}"
+            if event.get("prev_event_hash") is not None:
+                return False, "First event must have prev_event_hash=None"
         # Subsequent events must link to previous
         elif event.get("prev_event_hash") != prev_hash:
             return (
@@ -256,7 +256,7 @@ GOLDEN_TEST_PAYLOAD = {
 }
 
 # Placeholder - will be computed
-GOLDEN_PAYLOAD_HASH = "9c15b0e1e3c6c8f3a9c8e9b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
+GOLDEN_PAYLOAD_HASH = "5357e4c31d1b855c84c3b2c70640071d84279d20e7e1786e77ab5f1522df5a4a"
 SHA_256_HEX_LEN = 64
 
 
@@ -273,6 +273,5 @@ def test_golden_vector() -> bool:
         True if hash matches golden vector
     """
     computed = compute_payload_hash(GOLDEN_TEST_PAYLOAD)
-    # For now, we compute and accept
-    # In production, this would be a fixed expected hash
-    return len(computed) == SHA_256_HEX_LEN
+    # Verify length is correct AND matches deterministic golden hash
+    return len(computed) == SHA_256_HEX_LEN and computed == GOLDEN_PAYLOAD_HASH

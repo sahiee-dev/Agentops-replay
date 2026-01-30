@@ -19,15 +19,15 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-# Module logger for debug output
-logger = logging.getLogger(__name__)
-
 from .version import (
     INTEGRATION_VERSION,
     check_compatibility,
     get_langchain_version_string,
     warn_if_incompatible,
 )
+
+# Module logger for debug output (PEP8: after imports)
+logger = logging.getLogger(__name__)
 
 # Import agentops SDK
 try:
@@ -244,12 +244,12 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
     # Session Management
     # =========================================================================
     
-    def start_session(self, additional_tags: Optional[List[str]] = None):
+    def start_session(self, additional_tags: list[str] | None = None):
         """
         Start a new AgentOps recording session and register session tags.
         
         Parameters:
-            additional_tags (Optional[List[str]]): Extra tags to attach to the session; these are combined with the handler's configured tags and a LangChain version tag.
+            additional_tags (list[str] | None): Extra tags to attach to the session; these are combined with the handler's configured tags and a LangChain version tag.
         
         Raises:
             RuntimeError: If a session is already active.
@@ -734,12 +734,12 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
     # Helper Methods
     # =========================================================================
     
-    def _extract_provider(self, serialized: Dict[str, Any]) -> str:
+    def _extract_provider(self, serialized: dict[str, Any]) -> str:
         """
         Infer a provider identifier from a serialized LLM configuration.
         
         Parameters:
-            serialized (Dict[str, Any]): Serialized LLM config expected to contain an "id" key with a list of identifier fragments.
+            serialized (dict[str, Any]): Serialized LLM config expected to contain an "id" key with a list of identifier fragments.
         
         Returns:
             str: A provider name such as "openai", "anthropic", "google", "azure", or "aws_bedrock"; if none match, returns the first element of the `id` list or "unknown" when no `id` is present.

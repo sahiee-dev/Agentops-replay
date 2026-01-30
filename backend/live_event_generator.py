@@ -4,6 +4,9 @@ import random
 
 import requests
 
+# Default HTTP timeout for event posts (seconds)
+HTTP_TIMEOUT = 10.0
+
 
 class LiveEventGenerator:
     def __init__(self, session_id, base_url="http://localhost:8000"):
@@ -24,7 +27,7 @@ class LiveEventGenerator:
             ("api_call", "external_service", ["external_api"]),
             ("processing", "data_processor", ["computation"]),
             ("validation", "rule_engine", ["policy_check"]),
-            ("response", "response_generator", [])
+            ("response", "response_generator", []),
         ]
 
         print(f" Starting live event generation for session {self.session_id}")
@@ -35,12 +38,14 @@ class LiveEventGenerator:
 
             # Add random flags sometimes
             if random.random() < 0.3:  # 30% chance of additional flags
-                extra_flags = random.choice([
-                    ["sensitive_data"],
-                    ["high_cost"],
-                    ["compliance_violation"],
-                    ["security_check"]
-                ])
+                extra_flags = random.choice(
+                    [
+                        ["sensitive_data"],
+                        ["high_cost"],
+                        ["compliance_violation"],
+                        ["security_check"],
+                    ]
+                )
                 flags.extend(extra_flags)
 
             # Create event
@@ -49,18 +54,33 @@ class LiveEventGenerator:
                 "event_type": event_type,
                 "tool_name": tool_name,
                 "flags": flags,
-                "sequence_number": sequence
+                "sequence_number": sequence,
             }
 
             try:
-                response = requests.post(f"{self.base_url}/api/v1/events/", json=event_data)
+                # Run blocking HTTP call in thread with timeout
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        requests.post,
+                        f"{self.base_url}/api/v1/events/",
+                        json=event_data,
+                        timeout=HTTP_TIMEOUT,
+                    ),
+                    timeout=HTTP_TIMEOUT + 2.0,
+                )
                 if response.status_code == 200:
                     print(f" Live event #{sequence}: {event_type} -> {tool_name}")
                     sequence += 1
                 else:
                     print(f" Failed to create event: {response.text}")
-            except (requests.RequestException, ValueError, KeyError) as e:
-                logging.getLogger(__name__).exception("Error generating event: %s", str(e))
+            except asyncio.TimeoutError:
+                logging.getLogger(__name__).warning(
+                    "Timeout posting event #%d", sequence
+                )
+            except requests.RequestException as e:
+                logging.getLogger(__name__).exception(
+                    "Error generating event: %s", str(e)
+                )
             except Exception as e:
                 # Re-raise unexpected
                 raise e
@@ -73,6 +93,7 @@ class LiveEventGenerator:
         self.is_running = False
         print(" Stopped live event generation")
 
+
 # Usage for demo
 async def demo_live_events():
     # Use an existing session ID
@@ -84,6 +105,7 @@ async def demo_live_events():
     except KeyboardInterrupt:
         generator.stop()
         print("\n Live demo ended")
+
 
 if __name__ == "__main__":
     asyncio.run(demo_live_events())
