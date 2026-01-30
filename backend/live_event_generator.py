@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import random
 
 import requests
@@ -59,7 +60,6 @@ class LiveEventGenerator:
                 else:
                     print(f" Failed to create event: {response.text}")
             except (requests.RequestException, ValueError, KeyError) as e:
-                import logging
                 logging.getLogger(__name__).exception("Error generating event: %s", str(e))
             except Exception as e:
                 # Re-raise unexpected

@@ -18,6 +18,7 @@ from enum import Enum
 from typing import Any
 
 from .hasher import recompute_chain
+from app.models import ChainAuthority
 
 
 class SealStatus(Enum):

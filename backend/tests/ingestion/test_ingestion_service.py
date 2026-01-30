@@ -322,11 +322,30 @@ def mock_db():
     # Let's mock first() to return different things
     
     original_first = db.first
-    db.first.side_effect = lambda: None # Default
+    # Wire up the side effect to the query chain
+    db.query.side_effect = side_effect
+
+    # Mock scalars for session lookup in service.append_events (uses with_for_update)
+    # The real service calls: db.query(Session).filter(...).with_for_update().first()
     
-    # This is getting complex to mock the entire chain.
-    # Instead, let's just create a smarter mock object for the specific call sites.
-    pass 
+    # We need to ensure db.query returns 'db' (which is the mock) so method chaining works
+    db.query.return_value = db
+    db.filter.return_value = db
+    db.with_for_update.return_value = db
+    db.order_by.return_value = db
+    
+    # Define what .first() returns based on context
+    # This is tricky because .first() is called for Session AND EventChain checks
+    # A simple approach: use the side_effect on .first() to return based on call history or global state
+    # BUT easier: just assume for this mock fixture we primarily return the active session
+    
+    def first_side_effect():
+        # Check if we are looking for a session or event
+        # This is a bit of a hack, but sufficient for basic tests
+        return session
+        
+    db.first.side_effect = first_side_effect
+    db.scalar_one_or_none.return_value = session 
 
     return db
 

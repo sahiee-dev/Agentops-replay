@@ -268,7 +268,7 @@ class IngestService:
             if not session:
                 raise ValueError(f"Session {session_id} not found")
 
-             # AUTHORITY GATE
+            # AUTHORITY GATE
             if session.chain_authority != ChainAuthority.SERVER:
                 raise AuthorityViolation(
                     f"Only server authority sessions can be sealed. "

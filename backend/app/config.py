@@ -1,5 +1,6 @@
 
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -41,11 +42,11 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     ENABLE_AI_AGENT: bool = True
 
+    @field_validator('SECRET_KEY')
     @classmethod
     def validate_secret_key(cls, v: str) -> str:
         if v == "your-super-secret-key-change-this":
-            import logging
-            logging.getLogger(__name__).warning("Refusing to use insecure default SECRET_KEY in production.")
+            raise ValueError("Refusing to use insecure default SECRET_KEY in production. Please set SECRET_KEY in .env.")
         return v
 
     class Config:

@@ -55,10 +55,6 @@ class ReplayFrameSchema(BaseModel):
     redaction_hash: str | None = None
     redacted_fields: list[str] | None = None
 
-    # REDACTION fields
-    redaction_hash: str | None = None
-    redacted_fields: list[str] | None = None
-
     model_config = ConfigDict(use_enum_values=True)
 
 
@@ -66,9 +62,6 @@ class ReplayWarningSchema(BaseModel):
     """Schema for a replay warning."""
     severity: WarningSeveritySchema
     code: str  # Stable warning code
-    message: str
-    frame_position: int | None = None
-
     message: str
     frame_position: int | None = None
 
@@ -95,9 +88,6 @@ class ReplayResponseSchema(BaseModel):
     last_timestamp: str | None = None
     final_hash: str
 
-    last_timestamp: str | None = None
-    final_hash: str
-
     model_config = ConfigDict(use_enum_values=True)
 
 
@@ -114,8 +104,6 @@ class VerificationResponseSchema(BaseModel):
     error_code: str | None = None
     error_message: str | None = None
 
-    error_code: str | None = None
-    error_message: str | None = None
 
     model_config = ConfigDict(use_enum_values=True)
 
@@ -131,18 +119,11 @@ class ReplayFailureSchema(BaseModel):
     error_code: str
     error_message: str
 
-    error_code: str
-    error_message: str
-
     model_config = ConfigDict(use_enum_values=True)
 
 
 class FrameResponseSchema(BaseModel):
     """Response for single frame endpoint."""
-    session_id: str
-    requested_sequence: int
-    frame: ReplayFrameSchema
-
     session_id: str
     requested_sequence: int
     frame: ReplayFrameSchema
