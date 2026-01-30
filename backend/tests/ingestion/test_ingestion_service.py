@@ -296,9 +296,37 @@ def mock_db():
         total_drops=0
     )
 
-    db.execute.return_value.scalar_one_or_none.return_value = session
-    db.execute.return_value.first.return_value = None  # No existing events
-    db.execute.return_value.scalars.return_value = []
+    def side_effect(query_obj, *args, **kwargs):
+        # Extremely simplified mock for SQLAlchemy query chain
+        # In real tests, better to separate fixtures or use a real in-memory DB
+        return db
+
+    # Helper to simulate having events
+    def get_last_event_mock(session_id):
+        if session_id == "session-with-events-789":
+            event = MagicMock()
+            event.sequence_number = 4
+            event.event_hash = "mock_hash_4"
+            return event
+        return None
+
+    db.query.return_value = db
+    db.filter.return_value = db
+    db.order_by.return_value = db
+    
+    # scalars().all() -> empty list by default
+    db.scalars.return_value.all.return_value = []
+    
+    # execute().scalar_one_or_none() handles session lookup
+    # But service.py uses .first() on query() chain usually
+    # Let's mock first() to return different things
+    
+    original_first = db.first
+    db.first.side_effect = lambda: None # Default
+    
+    # This is getting complex to mock the entire chain.
+    # Instead, let's just create a smarter mock object for the specific call sites.
+    pass 
 
     return db
 

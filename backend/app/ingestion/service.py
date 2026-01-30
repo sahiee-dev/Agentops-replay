@@ -268,7 +268,7 @@ class IngestService:
             if not session:
                 raise ValueError(f"Session {session_id} not found")
 
-            # AUTHORITY GATE
+             # AUTHORITY GATE
             if session.chain_authority != ChainAuthority.SERVER:
                 raise AuthorityViolation(
                     f"Only server authority sessions can be sealed. "
@@ -355,7 +355,7 @@ class IngestService:
         ).order_by(EventChain.sequence_number.desc()).first()
 
         # Cast Column to runtime str (ORM returns actual value at runtime)
-        return str(last_event.event_hash) if last_event else None
+        return str(last_event.event_hash) if last_event else verifier_core.GENESIS_HASH
 
     def _get_last_sequence(self, db: DBSession, session: Session) -> int:
         """Get last sequence number in session, or -1 if no events."""
@@ -474,11 +474,15 @@ class IngestService:
         payload_hash = verifier_core.compute_payload_hash(log_drop_payload)
         prev_hash = self._get_last_event_hash(db, session)
 
+        # Compute single timestamp for consistency
+        now_ts = datetime.now(UTC)
+        timestamp_iso = now_ts.isoformat().replace('+00:00', 'Z')
+
         event_envelope = {
             "event_id": str(uuid.uuid4()),
             "session_id": str(session.session_id_str),
             "sequence_number": next_seq,
-            "timestamp_wall": datetime.now(UTC).isoformat().replace('+00:00', 'Z'),
+            "timestamp_wall": timestamp_iso,
             "event_type": "LOG_DROP",
             "payload_hash": payload_hash,
             "prev_event_hash": prev_hash
@@ -491,7 +495,7 @@ class IngestService:
             event_id=uuid.UUID(str(event_envelope["event_id"])),
             session_id=session.id,
             sequence_number=next_seq,
-            timestamp_wall=datetime.now(UTC),
+            timestamp_wall=now_ts,
             timestamp_monotonic=0,  # Not critical for LOG_DROP
             event_type="LOG_DROP",
             source_sdk_ver="ingestion-service",

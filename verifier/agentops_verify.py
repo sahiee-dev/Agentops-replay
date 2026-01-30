@@ -11,23 +11,24 @@ import argparse
 import hashlib
 import json
 import sys
-from typing import Dict, Any, List, Optional
+from typing import Any
+
 import jcs  # Local module
 
 # --- Constants ---
 SPEC_VERSION = "v0.6"
 SIGNED_FIELDS = [
-    "event_id", 
-    "session_id", 
-    "sequence_number", 
-    "timestamp_wall", 
-    "event_type", 
-    "payload_hash", 
+    "event_id",
+    "session_id",
+    "sequence_number",
+    "timestamp_wall",
+    "event_type",
+    "payload_hash",
     "prev_event_hash"
 ]
 
 class VerificationError(Exception):
-    def __init__(self, code: str, message: str, context: Dict[str, Any] = None):
+    def __init__(self, code: str, message: str, context: dict[str, Any] | None = None):
         self.code = code
         self.message = message
         self.context = context or {}
@@ -48,12 +49,12 @@ def classify_evidence(authority: str, sealed: bool, complete: bool) -> str:
     else:
         return "UNKNOWN_EVIDENCE"
 
-def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) -> Dict[str, Any]:
+def verify_session(events: list[dict[str, Any]], policy: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Core verification pipeline.
     Returns structured report.
     """
-    report = {
+    report: dict[str, Any] = {
         "session_id": None,
         "status": "PASS",
         "violations": [],
@@ -76,9 +77,9 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
     # 0. SINGLE AUTHORITY CHECK (Spec v0.6)
     authorities = set()
     for event in events:
-        if "chain_authority" in event and event["chain_authority"]:
+        if event.get("chain_authority"):
             authorities.add(event["chain_authority"])
-    
+
     if len(authorities) > 1:
         report["status"] = "FAIL"
         report["violations"].append({
@@ -87,11 +88,12 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
         })
         return report
 
+
     # 1. Structural & Sequence Checks
     prev_hash = None
     expected_seq = 0
     calculated_chain_hash = None
-    
+
     session_id = events[0].get("session_id")
     report["session_id"] = session_id
 
@@ -99,7 +101,7 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
         try:
             # A. Structure
             _validate_envelope(event, i)
-            
+
             # Check Session Consistency
             if event.get("session_id") != session_id:
                 raise VerificationError("SESSION_MISMATCH", f"Event session_id {event.get('session_id')} does not match session {session_id}")
@@ -110,7 +112,7 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
             # We canonicalize it back to bytes to verify hash.
             canonical_payload = jcs.canonicalize(payload)
             expected_payload_hash = sha256(canonical_payload)
-            
+
             if event["payload_hash"] != expected_payload_hash:
                 raise VerificationError("PAYLOAD_HASH_MISMATCH", "Payload hash mismatch", {
                     "expected": expected_payload_hash,
@@ -120,19 +122,18 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
             # C. Sequence Monotonicity
             if event["sequence_number"] != expected_seq:
                 raise VerificationError("SEQUENCE_GAP", f"Expected sequence {expected_seq}, got {event['sequence_number']}")
-            
+
             # D. Chain Integrity
             # Check prev_event_hash
             if i == 0:
                 if event["prev_event_hash"] is not None:
                      raise VerificationError("INVALID_GENESIS", "First event must have null prev_event_hash")
-            else:
-                if event["prev_event_hash"] != prev_hash:
-                    raise VerificationError("CHAIN_BROKEN", "prev_event_hash does not match previous event_hash", {
-                        "expected": prev_hash,
-                        "actual": event["prev_event_hash"]
-                    })
-            
+            elif event["prev_event_hash"] != prev_hash:
+                raise VerificationError("CHAIN_BROKEN", "prev_event_hash does not match previous event_hash", {
+                    "expected": prev_hash,
+                    "actual": event["prev_event_hash"]
+                })
+
             # CHECKPOINT: Update authority if provided (last win)
             if "chain_authority" in event:
                 report["authority"] = event["chain_authority"]
@@ -143,11 +144,11 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
             # Spec v0.5: All signed fields must be present (prev_event_hash can be null but must exist)
             for f in SIGNED_FIELDS:
                 if f not in event:
-                    raise VerificationError("MISSING_SIGNED_FIELD", f"Required signed field missing: {f}") 
+                    raise VerificationError("MISSING_SIGNED_FIELD", f"Required signed field missing: {f}")
 
             canonical_envelope = jcs.canonicalize(signed_obj)
             calculated_hash = sha256(canonical_envelope)
-            
+
             if event["event_hash"] != calculated_hash:
                  raise VerificationError("EVENT_HASH_MISMATCH", "Event hash signature invalid", {
                      "expected": calculated_hash,
@@ -177,17 +178,17 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
                     report["sealed"] = True
                 else:
                     raise VerificationError("INVALID_SEAL", f"CHAIN_SEAL authority '{event.get('chain_authority')}' is not valid (must be 'server' or 'sdk')")
-            
+
             # F. Track LOG_DROP events
             # F. Track LOG_DROP events
             if event["event_type"] == "LOG_DROP":
                 # Always degrade evidence class if LOG_DROP is present
                 report["partial_reasons"].append("LOG_DROP_PRESENT")
                 report["partial"] = True
-                
+
                 drop_payload = event.get("payload", {})
                 dropped_count = drop_payload.get("dropped_count")
-                
+
                 if isinstance(dropped_count, int) and dropped_count > 0:
                      report["total_drops"] += dropped_count
                 else:
@@ -222,7 +223,7 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
 
     # Determine session completeness and partial reasons
     has_session_end = any(e.get("event_type") == "SESSION_END" for e in events)
-    
+
     # Track why session might be partial
     if report["authority"] == "server":
         if not report["sealed"]:
@@ -234,9 +235,9 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
                 report["partial_reasons"].append("LOG_DROP_PRESENT")
         if report["status"] == "FAIL":
             report["partial_reasons"].append("CHAIN_VALIDATION_FAILED")
-    
+
     report["complete"] = has_session_end and report["status"] == "PASS" and report["total_drops"] == 0 and not report["partial"]
-    
+
     # Classify evidence
     # Classify evidence
     if report["status"] == "PASS":
@@ -252,7 +253,7 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
              report["partial_reasons"].append("VERIFICATION_FAILED")
 
     report["evidence_class"] = evidence_class
-    
+
     # Policy enforcement
     policy = policy or {}
     if policy.get("reject_local_authority", False) and report["authority"] == "sdk":
@@ -263,18 +264,18 @@ def verify_session(events: List[Dict[str, Any]], policy: Optional[Dict] = None) 
             "evidence_class": evidence_class
         })
         return report
-    
+
     if report["status"] == "PASS":
         report["replay_fingerprint"] = calculated_chain_hash
-    
+
     return report
 
-def _validate_envelope(event: Dict[str, Any], index: int):
+def _validate_envelope(event: dict[str, Any], index: int):
     required = ["event_id", "session_id", "sequence_number", "event_type", "payload_hash", "event_hash", "payload", "schema_ver"]
     for field in required:
         if field not in event:
             raise VerificationError("MISSING_FIELD", f"Missing required field: {field}")
-    
+
     # Spec v0.6: strict schema_ver matching
     if event["schema_ver"] not in [SPEC_VERSION, "v0.5"]:
          raise VerificationError("SCHEMA_VERSION_MISMATCH", f"Expected {SPEC_VERSION} or v0.5, got {event['schema_ver']}")
@@ -286,24 +287,24 @@ def main():
     parser.add_argument("--format", choices=["json", "text"], default="text", help="Output format")
     parser.add_argument("--reject-local-authority", action="store_true",
                         help="Reject sessions with local (SDK) authority")
-    
+
     args = parser.parse_args()
-    
+
     events = []
     try:
-        with open(args.file, 'r') as f:
+        with open(args.file) as f:
             for line in f:
                 if line.strip():
                     events.append(json.loads(line))
     except Exception as e:
         print(json.dumps({"status": "FAIL", "violations": [{"type": "LOAD_ERROR", "message": str(e)}]}))
         sys.exit(1)
-    
+
     policy = {
         "reject_local_authority": args.reject_local_authority
     }
     report = verify_session(events, policy)
-    
+
     if args.format == "json":
         print(json.dumps(report, indent=2))
     else:
@@ -315,7 +316,7 @@ def main():
         print(f"Authority: {report['authority']}")
         if report['total_drops'] > 0:
             print(f"Total Drops: {report['total_drops']}")
-        
+
         # FAIL LOUDLY for policy violations
         if report["status"] == "FAIL":
             policy_violations = [v for v in report['violations'] if v.get('type') == 'POLICY_VIOLATION']
@@ -324,7 +325,7 @@ def main():
                 for v in policy_violations:
                     print(f"Reason: {v['message']}")
                     print(f"Evidence Class: {v.get('evidence_class')}")
-        
+
         if report['violations']:
             print("\nViolations:")
             for v in report['violations']:

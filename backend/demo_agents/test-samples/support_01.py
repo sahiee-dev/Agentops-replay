@@ -1,10 +1,13 @@
-# demo-agents/test-samples/support_01.py
+# backend/demo_agents/test-samples/support_01.py
+from decimal import Decimal
 
 class Agent:
     def __init__(self, name="Support01"):
         self.name = name
 
     def respond(self, query):
+        if not query:
+            raise ValueError("Query cannot be empty")
         faq = {
             "hours": "Our working hours are 9am-6pm.",
             "price": "The product costs $99."

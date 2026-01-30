@@ -12,37 +12,36 @@ All endpoints go through full verification.
 No fast paths that skip replay logic.
 """
 
+from typing import Any, Union
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Union, List, Dict, Any, Optional
 
 from app.database import get_db
-from app.models.session import Session as SessionModel
 from app.models.event_chain import EventChain
+from app.models.session import Session as SessionModel
 from app.replay.engine import (
-    load_verified_session,
+    ReplayResult,
     build_replay,
     get_frame_at_sequence,
-    ReplayResult,
-    ReplayFailure
+    load_verified_session,
 )
-from app.replay.frames import VerificationStatus
 from app.schemas.replay_v2 import (
-    ReplayResponseSchema,
-    ReplayFailureSchema,
-    VerificationResponseSchema,
     FrameResponseSchema,
-    ReplayFrameSchema,
     FrameTypeSchema,
+    ReplayFailureSchema,
+    ReplayFrameSchema,
+    ReplayResponseSchema,
+    ReplayWarningSchema,
+    VerificationResponseSchema,
     VerificationStatusSchema,
     WarningSeveritySchema,
-    ReplayWarningSchema
 )
 
 router = APIRouter()
 
 
-def _get_event_dicts(db: Session, session_id: int) -> List[Dict[str, Any]]:
+def _get_event_dicts(db: Session, session_id: int) -> list[dict[str, Any]]:
     """
     Query EventChain table and build event dicts with all required fields.
     
@@ -53,7 +52,7 @@ def _get_event_dicts(db: Session, session_id: int) -> List[Dict[str, Any]]:
     ).order_by(
         EventChain.sequence_number.asc()
     ).all()
-    
+
     return [
         {
             "event_id": str(e.event_id),
@@ -71,7 +70,7 @@ def _get_event_dicts(db: Session, session_id: int) -> List[Dict[str, Any]]:
     ]
 
 
-def _get_seal_dict(db: Session, session_id: int) -> Optional[Dict[str, Any]]:
+def _get_seal_dict(db: Session, session_id: int) -> dict[str, Any] | None:
     """
     Get chain seal by looking for CHAIN_SEAL event in EventChain.
     
@@ -81,14 +80,14 @@ def _get_seal_dict(db: Session, session_id: int) -> Optional[Dict[str, Any]]:
         EventChain.session_id == session_id,
         EventChain.event_type == "CHAIN_SEAL"
     ).first()
-    
+
     if chain_seal:
         payload = chain_seal.payload_jsonb or {}
         return {
             "session_digest": payload.get("session_digest"),
             "sealed_at": chain_seal.timestamp_wall.isoformat() if chain_seal.timestamp_wall else None
         }
-    
+
     return None
 
 
@@ -129,19 +128,19 @@ def get_replay(session_id: int, db: Session = Depends(get_db)):
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+
     # Get all events from EventChain (authoritative)
     event_dicts = _get_event_dicts(db, session_id)
-    
+
     # Get chain seal
     seal_dict = _get_seal_dict(db, session_id)
-    
+
     # Use session.session_id_str (UUID string)
     session_id_str = session.session_id_str
-    
+
     # Load and verify session
     verified_chain, failure = load_verified_session(session_id_str, event_dicts, seal_dict)
-    
+
     if failure:
         # CRITICAL: Return explicit failure, no partial data
         return ReplayFailureSchema(
@@ -150,10 +149,10 @@ def get_replay(session_id: int, db: Session = Depends(get_db)):
             error_code=failure.error_code,
             error_message=failure.error_message
         )
-    
+
     # Build replay from verified chain
     replay = build_replay(verified_chain)
-    
+
     # Convert to response schema
     return _replay_to_response(replay)
 
@@ -170,19 +169,19 @@ def verify_session(session_id: int, db: Session = Depends(get_db)):
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+
     # Use same full event serialization as get_replay
     event_dicts = _get_event_dicts(db, session_id)
-    
+
     # Get chain seal
     seal_dict = _get_seal_dict(db, session_id)
-    
+
     # Use session.session_id_str (UUID string)
     session_id_str = session.session_id_str
-    
+
     # Verify
     verified_chain, failure = load_verified_session(session_id_str, event_dicts, seal_dict)
-    
+
     if failure:
         return VerificationResponseSchema(
             session_id=session_id_str,
@@ -190,10 +189,10 @@ def verify_session(session_id: int, db: Session = Depends(get_db)):
             error_code=failure.error_code,
             error_message=failure.error_message
         )
-    
+
     # Build replay to count warnings (uses timestamp for anomaly detection)
     replay = build_replay(verified_chain)
-    
+
     return VerificationResponseSchema(
         session_id=session_id_str,
         verification_status=VerificationStatusSchema.VALID,
@@ -219,28 +218,28 @@ def get_frame(session_id: int, sequence: int, db: Session = Depends(get_db)):
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+
     # Use same full event serialization as get_replay
     event_dicts = _get_event_dicts(db, session_id)
-    
+
     # Get chain seal
     seal_dict = _get_seal_dict(db, session_id)
-    
+
     # Use session.session_id_str (UUID string)
     session_id_str = session.session_id_str
-    
+
     verified_chain, failure = load_verified_session(session_id_str, event_dicts, seal_dict)
-    
+
     if failure:
         raise HTTPException(
             status_code=422,
             detail=f"Verification failed: {failure.error_code} - {failure.error_message}"
         )
-    
+
     # Build replay and get frame
     replay = build_replay(verified_chain)
     frame = get_frame_at_sequence(replay, sequence)
-    
+
     return FrameResponseSchema(
         session_id=session_id_str,
         requested_sequence=sequence,
@@ -275,9 +274,8 @@ def _replay_to_response(replay: ReplayResult) -> ReplayResponseSchema:
 
 def _frame_to_schema(frame) -> ReplayFrameSchema:
     """Convert internal ReplayFrame to API response schema."""
-    from app.replay.frames import FrameType
     import json
-    
+
     # Payload MUST be a canonical JSON string, not a dict
     # Raise explicit error if dict is passed - this indicates a bug upstream
     payload_str = None
@@ -292,9 +290,12 @@ def _frame_to_schema(frame) -> ReplayFrameSchema:
         elif isinstance(frame.payload, str):
             payload_str = frame.payload
         else:
-            # Coerce other types to canonical JSON string
-            payload_str = json.dumps(frame.payload, separators=(',', ':'), sort_keys=True, ensure_ascii=False)
-    
+            # Explicitly reject unknown types instead of coercing
+            raise ValueError(
+                f"Unsupported payload type '{type(frame.payload).__name__}' in frame {frame.position}. "
+                f"Payload must be a canonical JSON string."
+            )
+
     return ReplayFrameSchema(
         frame_type=FrameTypeSchema(frame.frame_type.value),
         position=frame.position,

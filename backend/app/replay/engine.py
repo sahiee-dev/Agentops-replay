@@ -8,11 +8,10 @@ CRITICAL INVARIANTS:
 4. Serving anything from an invalid chain is FORBIDDEN
 """
 
-import sys
 import os
+import sys
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime
+from typing import Any
 
 # Add verifier to path for JCS import (LOCKED to verifier implementation)
 _verifier_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'verifier'))
@@ -20,31 +19,29 @@ if _verifier_path not in sys.path:
     sys.path.insert(0, _verifier_path)
 
 from .frames import FrameType, ReplayFrame, VerificationStatus
-from .warnings import (
-    WarningSeverity, WarningCode, ReplayWarning
-)
+from .warnings import ReplayWarning
 
 
 @dataclass
 class VerifiedChain:
     """A verified event chain ready for replay."""
     session_id: str
-    events: List[Dict[str, Any]]
+    events: list[dict[str, Any]]
     evidence_class: str
     seal_present: bool
-    seal_hash: Optional[str]
+    seal_hash: str | None
     final_hash: str
     verification_status: VerificationStatus
 
 
-@dataclass 
+@dataclass
 class ReplayFailure:
     """Explicit failure object when verification fails."""
     session_id: str
     verification_status: VerificationStatus  # Always INVALID
     error_code: str
     error_message: str
-    
+
     # CRITICAL: No frames, no partial data, no metadata
     # These fields explicitly do not exist
 
@@ -60,23 +57,23 @@ class ReplayResult:
     evidence_class: str
     seal_present: bool
     verification_status: VerificationStatus
-    
-    frames: List[ReplayFrame]
-    warnings: List[ReplayWarning]
-    
+
+    frames: list[ReplayFrame]
+    warnings: list[ReplayWarning]
+
     # Metadata (verbatim from verified chain)
     event_count: int
     total_drops: int
-    first_timestamp: Optional[str]
-    last_timestamp: Optional[str]
+    first_timestamp: str | None
+    last_timestamp: str | None
     final_hash: str
 
 
 def load_verified_session(
     session_id: str,
-    events: List[Dict[str, Any]],
-    chain_seal: Optional[Dict[str, Any]] = None
-) -> Tuple[Optional[VerifiedChain], Optional[ReplayFailure]]:
+    events: list[dict[str, Any]],
+    chain_seal: dict[str, Any] | None = None
+) -> tuple[VerifiedChain | None, ReplayFailure | None]:
     """
     Load and verify a session before serving.
     
@@ -96,7 +93,7 @@ def load_verified_session(
     """
     # Verify chain integrity
     verification_result = _verify_chain(events)
-    
+
     if not verification_result[0]:
         return None, ReplayFailure(
             session_id=session_id,
@@ -104,13 +101,13 @@ def load_verified_session(
             error_code=verification_result[1],
             error_message=verification_result[2]
         )
-    
+
     # Determine evidence class
     evidence_class = _determine_evidence_class(events, chain_seal)
-    
+
     # Get final hash
     final_hash = events[-1].get('event_hash', '') if events else ''
-    
+
     return VerifiedChain(
         session_id=session_id,
         events=events,
@@ -133,24 +130,24 @@ def build_replay(chain: VerifiedChain) -> ReplayResult:
     
     INVARIANT: All frames have single traceable origin.
     """
-    frames: List[ReplayFrame] = []
-    warnings: List[ReplayWarning] = []
-    
+    frames: list[ReplayFrame] = []
+    warnings: list[ReplayWarning] = []
+
     total_drops = 0
     prev_seq = -1
     prev_timestamp = None
     position = 0
-    
+
     for event in chain.events:
         seq = event.get('sequence_number', 0)
         event_type = event.get('event_type', '')
         timestamp = event.get('timestamp') or event.get('timestamp_wall')
-        
+
         # Check for sequence gap
         if prev_seq >= 0 and seq > prev_seq + 1:
             gap_start = prev_seq + 1
             gap_end = seq - 1
-            
+
             # Add GAP frame
             frames.append(ReplayFrame(
                 frame_type=FrameType.GAP,
@@ -160,12 +157,12 @@ def build_replay(chain: VerifiedChain) -> ReplayResult:
             ))
             warnings.append(ReplayWarning.sequence_gap(gap_start, gap_end, position))
             position += 1
-        
+
         # Check for timestamp anomaly
         if prev_timestamp and timestamp:
             if timestamp < prev_timestamp:
                 warnings.append(ReplayWarning.timestamp_anomaly(position))
-        
+
         # Handle LOG_DROP events
         if event_type == 'LOG_DROP':
             # Payload MUST be payload_canonical (string), parse with json.loads
@@ -180,7 +177,7 @@ def build_replay(chain: VerifiedChain) -> ReplayResult:
                     f"LOG_DROP event at sequence {seq} has non-string payload. "
                     f"Expected canonical JSON string, got {type(payload_canonical).__name__}."
                 )
-            
+
             try:
                 import json
                 payload_dict = json.loads(payload_canonical)
@@ -188,10 +185,10 @@ def build_replay(chain: VerifiedChain) -> ReplayResult:
                 raise ValueError(
                     f"LOG_DROP event at sequence {seq} has invalid JSON payload: {e}"
                 )
-            
+
             dropped_count = payload_dict.get('dropped_count', 0)
             drop_reason = payload_dict.get('reason', 'UNKNOWN')
-            
+
             frames.append(ReplayFrame(
                 frame_type=FrameType.LOG_DROP,
                 position=position,
@@ -216,18 +213,18 @@ def build_replay(chain: VerifiedChain) -> ReplayResult:
                 payload=event.get('payload'),  # Already canonical JSON string
                 event_hash=event.get('event_hash')
             ))
-        
+
         prev_seq = seq
         prev_timestamp = timestamp
         position += 1
-    
+
     # Add chain-level warnings
     if not chain.seal_present:
         warnings.append(ReplayWarning.chain_not_sealed())
-    
+
     if 'PARTIAL' in chain.evidence_class:
         warnings.append(ReplayWarning.partial_evidence())
-    
+
     # Build result - fallback to timestamp_wall if timestamp is missing
     first_ts = None
     last_ts = None
@@ -236,7 +233,7 @@ def build_replay(chain: VerifiedChain) -> ReplayResult:
         last_event = chain.events[-1]
         first_ts = first_event.get('timestamp') or first_event.get('timestamp_wall')
         last_ts = last_event.get('timestamp') or last_event.get('timestamp_wall')
-    
+
     return ReplayResult(
         session_id=chain.session_id,
         evidence_class=chain.evidence_class,
@@ -269,7 +266,7 @@ def get_frame_at_sequence(
     for frame in replay.frames:
         if frame.sequence_number == sequence:
             return frame
-    
+
     # Check if sequence falls within an existing GAP frame
     for frame in replay.frames:
         if frame.frame_type == FrameType.GAP:
@@ -277,10 +274,10 @@ def get_frame_at_sequence(
                 if frame.gap_start <= sequence <= frame.gap_end:
                     # Return the original GAP frame with its real position and range
                     return frame
-    
+
     # Not in an existing gap - determine if we need a synthetic gap
     all_sequences = [f.sequence_number for f in replay.frames if f.sequence_number is not None]
-    
+
     if not all_sequences:
         # No events at all - return synthetic gap frame
         return ReplayFrame(
@@ -289,7 +286,7 @@ def get_frame_at_sequence(
             gap_start=sequence,
             gap_end=sequence
         )
-    
+
     # Outside any existing frame range - return synthetic gap
     return ReplayFrame(
         frame_type=FrameType.GAP,
@@ -299,7 +296,7 @@ def get_frame_at_sequence(
     )
 
 
-def _verify_chain(events: List[Dict[str, Any]]) -> Tuple[bool, str, str]:
+def _verify_chain(events: list[dict[str, Any]]) -> tuple[bool, str, str]:
     """
     Verify chain integrity.
     
@@ -308,37 +305,37 @@ def _verify_chain(events: List[Dict[str, Any]]) -> Tuple[bool, str, str]:
     """
     if not events:
         return (True, "", "")
-    
+
     # Check sequence monotonicity
     prev_seq = None
     for idx, event in enumerate(events):
         seq = event.get('sequence_number')
         if seq is None:
             return (False, "MISSING_SEQUENCE", f"Event {idx} missing sequence_number")
-        
+
         if prev_seq is not None and seq <= prev_seq:
             return (False, "NON_MONOTONIC", f"Sequence {prev_seq} -> {seq} at event {idx}")
-        
+
         prev_seq = seq
-    
+
     # Check hash chain
     # Note: Full verification would re-compute hashes, but for replay
     # we trust the ingestion service's verification
     for event in events:
         if not event.get('event_hash'):
             return (False, "MISSING_HASH", "Event missing event_hash")
-    
+
     return (True, "", "")
 
 
 def _determine_evidence_class(
-    events: List[Dict[str, Any]],
-    chain_seal: Optional[Dict[str, Any]]
+    events: list[dict[str, Any]],
+    chain_seal: dict[str, Any] | None
 ) -> str:
     """Determine evidence class from events and seal."""
     # Check for drops
     has_drops = any(e.get('event_type') == 'LOG_DROP' for e in events)
-    
+
     if chain_seal:
         # Sealed chain
         if has_drops:

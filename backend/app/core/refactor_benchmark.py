@@ -1,17 +1,18 @@
-import os
 import json
-from app.core.refactor_engine import HybridRefactor
+import os
+
 from app.core.metrics import combined_score
+from app.core.refactor_engine import HybridRefactor
 
 # Path to your sample agents
-SAMPLES_DIR = "demo-agents/test-samples/"
+SAMPLES_DIR = "backend/demo_agents/test-samples/"
 RESULTS_FILE = "backend/data/results/benchmark.json"
 
 def load_samples(path):
     samples = []
     files = [f for f in os.listdir(path) if f.endswith(".py")]
     for f in files:
-        with open(os.path.join(path, f), "r") as file:
+        with open(os.path.join(path, f)) as file:
             samples.append(file.read())
     return samples, files
 

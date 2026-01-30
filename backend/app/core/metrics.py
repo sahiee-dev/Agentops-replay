@@ -1,5 +1,4 @@
 # metrics.py
-import subprocess, tempfile, os, json
 from radon.complexity import cc_visit
 from radon.metrics import mi_visit
 from sentence_transformers import SentenceTransformer, util

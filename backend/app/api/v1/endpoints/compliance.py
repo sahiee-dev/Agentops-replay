@@ -1,7 +1,7 @@
 # backend/app/api/v1/endpoints/compliance.py
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
 
 from app.database import get_db
 from app.models.event import Event
@@ -23,15 +23,15 @@ def compliance_report(session_id: int, db: Session = Depends(get_db)):
 
     # Get all events for this session
     events = db.query(Event).filter(Event.session_id == session_id).all()
-    
+
     # Basic compliance checks
     flagged_events = [e for e in events if e.flags and len(e.flags) > 0]
     total_events = len(events)
     flagged_count = len(flagged_events)
-    
+
     # Calculate compliance score
     compliance_score = (total_events - flagged_count) / total_events * 100 if total_events > 0 else 100
-    
+
     return {
         "session_id": session_id,
         "total_events": total_events,
@@ -55,7 +55,7 @@ def list_flagged_sessions(db: Session = Depends(get_db)):
     flagged_sessions = db.query(SessionModel).join(Event).filter(
         Event.flags.isnot(None)
     ).distinct().all()
-    
+
     return {
         "flagged_sessions": [
             {

@@ -1,15 +1,14 @@
-import asyncio
-import random
-import time
 from datetime import datetime
+
 from sqlalchemy.orm import Session
+
 from app.models.event import Event
-from app.models.session import Session as SessionModel
+
 
 class EventGeneratorService:
     def __init__(self, db: Session):
         self.db = db
-        
+
     def generate_customer_support_scenario(self, session_id: int):
         """Generate realistic customer support agent events"""
         events = [
@@ -21,7 +20,7 @@ class EventGeneratorService:
             {"event_type": "response_generation", "tool_name": "text_processor", "flags": []},
             {"event_type": "user_feedback", "tool_name": "chat_interface", "flags": []}
         ]
-        
+
         created_events = []
         for i, event_data in enumerate(events, 1):
             db_event = Event(
@@ -34,10 +33,10 @@ class EventGeneratorService:
             )
             self.db.add(db_event)
             created_events.append(db_event)
-            
+
         self.db.commit()
         return created_events
-    
+
     def generate_data_analysis_scenario(self, session_id: int):
         """Generate realistic data analysis agent events"""
         events = [
@@ -51,7 +50,7 @@ class EventGeneratorService:
             {"event_type": "insight_extraction", "tool_name": "pattern_detector", "flags": ["ml_inference"]},
             {"event_type": "report_generation", "tool_name": "report_builder", "flags": ["document_creation"]}
         ]
-        
+
         created_events = []
         for i, event_data in enumerate(events, 1):
             db_event = Event(
@@ -64,10 +63,10 @@ class EventGeneratorService:
             )
             self.db.add(db_event)
             created_events.append(db_event)
-            
+
         self.db.commit()
         return created_events
-    
+
     def generate_voice_agent_scenario(self, session_id: int):
         """Generate realistic voice agent events"""
         events = [
@@ -81,7 +80,7 @@ class EventGeneratorService:
             {"event_type": "sentiment_analysis", "tool_name": "emotion_detector", "flags": ["ml_inference"]},
             {"event_type": "call_termination", "tool_name": "telephony_system", "flags": ["voice_call"]}
         ]
-        
+
         created_events = []
         for i, event_data in enumerate(events, 1):
             db_event = Event(
@@ -94,10 +93,10 @@ class EventGeneratorService:
             )
             self.db.add(db_event)
             created_events.append(db_event)
-            
+
         self.db.commit()
         return created_events
-    
+
     def generate_complex_workflow(self, session_id: int):
         """Generate a complex multi-step workflow with policy violations"""
         events = [
@@ -111,7 +110,7 @@ class EventGeneratorService:
             {"event_type": "escalation", "tool_name": "alert_system", "flags": ["security_alert"]},
             {"event_type": "audit_log", "tool_name": "logging_service", "flags": ["compliance_record"]}
         ]
-        
+
         created_events = []
         for i, event_data in enumerate(events, 1):
             db_event = Event(
@@ -124,10 +123,10 @@ class EventGeneratorService:
             )
             self.db.add(db_event)
             created_events.append(db_event)
-            
+
         self.db.commit()
         return created_events
-    
+
     def generate_scenario(self, session_id: int, scenario_type: str):
         """Generate events based on scenario type"""
         scenarios = {
@@ -136,8 +135,8 @@ class EventGeneratorService:
             "voice_agent": self.generate_voice_agent_scenario,
             "complex_workflow": self.generate_complex_workflow
         }
-        
+
         if scenario_type not in scenarios:
             raise ValueError(f"Unknown scenario type: {scenario_type}")
-            
+
         return scenarios[scenario_type](session_id)

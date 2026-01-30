@@ -2,7 +2,7 @@
 agentops_sdk/events.py - Strict Event Definitions from Spec v0.5
 """
 from enum import Enum
-from typing import Dict, Any, Optional
+from typing import Any
 
 SCHEMA_VER = "v0.6"
 
@@ -25,10 +25,10 @@ REQUIRED_FIELDS = {
     EventType.SESSION_START: ["agent_id", "environment", "framework", "framework_version", "sdk_version"],
     EventType.SESSION_END: ["status", "duration_ms"],
     EventType.LOG_DROP: ["dropped_events", "reason"],
-    EventType.CHAIN_SEAL: ["final_event_hash"], 
+    EventType.CHAIN_SEAL: ["final_event_hash"],
 }
 
-def validate_payload(event_type: EventType, payload: Dict[str, Any]):
+def validate_payload(event_type: EventType, payload: dict[str, Any]):
     """Strictly checks for required fields. Raises ValueError on failure."""
     req = REQUIRED_FIELDS.get(event_type)
     if req:

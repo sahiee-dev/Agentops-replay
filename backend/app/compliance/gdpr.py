@@ -12,11 +12,11 @@ Severity Levels:
 - WARNING: Potential PII exposure (heuristic detection) - ADVISORY ONLY
 """
 
-import re
 import json
+import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Dict, Any
+from typing import Any
 
 
 class Severity(Enum):
@@ -33,8 +33,8 @@ class Finding:
     event_id: str
     field_path: str
     message: str
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         return {
             "severity": self.severity.value,
             "event_index": self.event_index,
@@ -57,7 +57,7 @@ PII_PATTERNS = {
 REDACTION_MARKER = "[REDACTED]"
 
 
-def validate_redactions(events: List[Dict[str, Any]]) -> List[Finding]:
+def validate_redactions(events: list[dict[str, Any]]) -> list[Finding]:
     """
     Validate that all redacted fields have corresponding hashes.
     
@@ -71,11 +71,11 @@ def validate_redactions(events: List[Dict[str, Any]]) -> List[Finding]:
         List of Finding objects (ERROR severity only)
     """
     findings = []
-    
+
     for idx, event in enumerate(events):
         event_id = event.get('event_id', f'event_{idx}')
         payload = event.get('payload', {})
-        
+
         if isinstance(payload, str):
             # Parse canonical JSON string and inspect
             try:
@@ -89,7 +89,7 @@ def validate_redactions(events: List[Dict[str, Any]]) -> List[Finding]:
                     message=f"Payload is invalid JSON: {e}"
                 ))
                 continue
-            
+
             if isinstance(parsed_payload, dict):
                 _check_redactions_recursive(
                     data=parsed_payload,
@@ -134,7 +134,7 @@ def validate_redactions(events: List[Dict[str, Any]]) -> List[Finding]:
                 field_path="payload",
                 message=f"Unexpected payload type: {type(payload).__name__}. Expected str, dict, or list."
             ))
-    
+
     return findings
 
 
@@ -143,14 +143,14 @@ def _check_redactions_recursive(
     path: str,
     event_index: int,
     event_id: str,
-    findings: List[Finding]
+    findings: list[Finding]
 ) -> None:
     """Recursively check for [REDACTED] without corresponding hash."""
-    
+
     if isinstance(data, dict):
         for key, value in data.items():
             field_path = f"{path}.{key}"
-            
+
             if value == REDACTION_MARKER:
                 # Check for corresponding hash field
                 hash_key = f"{key}_hash"
@@ -164,13 +164,13 @@ def _check_redactions_recursive(
                     ))
             elif isinstance(value, (dict, list)):
                 _check_redactions_recursive(value, field_path, event_index, event_id, findings)
-                
+
     elif isinstance(data, list):
         for i, item in enumerate(data):
             _check_redactions_recursive(item, f"{path}[{i}]", event_index, event_id, findings)
 
 
-def check_pii_exposure(events: List[Dict[str, Any]]) -> List[Finding]:
+def check_pii_exposure(events: list[dict[str, Any]]) -> list[Finding]:
     """
     Heuristic check for potential PII exposure in unredacted fields.
     
@@ -184,11 +184,11 @@ def check_pii_exposure(events: List[Dict[str, Any]]) -> List[Finding]:
         List of Finding objects (WARNING severity only, ERROR for unexpected types)
     """
     findings = []
-    
+
     for idx, event in enumerate(events):
         event_id = event.get('event_id', f'event_{idx}')
         payload = event.get('payload', {})
-        
+
         if isinstance(payload, str):
             # Attempt to parse JSON string into structured data
             try:
@@ -218,7 +218,7 @@ def check_pii_exposure(events: List[Dict[str, Any]]) -> List[Finding]:
             ))
             # Still scan the coerced string for PII
             _check_string_for_pii(str(payload), "payload", idx, event_id, findings)
-    
+
     return findings
 
 
@@ -227,7 +227,7 @@ def _check_pii_in_list(
     path: str,
     event_index: int,
     event_id: str,
-    findings: List[Finding]
+    findings: list[Finding]
 ) -> None:
     """Check list items for potential PII."""
     for i, item in enumerate(data):
@@ -245,10 +245,10 @@ def _check_pii_recursive(
     path: str,
     event_index: int,
     event_id: str,
-    findings: List[Finding]
+    findings: list[Finding]
 ) -> None:
     """Recursively check for potential PII in data."""
-    
+
     if isinstance(data, str):
         _check_string_for_pii(data, path, event_index, event_id, findings)
     elif isinstance(data, dict):
@@ -265,14 +265,14 @@ def _check_string_for_pii(
     path: str,
     event_index: int,
     event_id: str,
-    findings: List[Finding]
+    findings: list[Finding]
 ) -> None:
     """Check a string value for PII patterns."""
-    
+
     # Skip ONLY if the entire value is exactly the redaction marker
     if value.strip() == REDACTION_MARKER:
         return
-    
+
     for pii_type, pattern in PII_PATTERNS.items():
         if pattern.search(value):
             findings.append(Finding(
@@ -286,7 +286,7 @@ def _check_string_for_pii(
             break
 
 
-def check_compliance(events: List[Dict[str, Any]]) -> Dict[str, Any]:
+def check_compliance(events: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Run all compliance checks and return summary.
     
@@ -295,10 +295,15 @@ def check_compliance(events: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     redaction_findings = validate_redactions(events)
     pii_findings = check_pii_exposure(events)
-    
+
     errors = [f for f in redaction_findings if f.severity == Severity.ERROR]
-    warnings = pii_findings  # All PII findings are warnings
-    
+    # Add PII errors to errors list
+    pii_errors = [f for f in pii_findings if f.severity == Severity.ERROR]
+    errors.extend(pii_errors)
+
+    # Warnings are only non-error PII findings
+    warnings = [f for f in pii_findings if f.severity != Severity.ERROR]
+
     return {
         "errors": [f.to_dict() for f in errors],
         "warnings": [f.to_dict() for f in warnings],

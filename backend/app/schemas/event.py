@@ -1,14 +1,15 @@
 # backend/app/schemas/event.py
-from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional, List
+
+from pydantic import BaseModel
+
 
 # Define EventBase FIRST
 class EventBase(BaseModel):
     event_type: str
-    tool_name: Optional[str] = None
-    flags: Optional[List[str]] = []
-    sequence_number: Optional[int] = None
+    tool_name: str | None = None
+    flags: list[str] | None = None
+    sequence_number: int | None = None
 
 # Then define EventCreate (which inherits from EventBase)
 class EventCreate(EventBase):

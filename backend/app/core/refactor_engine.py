@@ -1,9 +1,9 @@
 # backend/app/core/refactor_engine.py
 
-from radon.complexity import cc_visit
-from radon.metrics import mi_visit
+import ast
+
+import astor
 from sentence_transformers import SentenceTransformer, util
-import ast, astor
 
 model = SentenceTransformer('all-MiniLM-L6-v2')
 

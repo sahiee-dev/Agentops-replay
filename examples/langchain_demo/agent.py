@@ -9,23 +9,22 @@ This agent demonstrates AgentOps Replay capturing:
 All events are captured and can be verified for compliance/audit.
 """
 
-import sys
 import os
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'sdk', 'python')))
 
-from typing import Optional
-from datetime import datetime
 import json
+from datetime import datetime
 
 # Try LangChain imports
 try:
-    from langchain_core.tools import tool
-    from langchain_openai import ChatOpenAI
     from langchain.agents import AgentExecutor, create_react_agent
     from langchain_core.prompts import PromptTemplate
+    from langchain_core.tools import tool
+    from langchain_openai import ChatOpenAI
     LANGCHAIN_INSTALLED = True
 except ImportError:
     LANGCHAIN_INSTALLED = False
@@ -79,7 +78,7 @@ if LANGCHAIN_INSTALLED:
         order = ORDERS_DB.get(order_id)
         if not order:
             return json.dumps({"error": f"Order {order_id} not found"})
-        
+
         # Return order info (note: includes PII - email)
         return json.dumps({
             "order_id": order_id,
@@ -103,18 +102,18 @@ if LANGCHAIN_INSTALLED:
         order = ORDERS_DB.get(order_id)
         if not order:
             return json.dumps({"error": f"Order {order_id} not found"})
-        
+
         if not order.get("refund_eligible"):
             return json.dumps({
                 "error": f"Order {order_id} is not eligible for refund",
                 "status": order["status"]
             })
-        
+
         if amount > order["total"]:
             return json.dumps({
                 "error": f"Refund amount ${amount} exceeds order total ${order['total']}"
             })
-        
+
         refund_record = {
             "refund_id": f"REF-{len(REFUNDS_ISSUED) + 1:04d}",
             "order_id": order_id,
@@ -123,7 +122,7 @@ if LANGCHAIN_INSTALLED:
             "timestamp": datetime.now().isoformat()
         }
         REFUNDS_ISSUED.append(refund_record)
-        
+
         return json.dumps({
             "success": True,
             "refund_id": refund_record["refund_id"],
@@ -149,7 +148,7 @@ if LANGCHAIN_INSTALLED:
             "timestamp": datetime.now().isoformat()
         }
         EMAILS_SENT.append(email_record)
-        
+
         return json.dumps({
             "success": True,
             "email_id": email_record["email_id"],
@@ -164,7 +163,7 @@ def get_tools():
     return [lookup_order, issue_refund, send_email]
 
 
-def create_agent(api_key: Optional[str] = None, callbacks=None):
+def create_agent(api_key: str | None = None, callbacks=None):
     """
     Create and return the customer support agent.
     
@@ -174,7 +173,7 @@ def create_agent(api_key: Optional[str] = None, callbacks=None):
     """
     if not LANGCHAIN_INSTALLED:
         raise ImportError("LangChain not installed")
-    
+
     # Create LLM
     llm = ChatOpenAI(
         model="gpt-4o-mini",
@@ -182,10 +181,10 @@ def create_agent(api_key: Optional[str] = None, callbacks=None):
         api_key=api_key,
         callbacks=callbacks
     )
-    
+
     # Create tools
     tools = get_tools()
-    
+
     # Create prompt
     template = """You are a helpful customer support agent. You help customers with their orders.
 
@@ -210,10 +209,10 @@ Question: {input}
 Thought:{agent_scratchpad}"""
 
     prompt = PromptTemplate.from_template(template)
-    
+
     # Create agent
     agent = create_react_agent(llm, tools, prompt)
-    
+
     # Create executor
     agent_executor = AgentExecutor(
         agent=agent,
@@ -222,7 +221,7 @@ Thought:{agent_scratchpad}"""
         handle_parsing_errors=True,
         callbacks=callbacks
     )
-    
+
     return agent_executor
 
 

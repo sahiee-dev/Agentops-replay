@@ -1,7 +1,7 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-from datetime import datetime
 
 from app.database import get_db
 from app.models.session import Session as SessionModel
@@ -9,7 +9,7 @@ from app.schemas.session import SessionCreate, SessionRead
 
 router = APIRouter()
 
-@router.get("/", response_model=List[SessionRead])
+@router.get("/", response_model=list[SessionRead])
 def list_sessions(db: Session = Depends(get_db)):
     return db.query(SessionModel).all()
 

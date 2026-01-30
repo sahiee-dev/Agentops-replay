@@ -19,11 +19,11 @@ Usage:
 """
 
 from .callback import AgentOpsCallbackHandler
-from .version import INTEGRATION_VERSION, get_langchain_version, check_compatibility
+from .version import INTEGRATION_VERSION, check_compatibility, get_langchain_version
 
 __all__ = [
+    "INTEGRATION_VERSION",
     "AgentOpsCallbackHandler",
-    "INTEGRATION_VERSION", 
-    "get_langchain_version",
-    "check_compatibility"
+    "check_compatibility",
+    "get_langchain_version"
 ]

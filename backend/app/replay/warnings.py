@@ -13,7 +13,6 @@ Warnings are NOT hidden. They ARE the evidence.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class WarningSeverity(Enum):
@@ -57,8 +56,8 @@ class ReplayWarning:
     severity: WarningSeverity
     code: WarningCode
     message: str
-    frame_position: Optional[int] = None  # If warning relates to specific frame
-    
+    frame_position: int | None = None  # If warning relates to specific frame
+
     @classmethod
     def events_dropped(cls, count: int, reason: str, position: int) -> 'ReplayWarning':
         """Create warning for dropped events."""
@@ -70,7 +69,7 @@ class ReplayWarning:
             ),
             frame_position=position
         )
-    
+
     @classmethod
     def sequence_gap(cls, start: int, end: int, position: int) -> 'ReplayWarning':
         """Create warning for sequence gap."""
@@ -82,7 +81,7 @@ class ReplayWarning:
             ),
             frame_position=position
         )
-    
+
     @classmethod
     def timestamp_anomaly(cls, position: int) -> 'ReplayWarning':
         """Create warning for out-of-order timestamp."""
@@ -92,7 +91,7 @@ class ReplayWarning:
             message=WARNING_MESSAGES[WarningCode.TIMESTAMP_ANOMALY].format(pos=position),
             frame_position=position
         )
-    
+
     @classmethod
     def chain_not_sealed(cls) -> 'ReplayWarning':
         """Create warning for missing chain seal."""
@@ -101,7 +100,7 @@ class ReplayWarning:
             code=WarningCode.CHAIN_NOT_SEALED,
             message=WARNING_MESSAGES[WarningCode.CHAIN_NOT_SEALED]
         )
-    
+
     @classmethod
     def partial_evidence(cls) -> 'ReplayWarning':
         """Create warning for partial evidence class."""
@@ -110,7 +109,7 @@ class ReplayWarning:
             code=WarningCode.PARTIAL_EVIDENCE,
             message=WARNING_MESSAGES[WarningCode.PARTIAL_EVIDENCE]
         )
-    
+
     @classmethod
     def verification_failed(cls, reason: str) -> 'ReplayWarning':
         """Create warning for verification failure."""

@@ -1,25 +1,22 @@
 """
 test_generator.py - Generates valid and invalid test vectors for agentops-verify.
 """
-import json
 import hashlib
-import uuid
+import json
 import sys
+import uuid
+from typing import Any
 
-try:
-    import jcs
-except ImportError:
-    # Fallback for package-relative import
-    from . import jcs
+import jcs
 
 SPEC_VERSION = "v0.6"
 SIGNED_FIELDS = [
-    "event_id", 
-    "session_id", 
-    "sequence_number", 
-    "timestamp_wall", 
-    "event_type", 
-    "payload_hash", 
+    "event_id",
+    "session_id",
+    "sequence_number",
+    "timestamp_wall",
+    "event_type",
+    "payload_hash",
     "prev_event_hash"
 ]
 
@@ -28,9 +25,19 @@ REQUIRED_SESSION_START = ["agent_id", "environment", "framework", "framework_ver
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
-def create_event(session_id: str, seq: int, prev_hash: str, event_type: str, payload: dict, tamper=None):
+def create_event(
+    session_id: str,
+    seq: int,
+    prev_hash: str | None,
+    event_type: str,
+    payload: dict[str, Any],
+    tamper: str | None = None,
+) -> dict[str, Any]:
+    # Python 3.14+ has uuid7, but MyPy doesn't know that yet
+    event_uuid = str(getattr(uuid, "uuid7")()) if sys.version_info >= (3, 14) and hasattr(uuid, "uuid7") else str(uuid.uuid4())
+    
     event = {
-        "event_id": str(uuid.uuid7()) if sys.version_info >= (3, 14) else str(uuid.uuid4()), # Python 3.14+ has uuid7
+        "event_id": event_uuid,
         "session_id": session_id,
         "sequence_number": seq,
         "timestamp_wall": "2023-10-27T10:00:00Z",
@@ -55,18 +62,18 @@ def create_event(session_id: str, seq: int, prev_hash: str, event_type: str, pay
     signed_obj = {k: event[k] for k in SIGNED_FIELDS if k in event}
     canonical_envelope = jcs.canonicalize(signed_obj)
     event["event_hash"] = sha256(canonical_envelope)
-    
+
     # TAMPER EVENT HASH
     if tamper == "event_hash":
         event["event_hash"] = "badhash"
 
     return event
 
-def generate_valid_session():
+def generate_valid_session() -> list[dict[str, Any]]:
     session_id = str(uuid.uuid4())
-    events = []
+    events: list[dict[str, Any]] = []
     prev_hash = None
-    
+
     # 1. Start
     e1 = create_event(session_id, 0, None, "SESSION_START", {
         "agent_id": "test-agent",
@@ -103,16 +110,16 @@ def generate_valid_session():
 
     return events
 
-def generate_tampered_payload_session():
+def generate_tampered_payload_session() -> list[dict[str, Any]]:
     events = generate_valid_session()
     # Tamper payload of event 1 but keep hash -> Verifier should catch payload_hash mismatch
-    # Wait, create_event calculates hash from payload. 
+    # Wait, create_event calculates hash from payload.
     # To tamper, we modify the payload AFTER creation.
-    events[1]["payload"]["args"]["q"] = "evil_query" 
+    events[1]["payload"]["args"]["q"] = "evil_query"
     # Now payload_hash (calculated from "agentops") matches the old payload, but payload is "evil_query"
     return events
 
-def generate_tampered_chain_session():
+def generate_tampered_chain_session() -> list[dict[str, Any]]:
     events = generate_valid_session()
     # Break chain: E2 prev_hash != E1 hash
     events[1]["prev_event_hash"] = "broken_link"
@@ -120,7 +127,7 @@ def generate_tampered_chain_session():
     # But usually verifier checks previous_hash == prev_event.event_hash FIRST.
     return events
 
-def generate_sequence_gap_session():
+def generate_sequence_gap_session() -> list[dict[str, Any]]:
     events = generate_valid_session()
     # E2 sequence = 5
     events[1]["sequence_number"] = 5
@@ -129,7 +136,7 @@ def generate_sequence_gap_session():
     events[1]["event_hash"] = sha256(jcs.canonicalize(signed_obj))
     return events
 
-def write_jsonl(events, filename):
+def write_jsonl(events: list[dict[str, Any]], filename: str) -> None:
     with open(filename, 'w') as f:
         for e in events:
             f.write(json.dumps(e) + '\n')

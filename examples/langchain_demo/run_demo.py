@@ -8,8 +8,8 @@ This script demonstrates the full AgentOps Replay workflow:
 3. Export session to JSONL for verification
 """
 
-import sys
 import os
+import sys
 
 # Add project paths
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -17,12 +17,10 @@ sys.path.insert(0, PROJECT_ROOT)
 sys.path.insert(0, os.path.join(PROJECT_ROOT, 'sdk', 'python'))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, 'agentops_sdk'))
 
-import json
-from datetime import datetime
 
 # Check for LangChain
 try:
-    from agent import create_agent, get_refunds, get_emails, LANGCHAIN_INSTALLED
+    from agent import LANGCHAIN_INSTALLED, create_agent, get_emails, get_refunds
 except ImportError as e:
     print(f"Error importing agent: {e}")
     sys.exit(1)
@@ -55,23 +53,23 @@ def run_demo(use_agentops: bool = True, output_file: str = "session_output.jsonl
     print("AgentOps Replay - LangChain Demo")
     print("=" * 60)
     print()
-    
+
     if not LANGCHAIN_INSTALLED:
         print("ERROR: LangChain not installed.")
         print("Install with: pip install langchain langchain-openai")
         return False
-    
+
     # Check for OpenAI API key
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         print("ERROR: OPENAI_API_KEY environment variable not set")
         print("Set with: export OPENAI_API_KEY='your-key'")
         return False
-    
+
     # Initialize callbacks
     callbacks = []
     handler = None
-    
+
     if use_agentops and AGENTOPS_AVAILABLE:
         print("[+] Initializing AgentOps Replay callback handler...")
         handler = AgentOpsCallbackHandler(
@@ -86,9 +84,9 @@ def run_demo(use_agentops: bool = True, output_file: str = "session_output.jsonl
         print(f"    Session started with ID: {handler.client.session_id}")
     else:
         print("[!] Running without AgentOps callback handler")
-    
+
     print()
-    
+
     # Create agent
     print("[+] Creating customer support agent...")
     try:
@@ -100,15 +98,15 @@ def run_demo(use_agentops: bool = True, output_file: str = "session_output.jsonl
             handler.end_session(status="error")
             handler.export_to_jsonl(output_file)
         return False
-    
+
     print()
-    
+
     # Run queries
     results = []
     for i, query in enumerate(DEMO_QUERIES, 1):
         print(f"[{i}/{len(DEMO_QUERIES)}] Query: {query}")
         print("-" * 40)
-        
+
         try:
             result = agent.invoke(
                 {"input": query},
@@ -128,16 +126,16 @@ def run_demo(use_agentops: bool = True, output_file: str = "session_output.jsonl
                 "error": str(e),
                 "success": False
             })
-        
+
         print()
-    
+
     # End session and export
     if handler:
         print("[+] Ending session and exporting...")
         handler.end_session(status="success")
         handler.export_to_jsonl(output_file)
         print(f"    Session exported to: {output_file}")
-    
+
     # Summary
     print()
     print("=" * 60)
@@ -149,7 +147,7 @@ def run_demo(use_agentops: bool = True, output_file: str = "session_output.jsonl
     print(f"Refunds issued: {len(get_refunds())}")
     print(f"Emails sent: {len(get_emails())}")
     print()
-    
+
     if handler:
         print("Session data exported to:", output_file)
         print()
@@ -157,7 +155,7 @@ def run_demo(use_agentops: bool = True, output_file: str = "session_output.jsonl
         print("  python verify_session.py")
         print("  # or")
         print(f"  python ../../verifier/agentops_verify.py {output_file}")
-    
+
     return True
 
 
@@ -170,14 +168,14 @@ def run_mock_demo(output_file: str = "session_output.jsonl"):
     print("AgentOps Replay - Mock Demo (No API Key Required)")
     print("=" * 60)
     print()
-    
+
     try:
         from agentops_sdk.client import AgentOpsClient
         from agentops_sdk.events import EventType
     except ImportError as e:
         print(f"ERROR: Could not import AgentOps SDK: {e}")
         return False
-    
+
     print("[+] Creating mock session...")
     client = AgentOpsClient(local_authority=True, buffer_size=1000)
     client.start_session(
@@ -185,11 +183,11 @@ def run_mock_demo(output_file: str = "session_output.jsonl"):
         tags=["demo", "mock", "day-3"]
     )
     print(f"    Session ID: {client.session_id}")
-    
+
     # Simulate events
     print()
     print("[+] Recording mock events...")
-    
+
     # 1. Model request/response
     client.record(EventType.MODEL_REQUEST, {
         "model": "gpt-4o-mini",
@@ -198,14 +196,14 @@ def run_mock_demo(output_file: str = "session_output.jsonl"):
         "parameters": {"temperature": 0}
     })
     print("    - MODEL_REQUEST recorded")
-    
+
     # 2. Tool call
     client.record(EventType.TOOL_CALL, {
         "tool_name": "lookup_order",
         "args": {"order_id": "ORD-001"}
     })
     print("    - TOOL_CALL recorded")
-    
+
     # 3. Tool result
     client.record(EventType.TOOL_RESULT, {
         "tool_name": "lookup_order",
@@ -218,7 +216,7 @@ def run_mock_demo(output_file: str = "session_output.jsonl"):
         "duration_ms": 50
     })
     print("    - TOOL_RESULT recorded")
-    
+
     # 4. Decision trace
     client.record(EventType.DECISION_TRACE, {
         "decision_id": "dec-001",
@@ -227,16 +225,16 @@ def run_mock_demo(output_file: str = "session_output.jsonl"):
         "justification": "customer_query_policy"
     })
     print("    - DECISION_TRACE recorded")
-    
+
     # 5. End session
     client.end_session(status="success", duration_ms=1500)
     print("    - SESSION_END recorded")
-    
+
     # Export
     print()
     print(f"[+] Exporting to {output_file}...")
     client.flush_to_jsonl(output_file)
-    
+
     print()
     print("=" * 60)
     print("MOCK DEMO COMPLETE")
@@ -244,26 +242,26 @@ def run_mock_demo(output_file: str = "session_output.jsonl"):
     print()
     print("To verify the session, run:")
     print("  python verify_session.py")
-    
+
     return True
 
 
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Run AgentOps Replay LangChain Demo")
-    parser.add_argument("--mock", action="store_true", 
+    parser.add_argument("--mock", action="store_true",
                        help="Run mock demo without API key")
     parser.add_argument("--no-agentops", action="store_true",
                        help="Run without AgentOps callback")
     parser.add_argument("--output", default="session_output.jsonl",
                        help="Output JSONL file path")
-    
+
     args = parser.parse_args()
-    
+
     if args.mock:
         success = run_mock_demo(output_file=args.output)
     else:
         success = run_demo(use_agentops=not args.no_agentops, output_file=args.output)
-    
+
     sys.exit(0 if success else 1)

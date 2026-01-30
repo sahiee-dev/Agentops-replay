@@ -22,8 +22,11 @@ SIGNED_FIELDS = [
     "timestamp_wall",
     "event_type",
     "payload_hash",
+    "payload_hash",
     "prev_event_hash"
 ]
+
+GENESIS_HASH = "0" * 64
 
 
 def sha256(data: bytes) -> str:
@@ -177,8 +180,8 @@ def validate_chain_continuity(events: list[dict[str, Any]]) -> tuple[bool, str |
     for i, event in enumerate(events):
         # First event must have null prev_event_hash
         if i == 0:
-            if event.get("prev_event_hash") is not None:
-                return False, "First event must have null prev_event_hash"
+            if event.get("prev_event_hash") != GENESIS_HASH:
+                return False, f"First event must have prev_event_hash={GENESIS_HASH}"
         # Subsequent events must link to previous
         elif event.get("prev_event_hash") != prev_hash:
             return (

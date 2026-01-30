@@ -209,5 +209,5 @@ def create_chain_seal_event(seal_result: SealResult, session_id: str) -> dict[st
             "event_count": seal_result.event_count,
             "ingestion_service_id": seal_result.ingestion_service_id
         },
-        "chain_authority": "SERVER"
+        "chain_authority": ChainAuthority.SERVER.value
     }

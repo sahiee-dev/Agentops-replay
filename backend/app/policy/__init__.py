@@ -1,6 +1,6 @@
 """Policy engine package."""
 
-from .gdpr import detect_pii, PIIMatch
-from .tool_audit import generate_tool_audit, ToolAuditReport
+from .gdpr import PIIMatch, detect_pii
+from .tool_audit import ToolAuditReport, generate_tool_audit
 
-__all__ = ["detect_pii", "PIIMatch", "generate_tool_audit", "ToolAuditReport"]
+__all__ = ["PIIMatch", "ToolAuditReport", "detect_pii", "generate_tool_audit"]

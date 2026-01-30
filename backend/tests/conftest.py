@@ -1,8 +1,9 @@
 """Test configuration and fixtures."""
 
-import pytest
 import os
 import sys
+
+import pytest
 
 # Add paths
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -19,12 +20,12 @@ def setup_test_database():
     """Create test database tables before tests."""
     # Drop all tables
     Base.metadata.drop_all(bind=engine)
-    
+
     # Create all tables
     Base.metadata.create_all(bind=engine)
-    
+
     yield
-    
+
     # Cleanup
     Base.metadata.drop_all(bind=engine)
 
@@ -32,9 +33,9 @@ def setup_test_database():
 @pytest.fixture(scope="function")
 def db():
     """Database session fixture with automatic cleanup."""
-    from sqlalchemy import text
     from app.database import SessionLocal
-    
+    from sqlalchemy import text
+
     db = SessionLocal()
     try:
         yield db
