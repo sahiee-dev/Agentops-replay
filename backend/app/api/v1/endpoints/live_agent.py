@@ -10,14 +10,17 @@ from app.database import get_db
 
 router = APIRouter()
 
+
 class ChatMessage(BaseModel):
     message: str
     session_id: int | None = None
+
 
 class ChatResponse(BaseModel):
     response: str
     session_id: int
     agent_name: str
+
 
 class ConnectionManager:
     def __init__(self):
@@ -38,20 +41,21 @@ class ConnectionManager:
         for connection in self.active_connections:
             await connection.send_text(message)
 
+
 manager = ConnectionManager()
 
+
 @router.post("/chat", response_model=ChatResponse)
-async def chat_with_agent(
-    chat_message: ChatMessage,
-    db: Session = Depends(get_db)
-):
+async def chat_with_agent(chat_message: ChatMessage, db: Session = Depends(get_db)):
     """Chat with customer support agent"""
     try:
         # Get or create agent session
         if chat_message.session_id:
             # Check if agent session exists
             if chat_message.session_id not in manager.agent_sessions:
-                manager.agent_sessions[chat_message.session_id] = CustomerSupportAgent(db, chat_message.session_id)
+                manager.agent_sessions[chat_message.session_id] = CustomerSupportAgent(
+                    db, chat_message.session_id
+                )
             agent = manager.agent_sessions[chat_message.session_id]
         else:
             # Create new agent session
@@ -65,11 +69,12 @@ async def chat_with_agent(
         return ChatResponse(
             response=response,
             session_id=agent.session_id,
-            agent_name="Customer Support Agent"
+            agent_name="Customer Support Agent",
         )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Agent error: {e!s}")
+
 
 @router.post("/start-agent-session")
 async def start_agent_session(db: Session = Depends(get_db)):
@@ -81,8 +86,9 @@ async def start_agent_session(db: Session = Depends(get_db)):
     return {
         "session_id": session_id,
         "message": "Customer support agent session started",
-        "agent_name": "Customer Support Agent"
+        "agent_name": "Customer Support Agent",
     }
+
 
 @router.post("/end-agent-session/{session_id}")
 async def end_agent_session(session_id: int, db: Session = Depends(get_db)):
@@ -96,8 +102,11 @@ async def end_agent_session(session_id: int, db: Session = Depends(get_db)):
 
     raise HTTPException(status_code=404, detail="Agent session not found")
 
+
 @router.websocket("/ws/agent/{session_id}")
-async def websocket_agent_chat(websocket: WebSocket, session_id: int, db: Session = Depends(get_db)):
+async def websocket_agent_chat(
+    websocket: WebSocket, session_id: int, db: Session = Depends(get_db)
+):
     """Real-time WebSocket chat with agent"""
     await manager.connect(websocket)
 
@@ -118,12 +127,16 @@ async def websocket_agent_chat(websocket: WebSocket, session_id: int, db: Sessio
             response = await agent.process_customer_message(message_data["message"])
 
             # Send response back
-            await websocket.send_text(json.dumps({
-                "type": "agent_response",
-                "response": response,
-                "session_id": session_id,
-                "timestamp": datetime.utcnow().isoformat()
-            }))
+            await websocket.send_text(
+                json.dumps(
+                    {
+                        "type": "agent_response",
+                        "response": response,
+                        "session_id": session_id,
+                        "timestamp": datetime.utcnow().isoformat(),
+                    }
+                )
+            )
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)

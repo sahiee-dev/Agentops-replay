@@ -7,7 +7,7 @@ import sys
 
 from fastapi.testclient import TestClient
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from datetime import UTC, datetime
 
@@ -23,11 +23,7 @@ class TestIngestionAPI:
         """Test session creation with server authority."""
         response = client.post(
             "/api/v1/ingest/sessions",
-            json={
-                "authority": "server",
-                "agent_name": "test-agent",
-                "user_id": None
-            }
+            json={"authority": "server", "agent_name": "test-agent", "user_id": None},
         )
 
         assert response.status_code == 201
@@ -41,23 +37,21 @@ class TestIngestionAPI:
         """Test session creation with SDK authority."""
         response = client.post(
             "/api/v1/ingest/sessions",
-            json={
-                "authority": "sdk",
-                "agent_name": "test-agent"
-            }
+            json={"authority": "sdk", "agent_name": "test-agent"},
         )
 
         assert response.status_code == 201
         data = response.json()
         assert data["authority"] == "sdk"
-        assert data["ingestion_service_id"] is None  # SDK sessions don't have service ID
+        assert (
+            data["ingestion_service_id"] is None
+        )  # SDK sessions don't have service ID
 
     def test_append_events(self):
         """Test event appending."""
         # Create session
         session_resp = client.post(
-            "/api/v1/ingest/sessions",
-            json={"authority": "server"}
+            "/api/v1/ingest/sessions", json={"authority": "server"}
         )
         session_id = session_resp.json()["session_id"]
 
@@ -71,10 +65,10 @@ class TestIngestionAPI:
                         "sequence_number": 0,
                         "timestamp_wall": datetime.now(UTC).isoformat(),
                         "event_type": "TEST",
-                        "payload": {"data": "test"}
+                        "payload": {"data": "test"},
                     }
-                ]
-            }
+                ],
+            },
         )
 
         assert response.status_code == 200
@@ -87,8 +81,7 @@ class TestIngestionAPI:
         """Test that sequence gaps return HTTP 409."""
         # Create session and add event
         session_resp = client.post(
-            "/api/v1/ingest/sessions",
-            json={"authority": "server"}
+            "/api/v1/ingest/sessions", json={"authority": "server"}
         )
         session_id = session_resp.json()["session_id"]
 
@@ -96,13 +89,15 @@ class TestIngestionAPI:
             f"/api/v1/ingest/sessions/{session_id}/events",
             json={
                 "session_id": session_id,
-                "events": [{
-                    "sequence_number": 0,
-                    "timestamp_wall": datetime.now(UTC).isoformat(),
-                    "event_type": "TEST",
-                    "payload": {}
-                }]
-            }
+                "events": [
+                    {
+                        "sequence_number": 0,
+                        "timestamp_wall": datetime.now(UTC).isoformat(),
+                        "event_type": "TEST",
+                        "payload": {},
+                    }
+                ],
+            },
         )
 
         # Gap: jump to seq 5
@@ -110,13 +105,15 @@ class TestIngestionAPI:
             f"/api/v1/ingest/sessions/{session_id}/events",
             json={
                 "session_id": session_id,
-                "events": [{
-                    "sequence_number": 5,
-                    "timestamp_wall": datetime.now(UTC).isoformat(),
-                    "event_type": "TEST",
-                    "payload": {}
-                }]
-            }
+                "events": [
+                    {
+                        "sequence_number": 5,
+                        "timestamp_wall": datetime.now(UTC).isoformat(),
+                        "event_type": "TEST",
+                        "payload": {},
+                    }
+                ],
+            },
         )
 
         assert response.status_code == 409  # Conflict
@@ -126,8 +123,7 @@ class TestIngestionAPI:
         """Test session sealing."""
         # Create session with SESSION_END
         session_resp = client.post(
-            "/api/v1/ingest/sessions",
-            json={"authority": "server"}
+            "/api/v1/ingest/sessions", json={"authority": "server"}
         )
         session_id = session_resp.json()["session_id"]
 
@@ -136,13 +132,15 @@ class TestIngestionAPI:
             f"/api/v1/ingest/sessions/{session_id}/events",
             json={
                 "session_id": session_id,
-                "events": [{
-                    "sequence_number": 0,
-                    "timestamp_wall": datetime.now(UTC).isoformat(),
-                    "event_type": "SESSION_END",
-                    "payload": {}
-                }]
-            }
+                "events": [
+                    {
+                        "sequence_number": 0,
+                        "timestamp_wall": datetime.now(UTC).isoformat(),
+                        "event_type": "SESSION_END",
+                        "payload": {},
+                    }
+                ],
+            },
         )
 
         # Seal
@@ -158,8 +156,7 @@ class TestIngestionAPI:
     def test_seal_without_session_end_fails(self):
         """Test that seal fails without SESSION_END."""
         session_resp = client.post(
-            "/api/v1/ingest/sessions",
-            json={"authority": "server"}
+            "/api/v1/ingest/sessions", json={"authority": "server"}
         )
         session_id = session_resp.json()["session_id"]
 
@@ -171,10 +168,7 @@ class TestIngestionAPI:
 
     def test_seal_sdk_session_fails(self):
         """Test that SDK sessions cannot be sealed."""
-        session_resp = client.post(
-            "/api/v1/ingest/sessions",
-            json={"authority": "sdk"}
-        )
+        session_resp = client.post("/api/v1/ingest/sessions", json={"authority": "sdk"})
         session_id = session_resp.json()["session_id"]
 
         # Add SESSION_END
@@ -182,13 +176,15 @@ class TestIngestionAPI:
             f"/api/v1/ingest/sessions/{session_id}/events",
             json={
                 "session_id": session_id,
-                "events": [{
-                    "sequence_number": 0,
-                    "timestamp_wall": datetime.now(UTC).isoformat(),
-                    "event_type": "SESSION_END",
-                    "payload": {}
-                }]
-            }
+                "events": [
+                    {
+                        "sequence_number": 0,
+                        "timestamp_wall": datetime.now(UTC).isoformat(),
+                        "event_type": "SESSION_END",
+                        "payload": {},
+                    }
+                ],
+            },
         )
 
         # Try to seal
@@ -206,7 +202,7 @@ class TestExportAPI:
         # Create and populate session
         session_resp = client.post(
             "/api/v1/ingest/sessions",
-            json={"authority": "server", "agent_name": "test"}
+            json={"authority": "server", "agent_name": "test"},
         )
         session_id = session_resp.json()["session_id"]
 
@@ -214,17 +210,21 @@ class TestExportAPI:
             f"/api/v1/ingest/sessions/{session_id}/events",
             json={
                 "session_id": session_id,
-                "events": [{
-                    "sequence_number": 0,
-                    "timestamp_wall": datetime.now(UTC).isoformat(),
-                    "event_type": "TEST",
-                    "payload": {"data": "test"}
-                }]
-            }
+                "events": [
+                    {
+                        "sequence_number": 0,
+                        "timestamp_wall": datetime.now(UTC).isoformat(),
+                        "event_type": "TEST",
+                        "payload": {"data": "test"},
+                    }
+                ],
+            },
         )
 
         # Export JSON
-        response = client.get(f"/api/v1/export/sessions/{session_id}/export?format=json")
+        response = client.get(
+            f"/api/v1/export/sessions/{session_id}/export?format=json"
+        )
 
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/json"
@@ -241,8 +241,7 @@ class TestExportAPI:
         """Test PDF export generation."""
         # Create session
         session_resp = client.post(
-            "/api/v1/ingest/sessions",
-            json={"authority": "server"}
+            "/api/v1/ingest/sessions", json={"authority": "server"}
         )
         session_id = session_resp.json()["session_id"]
 
@@ -250,13 +249,15 @@ class TestExportAPI:
             f"/api/v1/ingest/sessions/{session_id}/events",
             json={
                 "session_id": session_id,
-                "events": [{
-                    "sequence_number": 0,
-                    "timestamp_wall": datetime.now(UTC).isoformat(),
-                    "event_type": "TEST",
-                    "payload": {}
-                }]
-            }
+                "events": [
+                    {
+                        "sequence_number": 0,
+                        "timestamp_wall": datetime.now(UTC).isoformat(),
+                        "event_type": "TEST",
+                        "payload": {},
+                    }
+                ],
+            },
         )
 
         # Export PDF

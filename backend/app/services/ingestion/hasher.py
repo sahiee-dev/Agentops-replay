@@ -23,7 +23,9 @@ from typing import Any
 
 # Add verifier to path for JCS import (LOCKED to verifier implementation)
 # Path: backend/app/services/ingestion/hasher.py -> ../../../../verifier
-_verifier_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'verifier'))
+_verifier_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "verifier")
+)
 if _verifier_path not in sys.path:
     sys.path.insert(0, _verifier_path)
 
@@ -32,6 +34,7 @@ from jcs import canonicalize  # AUTHORITATIVE: verifier's RFC 8785 implementatio
 
 class RejectionReason(Enum):
     """Reasons for rejecting an event batch."""
+
     NON_MONOTONIC_SEQUENCE = "NON_MONOTONIC_SEQUENCE"
     MISSING_PREV_HASH = "MISSING_PREV_HASH"
     INVALID_GENESIS = "INVALID_GENESIS"
@@ -49,6 +52,7 @@ GENESIS_HASH = "0" * 64
 @dataclass
 class ChainResult:
     """Result of chain recomputation."""
+
     valid: bool
     rejection_reason: RejectionReason | None = None
     rejection_details: str | None = None
@@ -61,21 +65,20 @@ class ChainResult:
 
 
 def recompute_chain(
-    events: list[dict[str, Any]],
-    expected_genesis_hash: str = GENESIS_HASH
+    events: list[dict[str, Any]], expected_genesis_hash: str = GENESIS_HASH
 ) -> ChainResult:
     """
     Recompute hash chain from scratch, ignoring SDK-provided hashes.
-    
+
     CRITICAL: This function establishes SERVER AUTHORITY.
     - SDK hashes are logged as untrusted_hash, never used
     - All hashes are recomputed from canonical payloads
     - Any validation failure results in FULL REJECTION
-    
+
     Args:
         events: List of raw events from SDK (untrusted)
         expected_genesis_hash: Expected prev_hash for first event
-        
+
     Returns:
         ChainResult with validation outcome
     """
@@ -84,7 +87,7 @@ def recompute_chain(
             valid=True,
             recomputed_events=[],
             final_hash=expected_genesis_hash,
-            event_count=0
+            event_count=0,
         )
 
     # Collect untrusted SDK hashes for logging
@@ -96,7 +99,7 @@ def recompute_chain(
         return ChainResult(
             valid=False,
             rejection_reason=validation_result[1],
-            rejection_details=validation_result[2]
+            rejection_details=validation_result[2],
         )
 
     # Recompute chain
@@ -105,31 +108,32 @@ def recompute_chain(
 
     for idx, event in enumerate(events):
         # Log SDK hash as untrusted (if present)
-        sdk_hash = event.get('event_hash')
+        sdk_hash = event.get("event_hash")
         if sdk_hash:
             untrusted_hashes.append(sdk_hash)
 
         # Validate prev_hash for non-genesis events
         if idx == 0:
             # Genesis event
-            event_prev_hash = event.get('prev_event_hash')
+            event_prev_hash = event.get("prev_event_hash")
             if event_prev_hash and event_prev_hash != expected_genesis_hash:
                 return ChainResult(
                     valid=False,
                     rejection_reason=RejectionReason.INVALID_GENESIS,
-                    rejection_details=f"First event has prev_hash={event_prev_hash}, expected {expected_genesis_hash}"
+                    rejection_details=f"First event has prev_hash={event_prev_hash}, expected {expected_genesis_hash}",
                 )
         else:
             # Non-genesis: prev_hash must match our computed prev
-            event_prev_hash = event.get('prev_event_hash')
+            event_prev_hash = event.get("prev_event_hash")
             # Note: We don't reject if SDK's prev_hash is wrong - we replace it
             # The key is that WE control the chain, not the SDK
 
         # Compute canonical payload
-        payload = event.get('payload', {})
+        payload = event.get("payload", {})
         if isinstance(payload, str):
             # Already serialized - parse and re-canonicalize
             import json
+
             try:
                 payload = json.loads(payload)
             except json.JSONDecodeError as e:
@@ -137,28 +141,28 @@ def recompute_chain(
                 return ChainResult(
                     valid=False,
                     rejection_reason=RejectionReason.INVALID_PAYLOAD,
-                    rejection_details=f"Event {idx} payload is invalid JSON: {e}. Payload length: {len(event.get('payload', ''))} chars"
+                    rejection_details=f"Event {idx} payload is invalid JSON: {e}. Payload length: {len(event.get('payload', ''))} chars",
                 )
 
         payload_canonical = canonicalize(payload)
         payload_hash = hashlib.sha256(payload_canonical).hexdigest()
 
         # Validate required fields before computing hash
-        event_type = event.get('event_type')
-        timestamp_monotonic = event.get('timestamp_monotonic')
-        sequence_number = event.get('sequence_number')
+        event_type = event.get("event_type")
+        timestamp_monotonic = event.get("timestamp_monotonic")
+        sequence_number = event.get("sequence_number")
 
         if event_type is None:
             return ChainResult(
                 valid=False,
                 rejection_reason=RejectionReason.MISSING_REQUIRED_FIELD,
-                rejection_details=f"Event {idx} missing required field 'event_type'"
+                rejection_details=f"Event {idx} missing required field 'event_type'",
             )
         if timestamp_monotonic is None:
             return ChainResult(
                 valid=False,
                 rejection_reason=RejectionReason.MISSING_REQUIRED_FIELD,
-                rejection_details=f"Event {idx} missing required field 'timestamp_monotonic'"
+                rejection_details=f"Event {idx} missing required field 'timestamp_monotonic'",
             )
 
         # Compute event hash
@@ -177,7 +181,7 @@ def recompute_chain(
         recomputed_event = {
             **event,
             "prev_event_hash": prev_hash,
-            "payload_canonical": payload_canonical.decode('utf-8'),
+            "payload_canonical": payload_canonical.decode("utf-8"),
             "payload_hash": payload_hash,
             "event_hash": event_hash,
             "chain_authority": "SERVER",
@@ -192,14 +196,16 @@ def recompute_chain(
         recomputed_events=recomputed,
         final_hash=prev_hash,
         event_count=len(recomputed),
-        untrusted_sdk_hashes=untrusted_hashes if untrusted_hashes else None
+        untrusted_sdk_hashes=untrusted_hashes if untrusted_hashes else None,
     )
 
 
-def _validate_sequences(events: list[dict[str, Any]]) -> tuple[bool, RejectionReason | None, str | None]:
+def _validate_sequences(
+    events: list[dict[str, Any]],
+) -> tuple[bool, RejectionReason | None, str | None]:
     """
     Validate sequence numbers are strictly monotonic.
-    
+
     Returns:
         Tuple of (valid, rejection_reason, rejection_details)
     """
@@ -210,25 +216,37 @@ def _validate_sequences(events: list[dict[str, Any]]) -> tuple[bool, RejectionRe
     prev_seq = None
 
     for idx, event in enumerate(events):
-        seq = event.get('sequence_number')
+        seq = event.get("sequence_number")
 
         if seq is None:
-            return (False, RejectionReason.NON_MONOTONIC_SEQUENCE,
-                    f"Event {idx} missing sequence_number")
+            return (
+                False,
+                RejectionReason.NON_MONOTONIC_SEQUENCE,
+                f"Event {idx} missing sequence_number",
+            )
 
         # Check for duplicates
         if seq in seen_sequences:
-            return (False, RejectionReason.DUPLICATE_SEQUENCE,
-                    f"Duplicate sequence_number {seq} at event {idx}")
+            return (
+                False,
+                RejectionReason.DUPLICATE_SEQUENCE,
+                f"Duplicate sequence_number {seq} at event {idx}",
+            )
 
         # Check monotonicity
         if prev_seq is not None:
             if seq <= prev_seq:
-                return (False, RejectionReason.NON_MONOTONIC_SEQUENCE,
-                        f"Non-monotonic sequence: {prev_seq} -> {seq} at event {idx}")
+                return (
+                    False,
+                    RejectionReason.NON_MONOTONIC_SEQUENCE,
+                    f"Non-monotonic sequence: {prev_seq} -> {seq} at event {idx}",
+                )
             if seq != prev_seq + 1:
-                return (False, RejectionReason.SEQUENCE_GAP,
-                        f"Sequence gap: {prev_seq} -> {seq} at event {idx}")
+                return (
+                    False,
+                    RejectionReason.SEQUENCE_GAP,
+                    f"Sequence gap: {prev_seq} -> {seq} at event {idx}",
+                )
 
         seen_sequences.add(seq)
         prev_seq = seq

@@ -12,12 +12,14 @@ from pydantic import BaseModel, ConfigDict
 
 class VerificationStatusSchema(str, Enum):
     """Verification status enum for API responses."""
+
     VALID = "VALID"
     INVALID = "INVALID"
 
 
 class FrameTypeSchema(str, Enum):
     """Frame type enum for API responses."""
+
     EVENT = "EVENT"
     GAP = "GAP"
     LOG_DROP = "LOG_DROP"
@@ -26,6 +28,7 @@ class FrameTypeSchema(str, Enum):
 
 class WarningSeveritySchema(str, Enum):
     """Warning severity enum for API responses."""
+
     INFO = "INFO"
     WARNING = "WARNING"
     CRITICAL = "CRITICAL"
@@ -33,6 +36,7 @@ class WarningSeveritySchema(str, Enum):
 
 class ReplayFrameSchema(BaseModel):
     """Schema for a single replay frame."""
+
     frame_type: FrameTypeSchema
     position: int
 
@@ -60,6 +64,7 @@ class ReplayFrameSchema(BaseModel):
 
 class ReplayWarningSchema(BaseModel):
     """Schema for a replay warning."""
+
     severity: WarningSeveritySchema
     code: str  # Stable warning code
     message: str
@@ -71,9 +76,10 @@ class ReplayWarningSchema(BaseModel):
 class ReplayResponseSchema(BaseModel):
     """
     Full replay response for a verified session.
-    
+
     INVARIANT: This response is ONLY generated from verified chains.
     """
+
     session_id: str
     evidence_class: str
     seal_present: bool
@@ -93,6 +99,7 @@ class ReplayResponseSchema(BaseModel):
 
 class VerificationResponseSchema(BaseModel):
     """Response for verification-only endpoint."""
+
     session_id: str
     verification_status: VerificationStatusSchema
     evidence_class: str | None = None
@@ -104,16 +111,16 @@ class VerificationResponseSchema(BaseModel):
     error_code: str | None = None
     error_message: str | None = None
 
-
     model_config = ConfigDict(use_enum_values=True)
 
 
 class ReplayFailureSchema(BaseModel):
     """
     Explicit failure response when verification fails.
-    
+
     CRITICAL: No frames, no partial data, no metadata.
     """
+
     session_id: str
     verification_status: VerificationStatusSchema  # Always INVALID
     error_code: str
@@ -124,6 +131,7 @@ class ReplayFailureSchema(BaseModel):
 
 class FrameResponseSchema(BaseModel):
     """Response for single frame endpoint."""
+
     session_id: str
     requested_sequence: int
     frame: ReplayFrameSchema

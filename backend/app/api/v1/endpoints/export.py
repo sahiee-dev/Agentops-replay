@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session as DBSession
 
 # Add verifier to path for JCS
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../verifier'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../verifier"))
 import jcs
 from app.compliance import generate_json_export, generate_pdf_from_verified_dict
 from app.database import get_db
@@ -23,18 +23,16 @@ router = APIRouter()
 
 @router.get("/sessions/{session_id}/export")
 async def export_session(
-    session_id: str,
-    format: str = "json",
-    db: DBSession = Depends(get_db)
+    session_id: str, format: str = "json", db: DBSession = Depends(get_db)
 ):
     """
     Export session in JSON or PDF format.
-    
+
     Args:
         session_id: Session UUID
         format: "json" or "pdf"
         db: Database session
-        
+
     Returns:
         JSON or PDF export
     """
@@ -48,7 +46,7 @@ async def export_session(
                 media_type="application/json",
                 headers={
                     "Content-Disposition": f'attachment; filename="session_{session_id}_export.json"'
-                }
+                },
             )
 
         elif format == "pdf":
@@ -59,11 +57,14 @@ async def export_session(
                 media_type="application/pdf",
                 headers={
                     "Content-Disposition": f'attachment; filename="session_{session_id}_compliance.pdf"'
-                }
+                },
             )
 
         else:
-            raise HTTPException(status_code=400, detail=f"Invalid format: {format}. Must be 'json' or 'pdf'")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid format: {format}. Must be 'json' or 'pdf'",
+            )
 
     except ValueError:
         # Invalid UUID or session not found

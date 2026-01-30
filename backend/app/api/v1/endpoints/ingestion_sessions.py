@@ -27,7 +27,11 @@ router = APIRouter()
 ingest_service = IngestService(service_id="prod-ingest-01")
 
 
-@router.post("/sessions", response_model=SessionStartResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/sessions",
+    response_model=SessionStartResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def start_session(request: SessionStartRequest):
     """Start new session with specified authority."""
     try:
@@ -35,14 +39,16 @@ async def start_session(request: SessionStartRequest):
             session_id_str=request.session_id,
             authority=request.authority.value,
             agent_name=request.agent_name,
-            user_id=request.user_id
+            user_id=request.user_id,
         )
 
         return SessionStartResponse(
             session_id=session_id,
             authority=request.authority.value,
             status="active",
-            ingestion_service_id=ingest_service.service_id if request.authority.value == "server" else None
+            ingestion_service_id=ingest_service.service_id
+            if request.authority.value == "server"
+            else None,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -53,23 +59,27 @@ async def append_events(session_id: str, batch: EventBatch):
     """Append batch of events with constitutional guarantees."""
     try:
         result = ingest_service.append_events(
-            session_id=session_id,
-            events=batch.events
+            session_id=session_id, events=batch.events
         )
 
         return EventBatchResponse(
             status=result["status"],
             accepted_count=result["accepted_count"],
-            final_hash=result.get("final_hash")
+            final_hash=result.get("final_hash"),
         )
     except SequenceViolation as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Sequence violation: {e!s}")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=f"Sequence violation: {e!s}"
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception:
         # Log exception server-side for debugging
         import logging
-        logging.getLogger(__name__).exception("Append events error for session %s", session_id)
+
+        logging.getLogger(__name__).exception(
+            "Append events error for session %s", session_id
+        )
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -82,7 +92,7 @@ async def seal_session(session_id: str):
             status=result["status"],
             seal_timestamp=result["seal_timestamp"],
             session_digest=result["session_digest"],
-            event_count=result["event_count"]
+            event_count=result["event_count"],
         )
     except AuthorityViolation as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
@@ -94,14 +104,20 @@ async def seal_session(session_id: str):
 async def get_session(session_id: str, db: DBSession = Depends(get_db)):
     """Retrieve session metadata."""
     try:
-        session = db.query(Session).filter(
-            Session.session_id_str == uuid.UUID(session_id)
-        ).first()
+        session = (
+            db.query(Session)
+            .filter(Session.session_id_str == uuid.UUID(session_id))
+            .first()
+        )
 
         if not session:
-            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Session {session_id} not found"
+            )
 
-        event_count = db.query(EventChain).filter(EventChain.session_id == session.id).count()
+        event_count = (
+            db.query(EventChain).filter(EventChain.session_id == session.id).count()
+        )
 
         return SessionMetadata(
             session_id=str(session.session_id_str),
@@ -111,7 +127,7 @@ async def get_session(session_id: str, db: DBSession = Depends(get_db)):
             started_at=session.started_at,
             sealed_at=session.sealed_at,
             total_drops=session.total_drops,
-            event_count=event_count
+            event_count=event_count,
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid session ID format")

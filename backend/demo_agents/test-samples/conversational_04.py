@@ -1,5 +1,6 @@
 # demo-agents/test-samples/conversational_04.py
 
+
 class Agent:
     def __init__(self, name="Agent04"):
         self.name = name
@@ -9,6 +10,7 @@ class Agent:
         if any(greet in user_input.lower() for greet in greetings):
             return f"{self.name}: Hello! Nice to meet you."
         return f"{self.name}: I'm thinking about '{user_input}'..."
+
 
 if __name__ == "__main__":
     agent = Agent()

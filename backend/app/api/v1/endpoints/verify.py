@@ -12,8 +12,6 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session as DBSession
 
-
-
 from app.database import get_db
 from app.models import EventChain, Session
 
@@ -25,26 +23,33 @@ logger = logging.getLogger(__name__)
 async def verify_session_api(session_id: str, db: DBSession = Depends(get_db)):
     """
     Verify session integrity using canonical export.
-    
+
     CONSTITUTIONAL: Operates on RFC 8785 canonical form, NOT ORM objects.
     Stores verification result for later inspection.
-    
+
     Returns:
         Evidence class, violations, replay fingerprint
     """
     try:
         # 1. Get session
-        session = db.query(Session).filter(
-            Session.session_id_str == uuid.UUID(session_id)
-        ).first()
+        session = (
+            db.query(Session)
+            .filter(Session.session_id_str == uuid.UUID(session_id))
+            .first()
+        )
 
         if not session:
-            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Session {session_id} not found"
+            )
 
         # 2. Export to canonical form
-        events = db.query(EventChain).filter(
-            EventChain.session_id == session.id
-        ).order_by(EventChain.sequence_number).all()
+        events = (
+            db.query(EventChain)
+            .filter(EventChain.session_id == session.id)
+            .order_by(EventChain.sequence_number)
+            .all()
+        )
 
         if not events:
             raise HTTPException(status_code=400, detail="Cannot verify empty session")
@@ -73,7 +78,9 @@ async def verify_session_api(session_id: str, db: DBSession = Depends(get_db)):
         policy = {"reject_local_authority": False}
 
         # Import verify_session from agentops_verify
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../verifier'))
+        sys.path.insert(
+            0, os.path.join(os.path.dirname(__file__), "../../../../verifier")
+        )
         from agentops_verify import verify_session
 
         result = verify_session(canonical_events, policy)
@@ -93,7 +100,7 @@ async def verify_session_api(session_id: str, db: DBSession = Depends(get_db)):
             "total_drops": result.get("total_drops", 0),
             "violations": result.get("violations", []),
             "replay_fingerprint": result.get("replay_fingerprint"),
-            "event_count": result.get("event_count")
+            "event_count": result.get("event_count"),
         }
 
     except ValueError as e:
@@ -102,6 +109,5 @@ async def verify_session_api(session_id: str, db: DBSession = Depends(get_db)):
         # Log full exception server-side for debugging
         logger.exception("Verification error for session %s", session_id)
         raise HTTPException(
-            status_code=500,
-            detail="Internal server error during verification"
+            status_code=500, detail="Internal server error during verification"
         )

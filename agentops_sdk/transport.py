@@ -16,7 +16,9 @@ import httpx
 class RetryExhausted(Exception):
     """Raised when all retry attempts are exhausted."""
 
-    def __init__(self, message=None, *, error_class=None, attempts=None, last_error=None):
+    def __init__(
+        self, message=None, *, error_class=None, attempts=None, last_error=None
+    ):
         super().__init__(message or "Retry attempts exhausted")
         self.error_class = error_class
         self.attempts = attempts
@@ -29,16 +31,16 @@ def send_batch_with_retry(
     events: list[dict[str, Any]],
     max_retries: int = 5,
     min_wait: float = 1.0,
-    max_wait: float = 10.0
+    max_wait: float = 10.0,
 ) -> dict[str, Any]:
     """
     Send event batch to server with exponential backoff.
-    
+
     CONSTITUTIONAL GUARANTEES:
     - Retries up to max_retries times
     - Exponential backoff between attempts
     - Returns error details on persistent failure
-    
+
     Args:
         http_client: HTTP client instance
         session_id: Session UUID
@@ -46,10 +48,10 @@ def send_batch_with_retry(
         max_retries: Maximum retry attempts
         min_wait: Minimum wait between retries (seconds)
         max_wait: Maximum wait between retries (seconds)
-        
+
     Returns:
         Response dict with 'status', 'accepted_count', 'final_hash'
-        
+
     Raises:
         RetryExhausted: After all retries are exhausted
     """
@@ -61,7 +63,7 @@ def send_batch_with_retry(
         try:
             response = http_client.post(
                 f"/api/v1/ingest/sessions/{session_id}/events",
-                json={"session_id": session_id, "events": events}
+                json={"session_id": session_id, "events": events},
             )
             response.raise_for_status()
             return response.json()
@@ -89,9 +91,9 @@ def send_batch_with_retry(
                     f"Client error (4xx) - {last_error}",
                     error_class=error_class,
                     attempts=attempt + 1,
-                    last_error=last_error
+                    last_error=last_error,
                 ) from e
-            else: # 5xx errors
+            else:  # 5xx errors
                 # Server errors (5xx) - will retry
                 error_class = "SERVER_ERROR"
                 last_error = f"HTTP {e.response.status_code}"
@@ -103,8 +105,10 @@ def send_batch_with_retry(
         # Exponential backoff
         attempt += 1
         if attempt < max_retries:
-            wait_time = min(min_wait * (2 ** attempt), max_wait)
-            print(f"⚠️  Retry {attempt}/{max_retries} after {wait_time:.1f}s... ({error_class})")
+            wait_time = min(min_wait * (2**attempt), max_wait)
+            print(
+                f"⚠️  Retry {attempt}/{max_retries} after {wait_time:.1f}s... ({error_class})"
+            )
             time.sleep(wait_time)
 
     # All retries exhausted
@@ -112,5 +116,5 @@ def send_batch_with_retry(
         f"Failed after {max_retries} attempts. Last error: {error_class} - {last_error}",
         error_class=error_class,
         attempts=attempt,
-        last_error=last_error
+        last_error=last_error,
     )

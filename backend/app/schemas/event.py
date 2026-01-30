@@ -11,9 +11,11 @@ class EventBase(BaseModel):
     flags: list[str] | None = None
     sequence_number: int | None = None
 
+
 # Then define EventCreate (which inherits from EventBase)
 class EventCreate(EventBase):
     session_id: int  # Integer to match your database
+
 
 # Then define EventRead (which inherits from EventBase)
 class EventRead(EventBase):

@@ -1,5 +1,6 @@
 # demo-agents/test-samples/analytical_03.py
 
+
 class Agent:
     def __init__(self, name="Analytical03"):
         self.name = name
@@ -7,6 +8,7 @@ class Agent:
     def analyze(self, data):
         max_val = max(data) if data else None
         return f"{self.name}: Max value = {max_val}"
+
 
 if __name__ == "__main__":
     agent = Agent()

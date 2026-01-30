@@ -52,15 +52,14 @@ Ingest a batch of events into a session.
 - Sequence must be strictly monotonic and continuous
 - `seal=true` requires SESSION_END as last event
 - All writes are atomic (full batch or nothing)
-"""
+""",
 )
 async def ingest_batch(
-    request: IngestBatchRequest,
-    db: DBSession = Depends(get_db)
+    request: IngestBatchRequest, db: DBSession = Depends(get_db)
 ) -> IngestionResult:
     """
     Ingest a batch of events.
-    
+
     This endpoint establishes SERVER authority for all events.
     SDK-provided hashes are logged but never trusted.
     """
@@ -71,9 +70,7 @@ async def ingest_batch(
         events = [event.model_dump() for event in request.events]
 
         result = service.ingest_batch(
-            session_id_str=request.session_id,
-            events=events,
-            seal=request.seal
+            session_id_str=request.session_id, events=events, seal=request.seal
         )
 
         # Commit transaction
@@ -87,7 +84,7 @@ async def ingest_batch(
             sealed=result.sealed,
             seal_timestamp=result.seal_timestamp,
             session_digest=result.session_digest,
-            evidence_class=result.evidence_class
+            evidence_class=result.evidence_class,
         )
 
     except StateConflictError as e:
@@ -99,8 +96,8 @@ async def ingest_batch(
                 "status": "rejected",
                 "code": e.code,
                 "message": e.message,
-                "details": e.details
-            }
+                "details": e.details,
+            },
         )
 
     except BadRequestError as e:
@@ -112,8 +109,8 @@ async def ingest_batch(
                 "status": "rejected",
                 "code": e.code,
                 "message": e.message,
-                "details": e.details
-            }
+                "details": e.details,
+            },
         )
 
     except Exception as e:
@@ -124,6 +121,6 @@ async def ingest_batch(
             detail={
                 "status": "error",
                 "code": "INTERNAL_ERROR",
-                "message": "Internal server error during ingestion"
-            }
+                "message": "Internal server error during ingestion",
+            },
         )

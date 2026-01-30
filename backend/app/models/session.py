@@ -19,12 +19,14 @@ from app.database import Base
 
 class ChainAuthority(str, enum.Enum):
     """Authority types per EVENT_LOG_SPEC.md v0.6"""
+
     SERVER = "server"
     SDK = "sdk"
 
 
 class SessionStatus(str, enum.Enum):
     """Session lifecycle states"""
+
     ACTIVE = "active"
     SEALED = "sealed"
     FAILED = "failed"
@@ -33,25 +35,26 @@ class SessionStatus(str, enum.Enum):
 class Session(Base):
     """
     Session model with constitutional authority boundary.
-    
+
     CRITICAL REQUIREMENTS:
     - chain_authority set at creation, immutable
     - Authority is session-level, NOT event-level
     - Evidence class computed via verification gate
     """
+
     __tablename__ = "sessions"
 
     # Primary key
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
 
     # Session identity (from SDK)
-    session_id_str = Column(UUID(as_uuid=True), nullable=False, unique=True, index=True, default=uuid.uuid4)
+    session_id_str = Column(
+        UUID(as_uuid=True), nullable=False, unique=True, index=True, default=uuid.uuid4
+    )
 
     # AUTHORITY BOUNDARY (Constitutional requirement)
     chain_authority: Mapped[ChainAuthority] = mapped_column(
-        SQLEnum(ChainAuthority, name="chain_authority_enum"),
-        nullable=False,
-        index=True
+        SQLEnum(ChainAuthority, name="chain_authority_enum"), nullable=False, index=True
     )
 
     # Session state
@@ -59,14 +62,16 @@ class Session(Base):
         SQLEnum(SessionStatus, name="session_status_enum"),
         nullable=False,
         default=SessionStatus.ACTIVE,
-        index=True
+        index=True,
     )
 
     # Evidence classification (computed via verification gate)
     evidence_class = Column(String(50), nullable=True, index=True)
 
     # Timestamps
-    started_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), index=True)
+    started_at = Column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), index=True
+    )
     sealed_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
     # Failure tracking
@@ -81,20 +86,24 @@ class Session(Base):
 
     # Relationships
     user = relationship("User", back_populates="sessions")
-    event_chains = relationship("EventChain", back_populates="session", cascade="all, delete-orphan")
-    chain_seal = relationship("ChainSeal", back_populates="session", uselist=False, cascade="all, delete-orphan")
+    event_chains = relationship(
+        "EventChain", back_populates="session", cascade="all, delete-orphan"
+    )
+    chain_seal = relationship(
+        "ChainSeal",
+        back_populates="session",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
     # Legacy relationship (keeping for existing app compatibility)
-    events = relationship("Event", back_populates="session", cascade="all, delete-orphan")
+    events = relationship(
+        "Event", back_populates="session", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         CheckConstraint(
-            "chain_authority IN ('server', 'sdk')",
-            name="valid_chain_authority"
+            "chain_authority IN ('server', 'sdk')", name="valid_chain_authority"
         ),
-        CheckConstraint(
-            "total_drops >= 0",
-            name="non_negative_drops"
-        ),
+        CheckConstraint("total_drops >= 0", name="non_negative_drops"),
     )
-

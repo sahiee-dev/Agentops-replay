@@ -9,9 +9,11 @@ from app.schemas.session import SessionCreate, SessionRead
 
 router = APIRouter()
 
+
 @router.get("/", response_model=list[SessionRead])
 def list_sessions(db: Session = Depends(get_db)):
     return db.query(SessionModel).all()
+
 
 @router.post("/", response_model=SessionRead)
 def create_session(session: SessionCreate, db: Session = Depends(get_db)):
@@ -20,12 +22,13 @@ def create_session(session: SessionCreate, db: Session = Depends(get_db)):
         user_id=session.user_id,
         agent_name=session.agent_name,
         status=session.status,
-        started_at=datetime.utcnow()  # Explicitly set timestamp
+        started_at=datetime.utcnow(),  # Explicitly set timestamp
     )
     db.add(db_session)
     db.commit()
     db.refresh(db_session)
     return db_session
+
 
 @router.get("/{session_id}", response_model=SessionRead)
 def get_session(session_id: int, db: Session = Depends(get_db)):

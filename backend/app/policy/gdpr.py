@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 class PIIMatch(BaseModel):
     """PII detection match result"""
+
     pattern_type: str  # "email", "phone", "ssn", "credit_card"
     matched_text: str
     location: str  # JSON path to the field
@@ -20,24 +21,24 @@ class PIIMatch(BaseModel):
 
 
 # PII Detection Patterns
-EMAIL_PATTERN = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
-PHONE_US_PATTERN = re.compile(r'\b(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b')
-PHONE_INTL_PATTERN = re.compile(r'\+\d{1,3}[-.\s]?\d{1,14}')
-SSN_PATTERN = re.compile(r'\b\d{3}-\d{2}-\d{4}\b')
-CREDIT_CARD_PATTERN = re.compile(r'\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b')
+EMAIL_PATTERN = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
+PHONE_US_PATTERN = re.compile(r"\b(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b")
+PHONE_INTL_PATTERN = re.compile(r"\+\d{1,3}[-.\s]?\d{1,14}")
+SSN_PATTERN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+CREDIT_CARD_PATTERN = re.compile(r"\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b")
 
 
 def detect_pii(payload: dict[str, Any], path: str = "$") -> list[PIIMatch]:
     """
     Detect PII in event payload.
-    
+
     CRITICAL: This function does NOT mutate the payload.
     It only returns detected PII locations for flagging.
-    
+
     Args:
         payload: Event payload dictionary
         path: JSON path (for recursive traversal)
-        
+
     Returns:
         List of PII matches
     """
@@ -57,54 +58,64 @@ def detect_pii(payload: dict[str, Any], path: str = "$") -> list[PIIMatch]:
         # Check for email
         if EMAIL_PATTERN.search(payload):
             for match in EMAIL_PATTERN.finditer(payload):
-                matches.append(PIIMatch(
-                    pattern_type="email",
-                    matched_text=match.group(),
-                    location=path,
-                    confidence="high"
-                ))
+                matches.append(
+                    PIIMatch(
+                        pattern_type="email",
+                        matched_text=match.group(),
+                        location=path,
+                        confidence="high",
+                    )
+                )
 
         # Check for US phone
         if PHONE_US_PATTERN.search(payload):
             for match in PHONE_US_PATTERN.finditer(payload):
-                matches.append(PIIMatch(
-                    pattern_type="phone_us",
-                    matched_text=match.group(),
-                    location=path,
-                    confidence="high"
-                ))
+                matches.append(
+                    PIIMatch(
+                        pattern_type="phone_us",
+                        matched_text=match.group(),
+                        location=path,
+                        confidence="high",
+                    )
+                )
 
         # Check for international phone
         if PHONE_INTL_PATTERN.search(payload):
             for match in PHONE_INTL_PATTERN.finditer(payload):
-                matches.append(PIIMatch(
-                    pattern_type="phone_intl",
-                    matched_text=match.group(),
-                    location=path,
-                    confidence="medium"
-                ))
+                matches.append(
+                    PIIMatch(
+                        pattern_type="phone_intl",
+                        matched_text=match.group(),
+                        location=path,
+                        confidence="medium",
+                    )
+                )
 
         # Check for SSN
         if SSN_PATTERN.search(payload):
             for match in SSN_PATTERN.finditer(payload):
-                matches.append(PIIMatch(
-                    pattern_type="ssn",
-                    matched_text=match.group(),
-                    location=path,
-                    confidence="high"
-                ))
+                matches.append(
+                    PIIMatch(
+                        pattern_type="ssn",
+                        matched_text=match.group(),
+                        location=path,
+                        confidence="high",
+                    )
+                )
 
         # Check for credit card
         if CREDIT_CARD_PATTERN.search(payload):
             for match in CREDIT_CARD_PATTERN.finditer(payload):
                 # Luhn algorithm check for credit cards
-                if _luhn_check(match.group().replace('-', '').replace(' ', '')):
-                    matches.append(PIIMatch(
-                        pattern_type="credit_card",
-                        matched_text=match.group(),
-                        location=path,
-                        confidence="high"
-                    ))
+                if _luhn_check(match.group().replace("-", "").replace(" ", "")):
+                    matches.append(
+                        PIIMatch(
+                            pattern_type="credit_card",
+                            matched_text=match.group(),
+                            location=path,
+                            confidence="high",
+                        )
+                    )
 
     elif isinstance(payload, (int, float)) and not isinstance(payload, bool):
         # CRITICAL: Numeric PII detection (SSNs, phones, credit cards stored as numbers)
@@ -114,30 +125,36 @@ def detect_pii(payload: dict[str, Any], path: str = "$") -> list[PIIMatch]:
 
         # Check for SSN pattern (exactly 9 digits)
         if re.fullmatch(r"\d{9}", digits):
-            matches.append(PIIMatch(
-                pattern_type="ssn",
-                matched_text=payload_str,
-                location=path,
-                confidence="high"
-            ))
+            matches.append(
+                PIIMatch(
+                    pattern_type="ssn",
+                    matched_text=payload_str,
+                    location=path,
+                    confidence="high",
+                )
+            )
 
         # Check for phone patterns (10-11 digits)
         if re.fullmatch(r"\d{10,11}", digits):
-            matches.append(PIIMatch(
-                pattern_type="phone_us",
-                matched_text=payload_str,
-                location=path,
-                confidence="medium"
-            ))
+            matches.append(
+                PIIMatch(
+                    pattern_type="phone_us",
+                    matched_text=payload_str,
+                    location=path,
+                    confidence="medium",
+                )
+            )
 
         # Check for credit card (13-19 digits with Luhn validation)
         if re.fullmatch(r"\d{13,19}", digits) and _luhn_check(digits):
-            matches.append(PIIMatch(
-                pattern_type="credit_card",
-                matched_text=payload_str,
-                location=path,
-                confidence="high"
-            ))
+            matches.append(
+                PIIMatch(
+                    pattern_type="credit_card",
+                    matched_text=payload_str,
+                    location=path,
+                    confidence="high",
+                )
+            )
 
     return matches
 
@@ -145,10 +162,10 @@ def detect_pii(payload: dict[str, Any], path: str = "$") -> list[PIIMatch]:
 def _luhn_check(card_number: str) -> bool:
     """
     Validate credit card number using Luhn algorithm.
-    
+
     Args:
         card_number: Card number string (digits only)
-        
+
     Returns:
         True if valid card number
     """
@@ -171,12 +188,12 @@ def _luhn_check(card_number: str) -> bool:
 def scan_session_for_pii(events: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Scan entire session for PII.
-    
+
     Returns summary of PII exposure.
-    
+
     Args:
         events: List of event dictionaries
-        
+
     Returns:
         dict with 'has_pii', 'total_matches', 'matches_by_type', 'flagged_events'
     """
@@ -184,17 +201,19 @@ def scan_session_for_pii(events: list[dict[str, Any]]) -> dict[str, Any]:
     flagged_events = []
 
     for i, event in enumerate(events):
-        payload = event.get('payload', {})
+        payload = event.get("payload", {})
         matches = detect_pii(payload)
 
         if matches:
-            flagged_events.append({
-                'event_index': i,
-                'event_id': event.get('event_id'),
-                'event_type': event.get('event_type'),
-                'match_count': len(matches),
-                'matches': [m.dict() for m in matches]
-            })
+            flagged_events.append(
+                {
+                    "event_index": i,
+                    "event_id": event.get("event_id"),
+                    "event_type": event.get("event_type"),
+                    "match_count": len(matches),
+                    "matches": [m.dict() for m in matches],
+                }
+            )
             all_matches.extend(matches)
 
     # Group by type
@@ -209,5 +228,5 @@ def scan_session_for_pii(events: list[dict[str, Any]]) -> dict[str, Any]:
         "has_pii": len(all_matches) > 0,
         "total_matches": len(all_matches),
         "matches_by_type": matches_by_type,
-        "flagged_events": flagged_events
+        "flagged_events": flagged_events,
     }

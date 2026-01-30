@@ -9,6 +9,7 @@ from app.models.session import Session as SessionModel
 
 router = APIRouter()
 
+
 @router.get("/")
 def compliance_overview():
     return {"message": "Compliance service available"}
@@ -30,7 +31,9 @@ def compliance_report(session_id: int, db: Session = Depends(get_db)):
     flagged_count = len(flagged_events)
 
     # Calculate compliance score
-    compliance_score = (total_events - flagged_count) / total_events * 100 if total_events > 0 else 100
+    compliance_score = (
+        (total_events - flagged_count) / total_events * 100 if total_events > 0 else 100
+    )
 
     return {
         "session_id": session_id,
@@ -43,18 +46,23 @@ def compliance_report(session_id: int, db: Session = Depends(get_db)):
                 "id": e.id,
                 "event_type": e.event_type,
                 "flags": e.flags,
-                "timestamp": e.timestamp
-            } for e in flagged_events
-        ]
+                "timestamp": e.timestamp,
+            }
+            for e in flagged_events
+        ],
     }
 
 
 @router.get("/sessions/flagged")
 def list_flagged_sessions(db: Session = Depends(get_db)):
     # Find sessions with flagged events
-    flagged_sessions = db.query(SessionModel).join(Event).filter(
-        Event.flags.isnot(None)
-    ).distinct().all()
+    flagged_sessions = (
+        db.query(SessionModel)
+        .join(Event)
+        .filter(Event.flags.isnot(None))
+        .distinct()
+        .all()
+    )
 
     return {
         "flagged_sessions": [
@@ -63,7 +71,8 @@ def list_flagged_sessions(db: Session = Depends(get_db)):
                 "user_id": s.user_id,
                 "agent_name": s.agent_name,
                 "status": s.status,
-                "started_at": s.started_at
-            } for s in flagged_sessions
+                "started_at": s.started_at,
+            }
+            for s in flagged_sessions
         ]
     }

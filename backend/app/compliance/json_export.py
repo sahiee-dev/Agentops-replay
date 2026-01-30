@@ -14,7 +14,9 @@ from typing import Any
 from sqlalchemy.orm import Session as DBSession
 
 # Add verifier to path for JCS import (LOCKED to verifier implementation)
-_verifier_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'verifier'))
+_verifier_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "verifier")
+)
 if _verifier_path not in sys.path:
     sys.path.insert(0, _verifier_path)
 
@@ -25,37 +27,39 @@ from jcs import canonicalize  # AUTHORITATIVE: verifier's RFC 8785 implementatio
 def _format_iso8601(dt: datetime) -> str:
     """
     Format datetime to strict ISO 8601: YYYY-MM-DDTHH:MM:SS.sssZ
-    
+
     No local offsets. No truncated seconds. Always UTC with Z suffix.
     """
     if dt is None:
-        raise ValueError("Timestamp is required but was None. Caller must handle optional timestamps explicitly.")
+        raise ValueError(
+            "Timestamp is required but was None. Caller must handle optional timestamps explicitly."
+        )
     # Ensure UTC
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
     elif dt.tzinfo != UTC:
         dt = dt.astimezone(UTC)
     # Format with milliseconds and Z suffix
-    return dt.strftime('%Y-%m-%dT%H:%M:%S.') + f'{dt.microsecond // 1000:03d}Z'
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z"
 
 
 def generate_json_export(session_id: str, db: DBSession) -> dict[str, Any]:
     """
     Generate RFC 8785 canonical JSON export.
-    
+
     Includes:
     - Full event chain
     - Verification metadata
     - Evidence class (AUTHORITATIVE/PARTIAL_AUTHORITATIVE/NON_AUTHORITATIVE)
     - Chain-of-custody statement
-    
+
     Args:
         session_id: Session UUID string
         db: Database session
-        
+
     Returns:
         Canonical export dictionary
-        
+
     Raises:
         ValueError: If session not found
     """
@@ -66,22 +70,21 @@ def generate_json_export(session_id: str, db: DBSession) -> dict[str, Any]:
         raise ValueError(f"Invalid session ID format: {session_id}")
 
     # Get session
-    session = db.query(Session).filter(
-        Session.session_id_str == session_id
-    ).first()
+    session = db.query(Session).filter(Session.session_id_str == session_id).first()
 
     if not session:
         raise ValueError(f"Session {session_id} not found")
 
     # Get events
-    events = db.query(EventChain).filter(
-        EventChain.session_id == session.id
-    ).order_by(EventChain.sequence_number).all()
+    events = (
+        db.query(EventChain)
+        .filter(EventChain.session_id == session.id)
+        .order_by(EventChain.sequence_number)
+        .all()
+    )
 
     # Get seal if exists
-    chain_seal = db.query(ChainSeal).filter(
-        ChainSeal.session_id == session.id
-    ).first()
+    chain_seal = db.query(ChainSeal).filter(ChainSeal.session_id == session.id).first()
 
     # Determine evidence class
     evidence_class = _determine_evidence_class(session, chain_seal, len(events))
@@ -117,19 +120,21 @@ def generate_json_export(session_id: str, db: DBSession) -> dict[str, Any]:
         "chain_authority": session.chain_authority.value,
         "session_metadata": {
             "started_at": _format_iso8601(session.started_at),
-            "sealed_at": _format_iso8601(session.sealed_at) if session.sealed_at else None,
+            "sealed_at": _format_iso8601(session.sealed_at)
+            if session.sealed_at
+            else None,
             "status": session.status.value,
             "total_drops": session.total_drops,
             "event_count": len(events),
-            "agent_name": session.agent_name
+            "agent_name": session.agent_name,
         },
         "seal": None,
         "events": canonical_events,
         "chain_of_custody": {
             "export_authority": session.ingestion_service_id,
             "export_timestamp": export_timestamp,  # Same timestamp for determinism
-            "canonical_format": "RFC 8785 (JCS)"
-        }
+            "canonical_format": "RFC 8785 (JCS)",
+        },
     }
 
     # Add seal metadata if present
@@ -140,7 +145,7 @@ def generate_json_export(session_id: str, db: DBSession) -> dict[str, Any]:
             "seal_timestamp": _format_iso8601(chain_seal.seal_timestamp),
             "session_digest": chain_seal.session_digest,
             "final_event_hash": chain_seal.final_event_hash,
-            "event_count": chain_seal.event_count
+            "event_count": chain_seal.event_count,
         }
     else:
         export["seal"] = {"present": False}
@@ -148,10 +153,12 @@ def generate_json_export(session_id: str, db: DBSession) -> dict[str, Any]:
     return export
 
 
-def _determine_evidence_class(session: Session, chain_seal: ChainSeal, event_count: int) -> str:
+def _determine_evidence_class(
+    session: Session, chain_seal: ChainSeal, event_count: int
+) -> str:
     """
     Determine evidence class per CHAIN_AUTHORITY_INVARIANTS.md.
-    
+
     Returns one of:
     - AUTHORITATIVE_EVIDENCE: Server-sealed, complete chain
     - PARTIAL_AUTHORITATIVE_EVIDENCE: Server-sealed, incomplete chain
@@ -170,7 +177,7 @@ def _determine_evidence_class(session: Session, chain_seal: ChainSeal, event_cou
 def serialize_canonical(export: dict[str, Any]) -> bytes:
     """
     Serialize export to RFC 8785 canonical bytes.
-    
+
     Uses verifier's JCS implementation (LOCKED).
     """
     return canonicalize(export)

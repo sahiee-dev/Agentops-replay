@@ -1,6 +1,5 @@
-
-
 # demo-agents/test-samples/conversational_10.py
+
 
 class Agent:
     def __init__(self, name="Agent10"):
@@ -9,6 +8,7 @@ class Agent:
     def get_response(self, user_input):
         reversed_text = user_input[::-1]
         return f"{self.name}: Reversed input -> '{reversed_text}'"
+
 
 if __name__ == "__main__":
     agent = Agent()

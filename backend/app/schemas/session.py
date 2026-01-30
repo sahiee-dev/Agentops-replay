@@ -9,9 +9,11 @@ class SessionBase(BaseModel):
     agent_name: str | None = None
     status: str | None = None
 
+
 # Then define SessionCreate (which inherits from SessionBase)
 class SessionCreate(SessionBase):
     user_id: int  # Integer to match your database
+
 
 # Then define SessionRead (which inherits from SessionBase)
 class SessionRead(SessionBase):

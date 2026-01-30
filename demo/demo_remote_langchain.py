@@ -8,7 +8,7 @@ import os
 import sys
 
 # Add SDK to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import time
 
@@ -19,7 +19,7 @@ from agentops_sdk.remote_client import RemoteAgentOpsClient
 def main():
     """
     Run LangChain agent with remote AgentOps tracking.
-    
+
     Server must be running: uvicorn app.main:app --reload
     """
     print("=" * 60)
@@ -31,7 +31,7 @@ def main():
     client = RemoteAgentOpsClient(
         server_url="http://localhost:8000",
         batch_size=5,  # Small batches for demo
-        max_retries=5
+        max_retries=5,
     )
 
     # Start session
@@ -44,36 +44,48 @@ def main():
 
     # Tool calls
     for i in range(3):
-        print(f"  Tool call {i+1}: web_search")
-        client.record(EventType.TOOL_CALL, {
-            "tool_name": "web_search",
-            "args": {"query": f"test query {i+1}"},
-            "start_time": time.time()
-        })
+        print(f"  Tool call {i + 1}: web_search")
+        client.record(
+            EventType.TOOL_CALL,
+            {
+                "tool_name": "web_search",
+                "args": {"query": f"test query {i + 1}"},
+                "start_time": time.time(),
+            },
+        )
         time.sleep(0.1)
 
-        client.record(EventType.TOOL_RESULT, {
-            "tool_name": "web_search",
-            "result": {"items": [f"result_{i+1}"]},
-            "duration_ms": 100,
-            "success": True
-        })
+        client.record(
+            EventType.TOOL_RESULT,
+            {
+                "tool_name": "web_search",
+                "result": {"items": [f"result_{i + 1}"]},
+                "duration_ms": 100,
+                "success": True,
+            },
+        )
 
     # LLM calls
     print("  LLM call: GPT-4")
-    client.record(EventType.MODEL_CALL, {  # Use MODEL_CALL not LLM_CALL
-        "model": "gpt-4",
-        "prompt_tokens": 150,
-        "completion_tokens": 75,
-        "total_tokens": 225
-    })
+    client.record(
+        EventType.MODEL_CALL,
+        {  # Use MODEL_CALL not LLM_CALL
+            "model": "gpt-4",
+            "prompt_tokens": 150,
+            "completion_tokens": 75,
+            "total_tokens": 225,
+        },
+    )
 
     # Agent output
     print("  Agent output generated")
-    client.record(EventType.MODEL_RESPONSE, {  # Use MODEL_RESPONSE not AGENT_OUTPUT
-        "output": "Based on the search results, here is my answer...",
-        "confidence": 0.95
-    })
+    client.record(
+        EventType.MODEL_RESPONSE,
+        {  # Use MODEL_RESPONSE not AGENT_OUTPUT
+            "output": "Based on the search results, here is my answer...",
+            "confidence": 0.95,
+        },
+    )
 
     print()
     print("Ending session...")
@@ -86,9 +98,15 @@ def main():
     print(f"Session ID: {client.remote_session_id}")
     print()
     print("Next steps:")
-    print(f"  1. Verify: curl http://localhost:8000/api/v1/ingest/sessions/{client.remote_session_id}")
-    print(f"  2. Export JSON: curl http://localhost:8000/api/v1/export/sessions/{client.remote_session_id}/export?format=json")
-    print(f"  3. Export PDF: curl http://localhost:8000/api/v1/export/sessions/{client.remote_session_id}/export?format=pdf -o compliance.pdf")
+    print(
+        f"  1. Verify: curl http://localhost:8000/api/v1/ingest/sessions/{client.remote_session_id}"
+    )
+    print(
+        f"  2. Export JSON: curl http://localhost:8000/api/v1/export/sessions/{client.remote_session_id}/export?format=json"
+    )
+    print(
+        f"  3. Export PDF: curl http://localhost:8000/api/v1/export/sessions/{client.remote_session_id}/export?format=pdf -o compliance.pdf"
+    )
     print("=" * 60)
 
 

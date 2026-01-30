@@ -1,11 +1,13 @@
 # demo-agents/test-samples/analytical_01.py
 
+
 class Agent:
     def __init__(self, name="Analytical01"):
         self.name = name
 
     def analyze(self, data):
         return f"{self.name}: Sum of data = {sum(data)}"
+
 
 if __name__ == "__main__":
     agent = Agent()

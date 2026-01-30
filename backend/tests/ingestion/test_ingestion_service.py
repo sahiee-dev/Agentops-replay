@@ -21,7 +21,7 @@ from unittest.mock import MagicMock
 import pytest
 
 # Add backend to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "app"))
 
 from app.models import ChainAuthority, Session, SessionStatus
 from app.services.ingestion.service import (
@@ -43,20 +43,18 @@ class TestValidBatchAccepted:
                 "event_type": "SESSION_START",
                 "sequence_number": 0,
                 "timestamp_monotonic": 1000,
-                "payload": {}
+                "payload": {},
             },
             {
                 "event_type": "LLM_CALL",
                 "sequence_number": 1,
                 "timestamp_monotonic": 2000,
-                "payload": {"prompt": "test"}
-            }
+                "payload": {"prompt": "test"},
+            },
         ]
 
         result = service.ingest_batch(
-            session_id_str=str(mock_session.session_id_str),
-            events=events,
-            seal=False
+            session_id_str=str(mock_session.session_id_str), events=events, seal=False
         )
 
         assert result.accepted_count == 2
@@ -77,7 +75,7 @@ class TestSealedSessionRejection:
                 "event_type": "LLM_CALL",
                 "sequence_number": 10,
                 "timestamp_monotonic": 10000,
-                "payload": {}
+                "payload": {},
             }
         ]
 
@@ -85,7 +83,7 @@ class TestSealedSessionRejection:
             service.ingest_batch(
                 session_id_str=str(mock_sealed_session.session_id_str),
                 events=events,
-                seal=False
+                seal=False,
             )
 
         assert exc_info.value.code == "ALREADY_SEALED"
@@ -106,7 +104,7 @@ class TestSequenceGapRejection:
                 "event_type": "LLM_CALL",
                 "sequence_number": 7,  # Gap: 5-6 missing
                 "timestamp_monotonic": 7000,
-                "payload": {}
+                "payload": {},
             }
         ]
 
@@ -114,7 +112,7 @@ class TestSequenceGapRejection:
             service.ingest_batch(
                 session_id_str=str(mock_session_with_events.session_id_str),
                 events=events,
-                seal=False
+                seal=False,
             )
 
         assert exc_info.value.code == "SEQUENCE_GAP"
@@ -133,7 +131,7 @@ class TestDuplicateSequenceRejection:
                 "event_type": "LLM_CALL",
                 "sequence_number": 3,  # Already exists
                 "timestamp_monotonic": 3000,
-                "payload": {}
+                "payload": {},
             }
         ]
 
@@ -141,7 +139,7 @@ class TestDuplicateSequenceRejection:
             service.ingest_batch(
                 session_id_str=str(mock_session_with_events.session_id_str),
                 events=events,
-                seal=False
+                seal=False,
             )
 
         assert exc_info.value.code == "DUPLICATE_SEQUENCE"
@@ -159,27 +157,27 @@ class TestNonMonotonicSequenceRejection:
                 "event_type": "SESSION_START",
                 "sequence_number": 0,
                 "timestamp_monotonic": 1000,
-                "payload": {}
+                "payload": {},
             },
             {
                 "event_type": "LLM_CALL",
                 "sequence_number": 2,  # Skip 1
                 "timestamp_monotonic": 2000,
-                "payload": {}
+                "payload": {},
             },
             {
                 "event_type": "LLM_RESPONSE",
                 "sequence_number": 1,  # Out of order!
                 "timestamp_monotonic": 3000,
-                "payload": {}
-            }
+                "payload": {},
+            },
         ]
 
         with pytest.raises(StateConflictError) as exc_info:
             service.ingest_batch(
                 session_id_str=str(mock_session.session_id_str),
                 events=events,
-                seal=False
+                seal=False,
             )
 
         assert exc_info.value.code in ("NON_MONOTONIC_SEQUENCE", "SEQUENCE_GAP")
@@ -197,20 +195,18 @@ class TestSealWithSessionEnd:
                 "event_type": "SESSION_START",
                 "sequence_number": 0,
                 "timestamp_monotonic": 1000,
-                "payload": {}
+                "payload": {},
             },
             {
                 "event_type": "SESSION_END",
                 "sequence_number": 1,
                 "timestamp_monotonic": 2000,
-                "payload": {}
-            }
+                "payload": {},
+            },
         ]
 
         result = service.ingest_batch(
-            session_id_str=str(mock_session.session_id_str),
-            events=events,
-            seal=True
+            session_id_str=str(mock_session.session_id_str), events=events, seal=True
         )
 
         assert result.sealed is True
@@ -231,21 +227,21 @@ class TestSealWithoutSessionEnd:
                 "event_type": "SESSION_START",
                 "sequence_number": 0,
                 "timestamp_monotonic": 1000,
-                "payload": {}
+                "payload": {},
             },
             {
                 "event_type": "LLM_CALL",  # NOT SESSION_END
                 "sequence_number": 1,
                 "timestamp_monotonic": 2000,
-                "payload": {}
-            }
+                "payload": {},
+            },
         ]
 
         with pytest.raises(BadRequestError) as exc_info:
             service.ingest_batch(
                 session_id_str=str(mock_session.session_id_str),
                 events=events,
-                seal=True
+                seal=True,
             )
 
         assert exc_info.value.code == "INVALID_SEAL_REQUEST"
@@ -264,15 +260,13 @@ class TestSessionNotFound:
                 "event_type": "SESSION_START",
                 "sequence_number": 0,
                 "timestamp_monotonic": 1000,
-                "payload": {}
+                "payload": {},
             }
         ]
 
         with pytest.raises(BadRequestError) as exc_info:
             service.ingest_batch(
-                session_id_str="nonexistent-session-id",
-                events=events,
-                seal=False
+                session_id_str="nonexistent-session-id", events=events, seal=False
             )
 
         assert exc_info.value.code == "SESSION_NOT_FOUND"
@@ -281,6 +275,7 @@ class TestSessionNotFound:
 # =========================================================
 # PYTEST FIXTURES
 # =========================================================
+
 
 @pytest.fixture
 def mock_db():
@@ -293,7 +288,7 @@ def mock_db():
         session_id_str="test-session-123",
         chain_authority=ChainAuthority.SERVER,
         status=SessionStatus.ACTIVE,
-        total_drops=0
+        total_drops=0,
     )
 
     def side_effect(query_obj, *args, **kwargs):
@@ -313,35 +308,35 @@ def mock_db():
     db.query.return_value = db
     db.filter.return_value = db
     db.order_by.return_value = db
-    
+
     # scalars().all() -> empty list by default
     db.scalars.return_value.all.return_value = []
-    
+
     # execute().scalar_one_or_none() handles session lookup
     # But service.py uses .first() on query() chain usually
     # Let's mock first() to return different things
-    
+
     # Mock scalars for session lookup in service.append_events (uses with_for_update)
     # The real service calls: db.query(Session).filter(...).with_for_update().first()
-    
+
     # We need to ensure db.query returns 'db' (which is the mock) so method chaining works
     db.query.return_value = db
     db.filter.return_value = db
     db.with_for_update.return_value = db
     db.order_by.return_value = db
-    
+
     # Define what .first() returns based on context
     # This is tricky because .first() is called for Session AND EventChain checks
     # A simple approach: use the side_effect on .first() to return based on call history or global state
     # BUT easier: just assume for this mock fixture we primarily return the active session
-    
+
     def first_side_effect():
         # Check if we are looking for a session or event
         # This is a bit of a hack, but sufficient for basic tests
         return session
-        
+
     db.first.side_effect = first_side_effect
-    db.scalar_one_or_none.return_value = session 
+    db.scalar_one_or_none.return_value = session
 
     return db
 
@@ -354,7 +349,7 @@ def mock_session():
         session_id_str="test-session-123",
         chain_authority=ChainAuthority.SERVER,
         status=SessionStatus.ACTIVE,
-        total_drops=0
+        total_drops=0,
     )
 
 
@@ -367,7 +362,7 @@ def mock_sealed_session():
         chain_authority=ChainAuthority.SERVER,
         status=SessionStatus.SEALED,
         sealed_at=datetime.now(UTC),
-        total_drops=0
+        total_drops=0,
     )
 
 
@@ -379,7 +374,7 @@ def mock_session_with_events():
         session_id_str="session-with-events-789",
         chain_authority=ChainAuthority.SERVER,
         status=SessionStatus.ACTIVE,
-        total_drops=0
+        total_drops=0,
     )
 
 

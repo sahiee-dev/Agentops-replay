@@ -15,14 +15,17 @@ from app.database import Base
 class ChainSeal(Base):
     """
     CHAIN_SEAL metadata for server-sealed sessions.
-    
+
     Authority Gate: Only server authority sessions can have a seal.
     Idempotency: Unique constraint on session_id prevents duplicate seals.
     """
+
     __tablename__ = "chain_seals"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=False, unique=True, index=True)
+    session_id = Column(
+        Integer, ForeignKey("sessions.id"), nullable=False, unique=True, index=True
+    )
 
     # Required metadata per EVENT_LOG_SPEC.md v0.6
     ingestion_service_id = Column(String(100), nullable=False)  # e.g., "prod-ingest-01"
@@ -37,5 +40,5 @@ class ChainSeal(Base):
     session = relationship("Session", back_populates="chain_seal", uselist=False)
 
     __table_args__ = (
-        CheckConstraint('event_count > 0', name='seal_event_count_positive'),
+        CheckConstraint("event_count > 0", name="seal_event_count_positive"),
     )

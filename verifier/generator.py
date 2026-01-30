@@ -1,6 +1,7 @@
 """
 test_generator.py - Generates valid and invalid test vectors for agentops-verify.
 """
+
 import hashlib
 import json
 import sys
@@ -17,13 +18,21 @@ SIGNED_FIELDS = [
     "timestamp_wall",
     "event_type",
     "payload_hash",
-    "prev_event_hash"
+    "prev_event_hash",
 ]
 
-REQUIRED_SESSION_START = ["agent_id", "environment", "framework", "framework_version", "sdk_version"]
+REQUIRED_SESSION_START = [
+    "agent_id",
+    "environment",
+    "framework",
+    "framework_version",
+    "sdk_version",
+]
+
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
 
 def create_event(
     session_id: str,
@@ -34,8 +43,12 @@ def create_event(
     tamper: str | None = None,
 ) -> dict[str, Any]:
     # Python 3.14+ has uuid7, but MyPy doesn't know that yet
-    event_uuid = str(getattr(uuid, "uuid7")()) if sys.version_info >= (3, 14) and hasattr(uuid, "uuid7") else str(uuid.uuid4())
-    
+    event_uuid = (
+        str(uuid.uuid7())
+        if sys.version_info >= (3, 14) and hasattr(uuid, "uuid7")
+        else str(uuid.uuid4())
+    )
+
     event = {
         "event_id": event_uuid,
         "session_id": session_id,
@@ -46,11 +59,13 @@ def create_event(
         "source_sdk_ver": "test-gen-0.1",
         "schema_ver": SPEC_VERSION,
         "prev_event_hash": prev_hash,
-        "chain_authority": "server"
+        "chain_authority": "server",
     }
 
     # Canonicalize Payload
-    event["payload"] = payload # Store as object for JSON serialization later, but hash the bytes
+    event["payload"] = (
+        payload  # Store as object for JSON serialization later, but hash the bytes
+    )
     canonical_payload = jcs.canonicalize(payload)
     event["payload_hash"] = sha256(canonical_payload)
 
@@ -69,12 +84,13 @@ def create_event(
 
     return event
 
+
 def generate_valid_session():
     """
     Builds a complete valid session as a list of chained event dictionaries.
-    
+
     The session contains four events in order: SESSION_START, TOOL_CALL, SESSION_END, and CHAIN_SEAL. Each event includes canonicalized payload and computed hashes so that each event's prev_event_hash links to the previous event's event_hash. The CHAIN_SEAL event includes server-authority metadata compatible with spec v0.6 (final_event_hash, ingestion_service_id, seal_timestamp, session_digest).
-    
+
     Returns:
         list[dict]: A list of four event dictionaries representing a valid, internally linked session.
     """
@@ -83,40 +99,62 @@ def generate_valid_session():
     prev_hash = None
 
     # 1. Start
-    e1 = create_event(session_id, 0, None, "SESSION_START", {
-        "agent_id": "test-agent",
-        "environment": "dev",
-        "framework": "test-framework",
-        "framework_version": "1.0.0",
-        "sdk_version": "0.1.0",
-        "tags": ["verification-test"]
-    })
+    e1 = create_event(
+        session_id,
+        0,
+        None,
+        "SESSION_START",
+        {
+            "agent_id": "test-agent",
+            "environment": "dev",
+            "framework": "test-framework",
+            "framework_version": "1.0.0",
+            "sdk_version": "0.1.0",
+            "tags": ["verification-test"],
+        },
+    )
     events.append(e1)
     prev_hash = e1["event_hash"]
 
     # 2. Tool Call
-    e2 = create_event(session_id, 1, prev_hash, "TOOL_CALL", {"tool_name": "search", "args": {"q": "agentops"}})
+    e2 = create_event(
+        session_id,
+        1,
+        prev_hash,
+        "TOOL_CALL",
+        {"tool_name": "search", "args": {"q": "agentops"}},
+    )
     events.append(e2)
     prev_hash = e2["event_hash"]
 
     # 3. Session End
-    e3 = create_event(session_id, 2, prev_hash, "SESSION_END", {
-        "status": "success",
-        "duration_ms": 200
-    })
+    e3 = create_event(
+        session_id,
+        2,
+        prev_hash,
+        "SESSION_END",
+        {"status": "success", "duration_ms": 200},
+    )
     events.append(e3)
     prev_hash = e3["event_hash"]
 
     # 4. Seal with required server authority metadata (Spec v0.6)
-    e4 = create_event(session_id, 3, prev_hash, "CHAIN_SEAL", {
-        "final_event_hash": prev_hash,
-        "ingestion_service_id": "ingestion-svc-prod-001",
-        "seal_timestamp": "2023-10-27T10:00:02Z",
-        "session_digest": prev_hash[:16]  # Short digest for session summary
-    })
+    e4 = create_event(
+        session_id,
+        3,
+        prev_hash,
+        "CHAIN_SEAL",
+        {
+            "final_event_hash": prev_hash,
+            "ingestion_service_id": "ingestion-svc-prod-001",
+            "seal_timestamp": "2023-10-27T10:00:02Z",
+            "session_digest": prev_hash[:16],  # Short digest for session summary
+        },
+    )
     events.append(e4)
 
     return events
+
 
 def generate_tampered_payload_session() -> list[dict[str, Any]]:
     events = generate_valid_session()
@@ -127,6 +165,7 @@ def generate_tampered_payload_session() -> list[dict[str, Any]]:
     # Now payload_hash (calculated from "agentops") matches the old payload, but payload is "evil_query"
     return events
 
+
 def generate_tampered_chain_session() -> list[dict[str, Any]]:
     events = generate_valid_session()
     # Break chain: E2 prev_hash != E1 hash
@@ -134,6 +173,7 @@ def generate_tampered_chain_session() -> list[dict[str, Any]]:
     # Note: This invalidates E2's event_hash too if we don't re-sign.
     # But usually verifier checks previous_hash == prev_event.event_hash FIRST.
     return events
+
 
 def generate_sequence_gap_session() -> list[dict[str, Any]]:
     events = generate_valid_session()
@@ -144,14 +184,22 @@ def generate_sequence_gap_session() -> list[dict[str, Any]]:
     events[1]["event_hash"] = sha256(jcs.canonicalize(signed_obj))
     return events
 
+
 def write_jsonl(events: list[dict[str, Any]], filename: str) -> None:
-    with open(filename, 'w') as f:
+    with open(filename, "w") as f:
         for e in events:
-            f.write(json.dumps(e) + '\n')
+            f.write(json.dumps(e) + "\n")
+
 
 if __name__ == "__main__":
     write_jsonl(generate_valid_session(), "verifier/test_vectors/valid_session.jsonl")
-    write_jsonl(generate_tampered_payload_session(), "verifier/test_vectors/invalid_hash.jsonl")
-    write_jsonl(generate_tampered_chain_session(), "verifier/test_vectors/invalid_chain.jsonl")
-    write_jsonl(generate_sequence_gap_session(), "verifier/test_vectors/invalid_sequence.jsonl")
+    write_jsonl(
+        generate_tampered_payload_session(), "verifier/test_vectors/invalid_hash.jsonl"
+    )
+    write_jsonl(
+        generate_tampered_chain_session(), "verifier/test_vectors/invalid_chain.jsonl"
+    )
+    write_jsonl(
+        generate_sequence_gap_session(), "verifier/test_vectors/invalid_sequence.jsonl"
+    )
     print("Generated test vectors.")

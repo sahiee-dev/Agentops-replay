@@ -13,10 +13,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Health check route
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
 
 # Include v1 routers
 app.include_router(api_router, prefix="/api/v1")

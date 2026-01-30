@@ -15,8 +15,8 @@ import sys
 import pytest
 
 # Add paths
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../verifier'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../verifier"))
 
 import uuid
 from datetime import UTC, datetime
@@ -53,15 +53,17 @@ class TestConstitutionalGuarantees:
         session_id = ingest_service.start_session(authority="server")
 
         # Create event with WRONG hash (SDK lie)
-        events = [{
-            "sequence_number": 0,
-            "timestamp_wall": datetime.now(UTC).isoformat(),
-            "event_type": "TEST",
-            "payload": {"data": "test"},
-            # Intentionally wrong hashes (should be ignored)
-            "payload_hash": "WRONG_HASH",
-            "event_hash": "WRONG_HASH"
-        }]
+        events = [
+            {
+                "sequence_number": 0,
+                "timestamp_wall": datetime.now(UTC).isoformat(),
+                "event_type": "TEST",
+                "payload": {"data": "test"},
+                # Intentionally wrong hashes (should be ignored)
+                "payload_hash": "WRONG_HASH",
+                "event_hash": "WRONG_HASH",
+            }
+        ]
 
         # Server should accept and recompute
         result = ingest_service.append_events(session_id, events)
@@ -69,23 +71,22 @@ class TestConstitutionalGuarantees:
 
         # Verify server recomputed correct hash
         db = SessionLocal()
-        session = db.query(Session).filter(
-            Session.session_id_str == uuid.UUID(session_id)
-        ).first()
+        session = (
+            db.query(Session)
+            .filter(Session.session_id_str == uuid.UUID(session_id))
+            .first()
+        )
 
-        event = db.query(EventChain).filter(
-            EventChain.session_id == session.id
-        ).first()
+        event = db.query(EventChain).filter(EventChain.session_id == session.id).first()
 
         # Hash should be correct, not "WRONG_HASH"
         assert event.payload_hash != "WRONG_HASH"
         assert len(event.payload_hash) == 64  # Valid SHA-256
 
         # Verify using verifier_core
-        assert verifier_core.verify_payload_hash({
-            "payload": event.payload_jsonb,
-            "payload_hash": event.payload_hash
-        })
+        assert verifier_core.verify_payload_hash(
+            {"payload": event.payload_jsonb, "payload_hash": event.payload_hash}
+        )
 
         db.close()
 
@@ -96,21 +97,25 @@ class TestConstitutionalGuarantees:
         session_id = ingest_service.start_session(authority="server")
 
         # First event (seq 0)
-        events = [{
-            "sequence_number": 0,
-            "timestamp_wall": datetime.now(UTC).isoformat(),
-            "event_type": "TEST",
-            "payload": {"data": "event0"}
-        }]
+        events = [
+            {
+                "sequence_number": 0,
+                "timestamp_wall": datetime.now(UTC).isoformat(),
+                "event_type": "TEST",
+                "payload": {"data": "event0"},
+            }
+        ]
         ingest_service.append_events(session_id, events)
 
         # Gap: Jump to seq 5 (missing 1-4)
-        events = [{
-            "sequence_number": 5,
-            "timestamp_wall": datetime.now(UTC).isoformat(),
-            "event_type": "TEST",
-            "payload": {"data": "event5"}
-        }]
+        events = [
+            {
+                "sequence_number": 5,
+                "timestamp_wall": datetime.now(UTC).isoformat(),
+                "event_type": "TEST",
+                "payload": {"data": "event5"},
+            }
+        ]
 
         # MUST reject
         with pytest.raises(SequenceViolation) as exc_info:
@@ -120,17 +125,22 @@ class TestConstitutionalGuarantees:
 
         # Verify LOG_DROP was emitted
         db = SessionLocal()
-        session = db.query(Session).filter(
-            Session.session_id_str == uuid.UUID(session_id)
-        ).first()
+        session = (
+            db.query(Session)
+            .filter(Session.session_id_str == uuid.UUID(session_id))
+            .first()
+        )
 
         assert session.total_drops > 0
 
         # Verify LOG_DROP event exists with sequence range
-        log_drop = db.query(EventChain).filter(
-            EventChain.session_id == session.id,
-            EventChain.event_type == "LOG_DROP"
-        ).first()
+        log_drop = (
+            db.query(EventChain)
+            .filter(
+                EventChain.session_id == session.id, EventChain.event_type == "LOG_DROP"
+            )
+            .first()
+        )
 
         assert log_drop is not None
         assert log_drop.payload_jsonb["first_missing_sequence"] == 1
@@ -145,12 +155,14 @@ class TestConstitutionalGuarantees:
         session_id = ingest_service.start_session(authority="server")
 
         # Add some events but NO SESSION_END
-        events = [{
-            "sequence_number": 0,
-            "timestamp_wall": datetime.now(UTC).isoformat(),
-            "event_type": "TEST",
-            "payload": {"data": "test"}
-        }]
+        events = [
+            {
+                "sequence_number": 0,
+                "timestamp_wall": datetime.now(UTC).isoformat(),
+                "event_type": "TEST",
+                "payload": {"data": "test"},
+            }
+        ]
         ingest_service.append_events(session_id, events)
 
         # Attempt to seal WITHOUT SESSION_END
@@ -173,14 +185,14 @@ class TestConstitutionalGuarantees:
                 "sequence_number": 0,
                 "timestamp_wall": datetime.now(UTC).isoformat(),
                 "event_type": "SESSION_START",
-                "payload": {}
+                "payload": {},
             },
             {
                 "sequence_number": 1,
                 "timestamp_wall": datetime.now(UTC).isoformat(),
                 "event_type": "SESSION_END",
-                "payload": {}
-            }
+                "payload": {},
+            },
         ]
         ingest_service.append_events(session_id, events)
 
@@ -196,10 +208,7 @@ class TestConstitutionalGuarantees:
         """
         # Test AUTHORITATIVE path (all conditions met)
         result = verifier_core.classify_evidence(
-            authority="server",
-            sealed=True,
-            complete=True,
-            has_drops=False
+            authority="server", sealed=True, complete=True, has_drops=False
         )
         assert result == "AUTHORITATIVE_EVIDENCE"
 
@@ -207,37 +216,25 @@ class TestConstitutionalGuarantees:
 
         # SDK authority
         result = verifier_core.classify_evidence(
-            authority="sdk",
-            sealed=True,
-            complete=True,
-            has_drops=False
+            authority="sdk", sealed=True, complete=True, has_drops=False
         )
         assert result == "NON_AUTHORITATIVE_EVIDENCE"
 
         # Server but not sealed
         result = verifier_core.classify_evidence(
-            authority="server",
-            sealed=False,
-            complete=True,
-            has_drops=False
+            authority="server", sealed=False, complete=True, has_drops=False
         )
         assert result == "NON_AUTHORITATIVE_EVIDENCE"
 
         # Server but has drops
         result = verifier_core.classify_evidence(
-            authority="server",
-            sealed=True,
-            complete=True,
-            has_drops=True
+            authority="server", sealed=True, complete=True, has_drops=True
         )
         assert result == "NON_AUTHORITATIVE_EVIDENCE"
 
         # Server but incomplete
         result = verifier_core.classify_evidence(
-            authority="server",
-            sealed=True,
-            complete=False,
-            has_drops=False
+            authority="server", sealed=True, complete=False, has_drops=False
         )
         assert result == "NON_AUTHORITATIVE_EVIDENCE"
 
@@ -248,12 +245,14 @@ class TestConstitutionalGuarantees:
         session_id = ingest_service.start_session(authority="server")
 
         # Add SESSION_END
-        events = [{
-            "sequence_number": 0,
-            "timestamp_wall": datetime.now(UTC).isoformat(),
-            "event_type": "SESSION_END",
-            "payload": {}
-        }]
+        events = [
+            {
+                "sequence_number": 0,
+                "timestamp_wall": datetime.now(UTC).isoformat(),
+                "event_type": "SESSION_END",
+                "payload": {},
+            }
+        ]
         ingest_service.append_events(session_id, events)
 
         # First seal
@@ -276,9 +275,7 @@ class TestEndToEndFlow:
         """
         # 1. Start server authority session
         session_id = ingest_service.start_session(
-            authority="server",
-            agent_name="test-agent",
-            user_id=None
+            authority="server", agent_name="test-agent", user_id=None
         )
 
         # 2. Append events with perfect sequence
@@ -287,20 +284,20 @@ class TestEndToEndFlow:
                 "sequence_number": 0,
                 "timestamp_wall": datetime.now(UTC).isoformat(),
                 "event_type": "TOOL_CALL",
-                "payload": {"tool": "search", "query": "test"}
+                "payload": {"tool": "search", "query": "test"},
             },
             {
                 "sequence_number": 1,
                 "timestamp_wall": datetime.now(UTC).isoformat(),
                 "event_type": "TOOL_RESULT",
-                "payload": {"result": "data"}
+                "payload": {"result": "data"},
             },
             {
                 "sequence_number": 2,
                 "timestamp_wall": datetime.now(UTC).isoformat(),
                 "event_type": "SESSION_END",
-                "payload": {"status": "SUCCESS"}
-            }
+                "payload": {"status": "SUCCESS"},
+            },
         ]
 
         result = ingest_service.append_events(session_id, events)
@@ -314,9 +311,11 @@ class TestEndToEndFlow:
 
         # 4. Verify session achieves AUTHORITATIVE_EVIDENCE
         db = SessionLocal()
-        session = db.query(Session).filter(
-            Session.session_id_str == uuid.UUID(session_id)
-        ).first()
+        session = (
+            db.query(Session)
+            .filter(Session.session_id_str == uuid.UUID(session_id))
+            .first()
+        )
 
         # Check all conditions
         assert session.chain_authority == ChainAuthority.SERVER
@@ -324,24 +323,24 @@ class TestEndToEndFlow:
         assert session.total_drops == 0
 
         # Has seal
-        seal = db.query(ChainSeal).filter(
-            ChainSeal.session_id == session.id
-        ).first()
+        seal = db.query(ChainSeal).filter(ChainSeal.session_id == session.id).first()
         assert seal is not None
 
         # Has SESSION_END
-        has_end = db.query(EventChain).filter(
-            EventChain.session_id == session.id,
-            EventChain.event_type == "SESSION_END"
-        ).count() > 0
+        has_end = (
+            db.query(EventChain)
+            .filter(
+                EventChain.session_id == session.id,
+                EventChain.event_type == "SESSION_END",
+            )
+            .count()
+            > 0
+        )
         assert has_end
 
         # Classify evidence
         evidence_class = verifier_core.classify_evidence(
-            authority="server",
-            sealed=True,
-            complete=True,
-            has_drops=False
+            authority="server", sealed=True, complete=True, has_drops=False
         )
         assert evidence_class == "AUTHORITATIVE_EVIDENCE"
 

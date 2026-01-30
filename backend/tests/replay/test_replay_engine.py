@@ -15,8 +15,10 @@ import sys
 import pytest
 
 # Add paths
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'app'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'verifier'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "app"))
+sys.path.insert(
+    0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "verifier")
+)
 
 from app.replay.engine import build_replay, get_frame_at_sequence, load_verified_session
 from app.replay.frames import FrameType, VerificationStatus
@@ -29,11 +31,31 @@ class TestGapDetection:
     def test_gap_detected_in_replay(self):
         """ADVERSARIAL: Gaps must be explicit, not smoothed."""
         events = [
-            {"sequence_number": 0, "event_type": "SESSION_START", "event_hash": "abc", "payload": {}},
-            {"sequence_number": 1, "event_type": "LLM_CALL", "event_hash": "def", "payload": {}},
+            {
+                "sequence_number": 0,
+                "event_type": "SESSION_START",
+                "event_hash": "abc",
+                "payload": {},
+            },
+            {
+                "sequence_number": 1,
+                "event_type": "LLM_CALL",
+                "event_hash": "def",
+                "payload": {},
+            },
             # Gap: 2, 3, 4 missing
-            {"sequence_number": 5, "event_type": "LLM_RESPONSE", "event_hash": "ghi", "payload": {}},
-            {"sequence_number": 6, "event_type": "SESSION_END", "event_hash": "jkl", "payload": {}},
+            {
+                "sequence_number": 5,
+                "event_type": "LLM_RESPONSE",
+                "event_hash": "ghi",
+                "payload": {},
+            },
+            {
+                "sequence_number": 6,
+                "event_type": "SESSION_END",
+                "event_hash": "jkl",
+                "payload": {},
+            },
         ]
 
         chain, failure = load_verified_session("test-session", events, None)
@@ -50,15 +72,32 @@ class TestGapDetection:
         assert gap.gap_end == 4, "Gap should end at sequence 4"
 
         # Verify warning exists
-        gap_warnings = [w for w in replay.warnings if w.code == WarningCode.SEQUENCE_GAP]
+        gap_warnings = [
+            w for w in replay.warnings if w.code == WarningCode.SEQUENCE_GAP
+        ]
         assert len(gap_warnings) == 1, "Should have gap warning"
 
     def test_no_gap_for_contiguous(self):
         """No GAP frames for contiguous sequences."""
         events = [
-            {"sequence_number": 0, "event_type": "SESSION_START", "event_hash": "a", "payload": {}},
-            {"sequence_number": 1, "event_type": "LLM_CALL", "event_hash": "b", "payload": {}},
-            {"sequence_number": 2, "event_type": "SESSION_END", "event_hash": "c", "payload": {}},
+            {
+                "sequence_number": 0,
+                "event_type": "SESSION_START",
+                "event_hash": "a",
+                "payload": {},
+            },
+            {
+                "sequence_number": 1,
+                "event_type": "LLM_CALL",
+                "event_hash": "b",
+                "payload": {},
+            },
+            {
+                "sequence_number": 2,
+                "event_type": "SESSION_END",
+                "event_hash": "c",
+                "payload": {},
+            },
         ]
 
         chain, _ = load_verified_session("test", events, None)
@@ -74,15 +113,30 @@ class TestLogDropRendering:
     def test_log_drop_creates_frame_and_warning(self):
         """LOG_DROP events become LOG_DROP frames with warnings."""
         events = [
-            {"sequence_number": 0, "event_type": "SESSION_START", "event_hash": "a", "payload": {}},
-            {"sequence_number": 1, "event_type": "LLM_CALL", "event_hash": "b", "payload": {}},
+            {
+                "sequence_number": 0,
+                "event_type": "SESSION_START",
+                "event_hash": "a",
+                "payload": {},
+            },
+            {
+                "sequence_number": 1,
+                "event_type": "LLM_CALL",
+                "event_hash": "b",
+                "payload": {},
+            },
             {
                 "sequence_number": 2,
                 "event_type": "LOG_DROP",
                 "event_hash": "c",
-                "payload": {"dropped_count": 5, "reason": "BUFFER_FULL"}
+                "payload": {"dropped_count": 5, "reason": "BUFFER_FULL"},
             },
-            {"sequence_number": 3, "event_type": "SESSION_END", "event_hash": "d", "payload": {}},
+            {
+                "sequence_number": 3,
+                "event_type": "SESSION_END",
+                "event_hash": "d",
+                "payload": {},
+            },
         ]
 
         chain, _ = load_verified_session("test", events, None)
@@ -97,7 +151,9 @@ class TestLogDropRendering:
         assert drop.drop_reason == "BUFFER_FULL"
 
         # Check warning
-        drop_warnings = [w for w in replay.warnings if w.code == WarningCode.EVENTS_DROPPED]
+        drop_warnings = [
+            w for w in replay.warnings if w.code == WarningCode.EVENTS_DROPPED
+        ]
         assert len(drop_warnings) == 1
         assert "5" in drop_warnings[0].message
 
@@ -111,9 +167,24 @@ class TestDeterminism:
     def test_same_input_same_output(self):
         """CRITICAL: Same events must produce identical replay."""
         events = [
-            {"sequence_number": 0, "event_type": "SESSION_START", "event_hash": "a", "payload": {"x": 1}},
-            {"sequence_number": 1, "event_type": "LLM_CALL", "event_hash": "b", "payload": {"prompt": "hello"}},
-            {"sequence_number": 2, "event_type": "SESSION_END", "event_hash": "c", "payload": {}},
+            {
+                "sequence_number": 0,
+                "event_type": "SESSION_START",
+                "event_hash": "a",
+                "payload": {"x": 1},
+            },
+            {
+                "sequence_number": 1,
+                "event_type": "LLM_CALL",
+                "event_hash": "b",
+                "payload": {"prompt": "hello"},
+            },
+            {
+                "sequence_number": 2,
+                "event_type": "SESSION_END",
+                "event_hash": "c",
+                "payload": {},
+            },
         ]
 
         # Run twice
@@ -139,7 +210,11 @@ class TestVerificationFailure:
     def test_missing_sequence_fails(self):
         """Events missing sequence_number must fail verification."""
         events = [
-            {"event_type": "SESSION_START", "event_hash": "a", "payload": {}},  # No sequence!
+            {
+                "event_type": "SESSION_START",
+                "event_hash": "a",
+                "payload": {},
+            },  # No sequence!
         ]
 
         chain, failure = load_verified_session("test", events, None)
@@ -152,9 +227,24 @@ class TestVerificationFailure:
     def test_non_monotonic_fails(self):
         """Non-monotonic sequences must fail verification."""
         events = [
-            {"sequence_number": 0, "event_type": "START", "event_hash": "a", "payload": {}},
-            {"sequence_number": 3, "event_type": "CALL", "event_hash": "b", "payload": {}},
-            {"sequence_number": 2, "event_type": "END", "event_hash": "c", "payload": {}},  # Out of order!
+            {
+                "sequence_number": 0,
+                "event_type": "START",
+                "event_hash": "a",
+                "payload": {},
+            },
+            {
+                "sequence_number": 3,
+                "event_type": "CALL",
+                "event_hash": "b",
+                "payload": {},
+            },
+            {
+                "sequence_number": 2,
+                "event_type": "END",
+                "event_hash": "c",
+                "payload": {},
+            },  # Out of order!
         ]
 
         chain, failure = load_verified_session("test", events, None)
@@ -171,8 +261,18 @@ class TestAntiInference:
     def test_no_synthetic_events_in_gap(self):
         """ADVERSARIAL: Gaps must NOT be filled with inferred events."""
         events = [
-            {"sequence_number": 0, "event_type": "START", "event_hash": "a", "payload": {}},
-            {"sequence_number": 10, "event_type": "END", "event_hash": "b", "payload": {}},
+            {
+                "sequence_number": 0,
+                "event_type": "START",
+                "event_hash": "a",
+                "payload": {},
+            },
+            {
+                "sequence_number": 10,
+                "event_type": "END",
+                "event_hash": "b",
+                "payload": {},
+            },
         ]
 
         chain, _ = load_verified_session("test", events, None)
@@ -182,7 +282,9 @@ class TestAntiInference:
         event_frames = [f for f in replay.frames if f.frame_type == FrameType.EVENT]
 
         # Should be exactly 2 (the originals), NOT 11 (with inferred events)
-        assert len(event_frames) == 2, f"Got {len(event_frames)} event frames, expected 2"
+        assert len(event_frames) == 2, (
+            f"Got {len(event_frames)} event frames, expected 2"
+        )
 
         # GAP frame should exist
         gap_frames = [f for f in replay.frames if f.frame_type == FrameType.GAP]
@@ -194,20 +296,42 @@ class TestAntiInference:
         """Events must appear in sequence order, not reordered for UX."""
         # Events with out-of-order timestamps but correct sequences
         events = [
-            {"sequence_number": 0, "event_type": "START", "event_hash": "a", "payload": {}, "timestamp": "2026-01-29T12:00:00Z"},
-            {"sequence_number": 1, "event_type": "CALL", "event_hash": "b", "payload": {}, "timestamp": "2026-01-29T11:00:00Z"},  # Earlier!
-            {"sequence_number": 2, "event_type": "END", "event_hash": "c", "payload": {}, "timestamp": "2026-01-29T13:00:00Z"},
+            {
+                "sequence_number": 0,
+                "event_type": "START",
+                "event_hash": "a",
+                "payload": {},
+                "timestamp": "2026-01-29T12:00:00Z",
+            },
+            {
+                "sequence_number": 1,
+                "event_type": "CALL",
+                "event_hash": "b",
+                "payload": {},
+                "timestamp": "2026-01-29T11:00:00Z",
+            },  # Earlier!
+            {
+                "sequence_number": 2,
+                "event_type": "END",
+                "event_hash": "c",
+                "payload": {},
+                "timestamp": "2026-01-29T13:00:00Z",
+            },
         ]
 
         chain, _ = load_verified_session("test", events, None)
         replay = build_replay(chain)
 
         # Frames should be in SEQUENCE order, not timestamp order
-        sequences = [f.sequence_number for f in replay.frames if f.sequence_number is not None]
+        sequences = [
+            f.sequence_number for f in replay.frames if f.sequence_number is not None
+        ]
         assert sequences == [0, 1, 2], "Frames must be in sequence order"
 
         # Should have timestamp anomaly warning
-        anomaly_warnings = [w for w in replay.warnings if w.code == WarningCode.TIMESTAMP_ANOMALY]
+        anomaly_warnings = [
+            w for w in replay.warnings if w.code == WarningCode.TIMESTAMP_ANOMALY
+        ]
         assert len(anomaly_warnings) == 1
 
 
@@ -217,8 +341,18 @@ class TestFrameAtSequence:
     def test_returns_gap_for_missing(self):
         """Missing sequence returns GAP frame."""
         events = [
-            {"sequence_number": 0, "event_type": "START", "event_hash": "a", "payload": {}},
-            {"sequence_number": 5, "event_type": "END", "event_hash": "b", "payload": {}},
+            {
+                "sequence_number": 0,
+                "event_type": "START",
+                "event_hash": "a",
+                "payload": {},
+            },
+            {
+                "sequence_number": 5,
+                "event_type": "END",
+                "event_hash": "b",
+                "payload": {},
+            },
         ]
 
         chain, _ = load_verified_session("test", events, None)
@@ -234,8 +368,18 @@ class TestFrameAtSequence:
     def test_returns_event_for_existing(self):
         """Existing sequence returns EVENT frame."""
         events = [
-            {"sequence_number": 0, "event_type": "START", "event_hash": "a", "payload": {"x": 1}},
-            {"sequence_number": 1, "event_type": "END", "event_hash": "b", "payload": {}},
+            {
+                "sequence_number": 0,
+                "event_type": "START",
+                "event_hash": "a",
+                "payload": {"x": 1},
+            },
+            {
+                "sequence_number": 1,
+                "event_type": "END",
+                "event_hash": "b",
+                "payload": {},
+            },
         ]
 
         chain, _ = load_verified_session("test", events, None)

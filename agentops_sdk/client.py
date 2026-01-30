@@ -1,6 +1,7 @@
 """
 agentops_sdk/client.py - Main SDK Entry Point
 """
+
 import hashlib
 import os
 import sys
@@ -10,7 +11,9 @@ from .buffer import EventBuffer
 from .envelope import create_proposal
 from .events import EventType, validate_payload
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'verifier')))
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "verifier"))
+)
 import uuid
 
 import jcs
@@ -36,10 +39,10 @@ class AgentOpsClient:
         payload = {
             "agent_id": agent_id,
             "tags": tags or [],
-            "environment": "dev", # Default, should be config
+            "environment": "dev",  # Default, should be config
             "framework": "python-sdk-raw",
             "framework_version": "0.0.1",
-            "sdk_version": "0.1.0"
+            "sdk_version": "0.1.0",
         }
         self.record(EventType.SESSION_START, payload)
 
@@ -53,10 +56,7 @@ class AgentOpsClient:
         # 2. Check for Drop Injection
         dropped = self.buffer.dropped_count  # Read but don't reset yet
         if dropped > 0:
-            drop_payload = {
-                "dropped_events": dropped,
-                "reason": "buffer_overflow"
-            }
+            drop_payload = {"dropped_events": dropped, "reason": "buffer_overflow"}
             try:
                 self._emit_proposal(EventType.LOG_DROP, drop_payload)
                 # Only reset after successful emission
@@ -76,7 +76,7 @@ class AgentOpsClient:
             event_type=event_type,
             payload=payload,
             prev_hash=self.prev_hash,
-            local_authority=self.local_authority
+            local_authority=self.local_authority,
         )
 
         # Update State
@@ -94,7 +94,7 @@ class AgentOpsClient:
                 "timestamp_wall": proposal.timestamp_wall,
                 "event_type": proposal.event_type,
                 "payload_hash": proposal.payload_hash,
-                "prev_event_hash": proposal.prev_event_hash
+                "prev_event_hash": proposal.prev_event_hash,
             }
             canonical_env = jcs.canonicalize(signed_obj)
             self.prev_hash = hashlib.sha256(canonical_env).hexdigest()
@@ -102,12 +102,16 @@ class AgentOpsClient:
         self.buffer.append(proposal)
 
     def end_session(self, status: str, duration_ms: int):
-        self.record(EventType.SESSION_END, {"status": status, "duration_ms": duration_ms})
+        self.record(
+            EventType.SESSION_END, {"status": status, "duration_ms": duration_ms}
+        )
 
         if self.local_authority and self.prev_hash is not None:
             # Emit CHAIN_SEAL only if we have a valid prev_hash
             validate_payload(EventType.CHAIN_SEAL, {"final_event_hash": self.prev_hash})
-            self._emit_proposal(EventType.CHAIN_SEAL, {"final_event_hash": self.prev_hash})
+            self._emit_proposal(
+                EventType.CHAIN_SEAL, {"final_event_hash": self.prev_hash}
+            )
 
     def flush_to_jsonl(self, filename: str):
         """Helper for local testing"""
@@ -116,6 +120,7 @@ class AgentOpsClient:
         # In Remote mode, these are proposals.
 
         import json
-        with open(filename, 'w') as f:
+
+        with open(filename, "w") as f:
             for e in events:
-                f.write(json.dumps(e.to_dict()) + '\n')
+                f.write(json.dumps(e.to_dict()) + "\n")

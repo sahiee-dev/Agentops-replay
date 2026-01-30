@@ -1,5 +1,6 @@
 # demo-agents/test-samples/conversational_08.py
 
+
 class Agent:
     def __init__(self, name="Agent08"):
         self.name = name
@@ -7,6 +8,7 @@ class Agent:
     def get_response(self, user_input):
         words = user_input.split()
         return f"{self.name}: Your input has {len(words)} words."
+
 
 if __name__ == "__main__":
     agent = Agent()

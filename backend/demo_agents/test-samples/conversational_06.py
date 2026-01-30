@@ -1,5 +1,6 @@
 # demo-agents/test-samples/conversational_06.py
 
+
 class Agent:
     def __init__(self, name="Agent06"):
         self.name = name
@@ -8,6 +9,7 @@ class Agent:
         if "?" in user_input:
             return f"{self.name}: That's an interesting question about '{user_input}'."
         return f"{self.name}: You said '{user_input}'."
+
 
 if __name__ == "__main__":
     agent = Agent()

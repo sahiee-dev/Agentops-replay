@@ -6,11 +6,13 @@ import sys
 import pytest
 
 # Add paths
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../verifier'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../verifier"))
 
 # Set test database URL
-os.environ["DATABASE_URL"] = "postgresql://postgres:postgres@localhost:5432/agentops_test"
+os.environ["DATABASE_URL"] = (
+    "postgresql://postgres:postgres@localhost:5432/agentops_test"
+)
 
 from app.database import Base, engine
 

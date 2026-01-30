@@ -20,6 +20,7 @@ class VerificationStatus(Enum):
     Verification status of a session chain.
     REQUIRED: Must be enum, not free string. Enums enforce invariant boundaries.
     """
+
     VALID = "VALID"
     INVALID = "INVALID"
 
@@ -27,16 +28,17 @@ class VerificationStatus(Enum):
 class FrameType(Enum):
     """
     Types of frames in a replay.
-    
+
     Each frame type has exactly one origin:
     - EVENT: A recorded event from the chain
     - GAP: A detected missing sequence range
     - LOG_DROP: An explicit drop marker from the chain
     - REDACTION: A redacted content notice from the chain
     """
-    EVENT = "EVENT"           # Normal recorded event
-    GAP = "GAP"              # Missing sequence range
-    LOG_DROP = "LOG_DROP"    # Explicit drop marker
+
+    EVENT = "EVENT"  # Normal recorded event
+    GAP = "GAP"  # Missing sequence range
+    LOG_DROP = "LOG_DROP"  # Explicit drop marker
     REDACTION = "REDACTION"  # Redacted content notice
 
 
@@ -44,13 +46,14 @@ class FrameType(Enum):
 class ReplayFrame:
     """
     A single frame in a replay timeline.
-    
+
     INVARIANT: Every frame must have exactly one traceable origin.
     - EVENT frames come from recorded events
     - GAP frames come from detected sequence absences
     - LOG_DROP frames come from recorded LOG_DROP events
     - REDACTION frames come from recorded events with [REDACTED] fields
     """
+
     frame_type: FrameType
 
     # Position (required for all frames)
@@ -65,7 +68,7 @@ class ReplayFrame:
 
     # For GAP frames - detected structural absence
     gap_start: int | None = None  # First missing sequence
-    gap_end: int | None = None    # Last missing sequence
+    gap_end: int | None = None  # Last missing sequence
 
     # For LOG_DROP frames - from recorded LOG_DROP
     dropped_count: int | None = None
@@ -78,7 +81,7 @@ class ReplayFrame:
     def validate_single_origin(self) -> bool:
         """
         Validate that this frame has exactly one origin.
-        
+
         INVARIANT: Exactly one origin group must be populated.
         Returns False if more than one group is present.
         """
@@ -89,7 +92,9 @@ class ReplayFrame:
         redaction_present = self.redaction_hash is not None
 
         # Count how many origin groups are present
-        origin_count = sum([event_present, gap_present, log_drop_present, redaction_present])
+        origin_count = sum(
+            [event_present, gap_present, log_drop_present, redaction_present]
+        )
 
         # Exactly one origin must be present
         if origin_count != 1:

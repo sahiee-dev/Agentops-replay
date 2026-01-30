@@ -1,5 +1,6 @@
 # demo-agents/test-samples/analytical_06.py
 
+
 class Agent:
     def __init__(self, name="Analytical06"):
         self.name = name
@@ -7,6 +8,7 @@ class Agent:
     def analyze(self, data):
         evens = [x for x in data if x % 2 == 0]
         return f"{self.name}: Even numbers = {evens}"
+
 
 if __name__ == "__main__":
     agent = Agent()

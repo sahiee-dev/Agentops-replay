@@ -15,6 +15,7 @@ from app.api.v1.endpoints import ingestion as batch_ingestion
 # Import event_generation only if the file exists
 try:
     from app.api.v1.endpoints import event_generation
+
     HAS_EVENT_GENERATION = True
 except ImportError:
     HAS_EVENT_GENERATION = False
@@ -24,7 +25,9 @@ router = APIRouter()
 
 # Constitutional ingestion endpoints (Day 4)
 router.include_router(ingestion_sessions.router, prefix="/ingest", tags=["ingestion"])
-router.include_router(batch_ingestion.router, prefix="/ingest/batch", tags=["ingestion"])
+router.include_router(
+    batch_ingestion.router, prefix="/ingest/batch", tags=["ingestion"]
+)
 router.include_router(verify.router, prefix="/verify", tags=["verification"])
 router.include_router(export_endpoints.router, prefix="/export", tags=["export"])
 
@@ -37,5 +40,6 @@ router.include_router(live_agent.router, prefix="/live-agent", tags=["live-agent
 
 # Include event generation if available
 if HAS_EVENT_GENERATION:
-    router.include_router(event_generation.router, prefix="/event-generation", tags=["event-generation"])
-
+    router.include_router(
+        event_generation.router, prefix="/event-generation", tags=["event-generation"]
+    )

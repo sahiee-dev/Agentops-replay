@@ -8,9 +8,9 @@ from .hasher import ChainResult, RejectionReason, recompute_chain
 from .sealer import SealResult, seal_chain
 
 __all__ = [
-    'ChainResult',
-    'RejectionReason',
-    'SealResult',
-    'recompute_chain',
-    'seal_chain',
+    "ChainResult",
+    "RejectionReason",
+    "SealResult",
+    "recompute_chain",
+    "seal_chain",
 ]
