@@ -321,10 +321,6 @@ def mock_db():
     # But service.py uses .first() on query() chain usually
     # Let's mock first() to return different things
     
-    original_first = db.first
-    # Wire up the side effect to the query chain
-    db.query.side_effect = side_effect
-
     # Mock scalars for session lookup in service.append_events (uses with_for_update)
     # The real service calls: db.query(Session).filter(...).with_for_update().first()
     
