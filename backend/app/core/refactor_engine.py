@@ -1,11 +1,11 @@
 # backend/app/core/refactor_engine.py
 
-from radon.complexity import cc_visit
-from radon.metrics import mi_visit
-from sentence_transformers import SentenceTransformer, util
-import ast, astor
+import ast
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
+from sentence_transformers import SentenceTransformer, util
+
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
 
 class HybridRefactor:
     def __init__(self):
@@ -17,7 +17,7 @@ class HybridRefactor:
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef) and node.name == "foo":
                     node.name = "optimized_foo"
-            return astor.to_source(tree)
+            return ast.unparse(tree)
         except Exception:
             return code
 

@@ -1,21 +1,18 @@
 """
 agentops_sdk/buffer.py - RingBuffer with LOG_DROP support
 """
-from typing import List, Optional
-from .events import EventType, SCHEMA_VER
-from .envelope import ProposedEvent, create_proposal
-from .jcs import canonicalize
-import uuid
-import datetime
+
+from .envelope import ProposedEvent
+
 
 class EventBuffer:
     def __init__(self, capacity: int = 1000):
         self.capacity = capacity
-        # We use a simple list + truncation for v0.1. 
-        self.queue: List[ProposedEvent] = []
+        # We use a simple list + truncation for v0.1.
+        self.queue: list[ProposedEvent] = []
         self.dropped_count: int = 0
-        self.session_id: Optional[str] = None
-        
+        self.session_id: str | None = None
+
     def set_session(self, session_id: str):
         self.session_id = session_id
 
@@ -25,14 +22,14 @@ class EventBuffer:
             # Client responsibility to check dropped_count and emit LOG_DROP.
             self.dropped_count += 1
             return
-            
+
         self.queue.append(event)
-        
-    def flush(self) -> List[ProposedEvent]:
+
+    def flush(self) -> list[ProposedEvent]:
         # Note: We do NOT inject LOG_DROP here because we lack the sequence number context.
         # The Client (AgentOpsClient) is responsible for checking get_dropped_count()
         # and emitting a LOG_DROP event (with correct sequence) before recording new events.
-        
+
         batch = list(self.queue)
         self.queue.clear()
         return batch

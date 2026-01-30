@@ -1,14 +1,16 @@
-from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool
-from alembic import context
 import os
 import sys
+from logging.config import fileConfig
+
+from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # Add the parent directory to the path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from app.database import Base
 from app.models import *
+
 target_metadata = Base.metadata
 from app.config import settings
 
@@ -19,8 +21,10 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+
 def get_url():
     return f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
+
 
 def run_migrations_offline() -> None:
     url = get_url()
@@ -34,6 +38,7 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
+
 def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section)
     configuration["sqlalchemy.url"] = get_url()
@@ -44,12 +49,11 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()
+
 
 if context.is_offline_mode():
     run_migrations_offline()

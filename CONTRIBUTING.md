@@ -26,6 +26,22 @@ python3 --version  # Must be 3.11+
 python3 verifier/agentops_verify.py verifier/test_vectors/valid_session.jsonl
 ```
 
+## Quality Gate Contract
+
+> **A PR is invalid if:**
+>
+> - Ruff fails (`ruff check .`)
+> - MyPy strict fails (`mypy .`)
+> - Coverage < 90% (`pytest --cov-fail-under=90`)
+> - Verifier output changes without spec update
+> - `# type: ignore` added without inline justification
+
+**Python Version**: 3.11 is canonical. See `.python-version`. CI is the source of truth.
+
+**Tool Versions**: Pinned in `pyproject.toml [project.optional-dependencies.dev]`. Do not upgrade without testing.
+
+**Do not relax the gates to make CI green. Make the code earn the green.**
+
 ## Contribution Areas
 
 ### 1. Verifier Improvements

@@ -1,7 +1,7 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional
-from datetime import datetime
 
 from app.database import get_db
 from app.models.event import Event
@@ -9,20 +9,22 @@ from app.schemas.event import EventCreate, EventRead
 
 router = APIRouter()
 
-@router.get("/", response_model=List[EventRead])
+
+@router.get("/", response_model=list[EventRead])
 def list_events(
-    session_id: Optional[int] = Query(None),
-    event_type: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    session_id: int | None = Query(None),
+    event_type: str | None = Query(None),
+    db: Session = Depends(get_db),
 ):
     query = db.query(Event)
-    
-    if session_id:
+
+    if session_id is not None:
         query = query.filter(Event.session_id == session_id)
     if event_type:
         query = query.filter(Event.event_type == event_type)
-    
+
     return query.order_by(Event.timestamp.desc()).all()
+
 
 @router.post("/", response_model=EventRead)
 def create_event(event: EventCreate, db: Session = Depends(get_db)):
@@ -33,12 +35,13 @@ def create_event(event: EventCreate, db: Session = Depends(get_db)):
         tool_name=event.tool_name,
         flags=event.flags,
         sequence_number=event.sequence_number,
-        timestamp=datetime.utcnow()  # Set timestamp automatically
+        timestamp=datetime.utcnow(),  # Set timestamp automatically
     )
     db.add(db_event)
     db.commit()
     db.refresh(db_event)
     return db_event
+
 
 @router.get("/{event_id}", response_model=EventRead)
 def get_event(event_id: int, db: Session = Depends(get_db)):

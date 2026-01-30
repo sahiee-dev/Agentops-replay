@@ -5,19 +5,21 @@ All schemas preserve raw payloads. No derived fields.
 Payloads are VERBATIM canonical JSON, not reformatted.
 """
 
-from typing import List, Dict, Any, Optional
-from pydantic import BaseModel
 from enum import Enum
+
+from pydantic import BaseModel, ConfigDict
 
 
 class VerificationStatusSchema(str, Enum):
     """Verification status enum for API responses."""
+
     VALID = "VALID"
     INVALID = "INVALID"
 
 
 class FrameTypeSchema(str, Enum):
     """Frame type enum for API responses."""
+
     EVENT = "EVENT"
     GAP = "GAP"
     LOG_DROP = "LOG_DROP"
@@ -26,6 +28,7 @@ class FrameTypeSchema(str, Enum):
 
 class WarningSeveritySchema(str, Enum):
     """Warning severity enum for API responses."""
+
     INFO = "INFO"
     WARNING = "WARNING"
     CRITICAL = "CRITICAL"
@@ -33,104 +36,104 @@ class WarningSeveritySchema(str, Enum):
 
 class ReplayFrameSchema(BaseModel):
     """Schema for a single replay frame."""
+
     frame_type: FrameTypeSchema
     position: int
-    
+
     # EVENT fields
-    sequence_number: Optional[int] = None
-    timestamp: Optional[str] = None
-    event_type: Optional[str] = None
-    payload: Optional[str] = None  # VERBATIM RFC-8785 canonical JSON string
-    event_hash: Optional[str] = None
-    
+    sequence_number: int | None = None
+    timestamp: str | None = None
+    event_type: str | None = None
+    payload: str | None = None  # VERBATIM RFC-8785 canonical JSON string
+    event_hash: str | None = None
+
     # GAP fields
-    gap_start: Optional[int] = None
-    gap_end: Optional[int] = None
-    
+    gap_start: int | None = None
+    gap_end: int | None = None
+
     # LOG_DROP fields
-    dropped_count: Optional[int] = None
-    drop_reason: Optional[str] = None
-    
+    dropped_count: int | None = None
+    drop_reason: str | None = None
+
     # REDACTION fields
-    redaction_hash: Optional[str] = None
-    redacted_fields: Optional[List[str]] = None
-    
-    class Config:
-        use_enum_values = True
+    redaction_hash: str | None = None
+    redacted_fields: list[str] | None = None
+
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class ReplayWarningSchema(BaseModel):
     """Schema for a replay warning."""
+
     severity: WarningSeveritySchema
     code: str  # Stable warning code
     message: str
-    frame_position: Optional[int] = None
-    
-    class Config:
-        use_enum_values = True
+    frame_position: int | None = None
+
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class ReplayResponseSchema(BaseModel):
     """
     Full replay response for a verified session.
-    
+
     INVARIANT: This response is ONLY generated from verified chains.
     """
+
     session_id: str
     evidence_class: str
     seal_present: bool
     verification_status: VerificationStatusSchema
-    
-    frames: List[ReplayFrameSchema]
-    warnings: List[ReplayWarningSchema]
-    
+
+    frames: list[ReplayFrameSchema]
+    warnings: list[ReplayWarningSchema]
+
     event_count: int
     total_drops: int
-    first_timestamp: Optional[str] = None
-    last_timestamp: Optional[str] = None
+    first_timestamp: str | None = None
+    last_timestamp: str | None = None
     final_hash: str
-    
-    class Config:
-        use_enum_values = True
+
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class VerificationResponseSchema(BaseModel):
     """Response for verification-only endpoint."""
+
     session_id: str
     verification_status: VerificationStatusSchema
-    evidence_class: Optional[str] = None
-    seal_present: Optional[bool] = None
-    event_count: Optional[int] = None
-    warning_count: Optional[int] = None
-    
+    evidence_class: str | None = None
+    seal_present: bool | None = None
+    event_count: int | None = None
+    warning_count: int | None = None
+
     # On failure
-    error_code: Optional[str] = None
-    error_message: Optional[str] = None
-    
-    class Config:
-        use_enum_values = True
+    error_code: str | None = None
+    error_message: str | None = None
+
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class ReplayFailureSchema(BaseModel):
     """
     Explicit failure response when verification fails.
-    
+
     CRITICAL: No frames, no partial data, no metadata.
     """
+
     session_id: str
     verification_status: VerificationStatusSchema  # Always INVALID
     error_code: str
     error_message: str
-    
-    class Config:
-        use_enum_values = True
+
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class FrameResponseSchema(BaseModel):
     """Response for single frame endpoint."""
+
     session_id: str
     requested_sequence: int
     frame: ReplayFrameSchema
-    
-    class Config:
-        use_enum_values = True
+
+    model_config = ConfigDict(use_enum_values=True)

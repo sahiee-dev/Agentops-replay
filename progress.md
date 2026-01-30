@@ -189,14 +189,29 @@ Fingerprint: 4272bdc7...
 
 ---
 
-### ⏳ Phase 6: Remaining Work
+### ✅ Phase 6: Ingestion Service Implementation (Complete)
 
-**Requirements:**
+**Date:** January 30, 2026
 
-- [ ] Ingestion service HTTP endpoints (FastAPI)
-- [ ] Immutable event store (PostgreSQL + append-only)
-- [ ] Atomic batch commits
-- [ ] Queue worker integration
+**Artifacts Created:**
+
+- `backend/app/services/ingestion/service.py` — Ingestion orchestrator (atomic transactions, locking)
+- `backend/app/api/v1/endpoints/ingestion.py` — Batch ingestion endpoint (`POST /v1/ingest/batch`)
+- `backend/app/schemas/ingestion.py` — Strict Pydantic schemas (RawEventCreate, IngestBatchRequest)
+- `backend/tests/ingestion/test_ingestion_service.py` — Adversarial test suite (8 scenarios)
+
+**Key Achievements:**
+
+- [x] **Server Authority:** Implemented `IngestionService` stamping `chain_authority=SERVER`.
+- [x] **Fail-Loudly:** Mapped state conflicts to HTTP 409 and bad requests to HTTP 400.
+- [x] **Atomic Writes:** Single transaction block for batch persistence.
+- [x] **Seal Gate:** Enforced invariant: `seal=true` REQUIRES `SESSION_END`.
+- [x] **Adversarial Testing:** Verified rejection of gaps, duplicates, and sealed session tampering.
+
+**Status:**
+
+- Core Ingestion Service: **Verified**
+- Queue Worker: **Deferred** (to Policy Phase)
 
 ### ✅ Phase 7: Replay System
 
