@@ -41,26 +41,19 @@ Export Authority: {export_authority}"""
 
 def generate_pdf_from_verified_json(verified_json_path: str) -> bytes:
     """
-    Generate compliance-grade PDF from a VERIFIED JSON export.
+    Generate a compliance-grade PDF rendering of a verified JSON export.
     
-    CRITICAL: This function takes a path to a verified JSON file, NOT a session_id.
-    The JSON must have already passed verification before being passed here.
+    The given file must be a previously verified JSON export; the PDF is a faithful rendering that copies hashes verbatim from the JSON and organizes content into a cover page, executive summary, event timeline, and verification annex.
     
-    Structure (per user specification):
-    1. Cover Page (Evidence Class, Verification Status, Session ID, Disclaimer)
-    2. Executive Summary (Non-technical, no hashes)
-    3. Event Timeline (Seq, Type, Timestamp; explicit LOG_DROP markers)
-    4. Verification Annex (Hash chain, Session digest, CHAIN_SEAL, Verifier version)
+    Parameters:
+        verified_json_path (str): Path to a verified JSON export file.
     
-    Args:
-        verified_json_path: Absolute path to a verified JSON export file
-        
     Returns:
-        PDF bytes
-        
+        bytes: PDF document bytes.
+    
     Raises:
-        FileNotFoundError: If JSON file not found
-        ValueError: If JSON is malformed
+        FileNotFoundError: If the JSON file cannot be found at the given path.
+        ValueError: If the file contains malformed JSON.
     """
     # Load verified JSON
     with open(verified_json_path, 'r', encoding='utf-8') as f:
@@ -71,16 +64,36 @@ def generate_pdf_from_verified_json(verified_json_path: str) -> bytes:
 
 def generate_pdf_from_verified_dict(export_data: Dict[str, Any]) -> bytes:
     """
-    Generate PDF from an already-loaded verified JSON dict.
+    Generate a compliance-grade PDF from a verified JSON export provided as an in-memory dictionary.
     
-    Use this when you have the verified data in memory.
+    Parameters:
+        export_data (Dict[str, Any]): Parsed verified JSON export. Expected keys include (but are not limited to)
+            `evidence_class`, `session_id`, `export_timestamp`, `session_metadata`, `events`, `seal`,
+            and `chain_of_custody`. Missing keys will be handled with sensible defaults where applicable.
+    
+    Returns:
+        bytes: The generated PDF file content as bytes.
     """
     return _render_pdf(export_data)
 
 
 def _render_pdf(export_data: Dict[str, Any]) -> bytes:
     """
-    Internal: Render PDF from export data.
+    Render a compliance-grade PDF document from a verified export dictionary.
+    
+    Takes the parsed verified JSON export data and constructs a multi-section PDF intended for compliance review. The generated document includes:
+    - A cover page with Evidence Class, Verification Status, Session ID, Export Timestamp, and a required evidence disclaimer.
+    - An Executive Summary (no hashes) summarizing session metadata and highlighting dropped events when present.
+    - An Event Timeline showing up to 50 events (sequence, event type, timestamp) with an overflow indicator when more events exist.
+    - A Verification Annex that reproduces seal/hash fields verbatim from the export and a Chain-of-Custody subsection.
+    
+    Parameters:
+        export_data (Dict[str, Any]): Verified export dictionary. Expected keys (when present) include
+            'evidence_class', 'session_id', 'export_timestamp', 'chain_of_custody',
+            'session_metadata', 'events', and 'seal'. Missing fields are rendered with sensible defaults.
+    
+    Returns:
+        bytes: The complete PDF file as raw bytes.
     """
     # Create PDF buffer
     buffer = BytesIO()
@@ -281,7 +294,13 @@ def _render_pdf(export_data: Dict[str, Any]) -> bytes:
 
 def _get_verification_status(export_data: Dict[str, Any]) -> str:
     """
-    Determine verification status display string.
+    Map the export's `evidence_class` to a human-readable verification status.
+    
+    Parameters:
+        export_data (Dict[str, Any]): Verified export dictionary; the function reads the `evidence_class` key from this mapping.
+    
+    Returns:
+        str: `VERIFIED` if `evidence_class` is `AUTHORITATIVE_EVIDENCE`, `PARTIAL (incomplete chain)` if `PARTIAL_AUTHORITATIVE_EVIDENCE`, `NON-AUTHORITATIVE (development only)` otherwise.
     """
     evidence_class = export_data.get('evidence_class', '')
     if evidence_class == 'AUTHORITATIVE_EVIDENCE':

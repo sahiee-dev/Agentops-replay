@@ -109,7 +109,11 @@ class TestDeterminism:
     """Tests for deterministic replay."""
     
     def test_same_input_same_output(self):
-        """CRITICAL: Same events must produce identical replay."""
+        """
+        Ensure identical input events produce identical replay frames.
+        
+        Builds two verified sessions from the same event list, constructs replays, and asserts the replays have the same number of frames and that each corresponding frame matches in frame_type, sequence_number, event_hash, and payload.
+        """
         events = [
             {"sequence_number": 0, "event_type": "SESSION_START", "event_hash": "a", "payload": {"x": 1}},
             {"sequence_number": 1, "event_type": "LLM_CALL", "event_hash": "b", "payload": {"prompt": "hello"}},
@@ -169,7 +173,11 @@ class TestAntiInference:
     """Tests proving no synthetic events are created."""
     
     def test_no_synthetic_events_in_gap(self):
-        """ADVERSARIAL: Gaps must NOT be filled with inferred events."""
+        """
+        Ensure replay does not synthesize events to fill sequence gaps.
+        
+        Verifies that only the original events are rendered as EVENT frames and that a single GAP frame covers the missing sequence range (gap_start 1, gap_end 9).
+        """
         events = [
             {"sequence_number": 0, "event_type": "START", "event_hash": "a", "payload": {}},
             {"sequence_number": 10, "event_type": "END", "event_hash": "b", "payload": {}},

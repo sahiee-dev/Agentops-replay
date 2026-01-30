@@ -61,7 +61,17 @@ class ReplayWarning:
     
     @classmethod
     def events_dropped(cls, count: int, reason: str, position: int) -> 'ReplayWarning':
-        """Create warning for dropped events."""
+        """
+        Create a ReplayWarning indicating that one or more events were dropped.
+        
+        Parameters:
+            count (int): Number of events that were dropped.
+            reason (str): Human-readable explanation for the drop.
+            position (int): Frame position associated with the dropped events.
+        
+        Returns:
+            ReplayWarning: Warning with severity WARNING and code EVENTS_DROPPED; its message is formatted using `count` and `reason`, and `frame_position` is set to `position`.
+        """
         return cls(
             severity=WarningSeverity.WARNING,
             code=WarningCode.EVENTS_DROPPED,
@@ -73,7 +83,17 @@ class ReplayWarning:
     
     @classmethod
     def sequence_gap(cls, start: int, end: int, position: int) -> 'ReplayWarning':
-        """Create warning for sequence gap."""
+        """
+        Create a warning for a gap in sequence numbers.
+        
+        Parameters:
+            start (int): Start of the missing sequence range.
+            end (int): End of the missing sequence range.
+            position (int): Frame position associated with the gap.
+        
+        Returns:
+            ReplayWarning: Warning with severity WARNING, code SEQUENCE_GAP, a message formatted with `start` and `end`, and `frame_position` set to `position`.
+        """
         return cls(
             severity=WarningSeverity.WARNING,
             code=WarningCode.SEQUENCE_GAP,
@@ -85,7 +105,15 @@ class ReplayWarning:
     
     @classmethod
     def timestamp_anomaly(cls, position: int) -> 'ReplayWarning':
-        """Create warning for out-of-order timestamp."""
+        """
+        Create a ReplayWarning for an out-of-order timestamp at a specific frame position.
+        
+        Parameters:
+            position (int): Frame position where the timestamp anomaly was observed.
+        
+        Returns:
+            ReplayWarning: A warning with severity `INFO`, code `TIMESTAMP_ANOMALY`, a message formatted with `position`, and `frame_position` set to `position`.
+        """
         return cls(
             severity=WarningSeverity.INFO,
             code=WarningCode.TIMESTAMP_ANOMALY,
@@ -95,7 +123,12 @@ class ReplayWarning:
     
     @classmethod
     def chain_not_sealed(cls) -> 'ReplayWarning':
-        """Create warning for missing chain seal."""
+        """
+        Create a ReplayWarning indicating the chain is not sealed.
+        
+        Returns:
+            ReplayWarning: A warning with severity CRITICAL, code CHAIN_NOT_SEALED, and the corresponding message from WARNING_MESSAGES. The warning has no frame_position set.
+        """
         return cls(
             severity=WarningSeverity.CRITICAL,
             code=WarningCode.CHAIN_NOT_SEALED,
@@ -104,7 +137,12 @@ class ReplayWarning:
     
     @classmethod
     def partial_evidence(cls) -> 'ReplayWarning':
-        """Create warning for partial evidence class."""
+        """
+        Create a warning indicating the chain's evidence is partial.
+        
+        Returns:
+            ReplayWarning: A warning with severity WARNING and code PARTIAL_EVIDENCE.
+        """
         return cls(
             severity=WarningSeverity.WARNING,
             code=WarningCode.PARTIAL_EVIDENCE,
@@ -113,7 +151,15 @@ class ReplayWarning:
     
     @classmethod
     def verification_failed(cls, reason: str) -> 'ReplayWarning':
-        """Create warning for verification failure."""
+        """
+        Create a ReplayWarning for a chain verification failure.
+        
+        Parameters:
+        	reason (str): Human-readable explanation of why verification failed; interpolated into the warning message.
+        
+        Returns:
+        	ReplayWarning: A warning with severity CRITICAL, code VERIFICATION_FAILED, and a message containing the provided reason.
+        """
         return cls(
             severity=WarningSeverity.CRITICAL,
             code=WarningCode.VERIFICATION_FAILED,

@@ -78,21 +78,17 @@ def load_verified_session(
     chain_seal: Optional[Dict[str, Any]] = None
 ) -> Tuple[Optional[VerifiedChain], Optional[ReplayFailure]]:
     """
-    Load and verify a session before serving.
+    Verify an event chain for a session before serving.
     
-    CRITICAL: If verification fails:
-    - Return explicit failure object
-    - NO frames, NO partial data, NO metadata
-    - Serving anything from invalid chain is FORBIDDEN
+    Per invariant: if verification fails, return an explicit ReplayFailure and expose no frames, partial data, or metadata — serving from an invalid chain is forbidden.
     
-    Args:
-        session_id: Session UUID
-        events: Events from storage
-        chain_seal: Chain seal if present
-        
+    Parameters:
+        session_id (str): Session UUID.
+        events (List[Dict[str, Any]]): Events retrieved from storage for the session.
+        chain_seal (Optional[Dict[str, Any]]): Optional chain seal metadata.
+    
     Returns:
-        Tuple of (VerifiedChain, None) on success
-        Tuple of (None, ReplayFailure) on failure
+        Tuple[Optional[VerifiedChain], Optional[ReplayFailure]]: On success, `(VerifiedChain, None)`. On failure, `(None, ReplayFailure)` where the `ReplayFailure` has `verification_status` set to `INVALID` and contains `error_code` and `error_message`.
     """
     # Verify chain integrity
     verification_result = _verify_chain(events)
@@ -124,14 +120,18 @@ def load_verified_session(
 
 def build_replay(chain: VerifiedChain) -> ReplayResult:
     """
-    Convert verified chain to replay frames.
+    Convert a verified event chain into a ReplayResult containing frames and warnings.
     
-    Injects:
-    - GAP frames for missing sequences
-    - LOG_DROP frames for drop events
-    - Warnings for all detected issues
+    Builds a sequence of ReplayFrame objects from the provided VerifiedChain, injecting GAP frames for missing sequence numbers and LOG_DROP frames for drop events, and accumulates ReplayWarning entries for detected issues (gaps, timestamp anomalies, dropped events, and chain-level concerns).
     
-    INVARIANT: All frames have single traceable origin.
+    Parameters:
+        chain (VerifiedChain): A verified event chain to convert; must represent a VALID verification state.
+    
+    Returns:
+        ReplayResult: Replay result containing frames, warnings, counts (event_count, total_drops), first/last timestamps, and the chain final_hash.
+    
+    Raises:
+        ValueError: If a LOG_DROP event has a missing, non-string, or invalid JSON `payload` (data integrity violation).
     """
     frames: List[ReplayFrame] = []
     warnings: List[ReplayWarning] = []
@@ -257,13 +257,12 @@ def get_frame_at_sequence(
     sequence: int
 ) -> ReplayFrame:
     """
-    Get frame at specific sequence number.
+    Retrieve the replay frame that covers a given sequence number.
     
-    CONSTRAINT: This function:
-    - MUST go through full verification (replay is already verified)
-    - MUST NOT bypass gap logic
-    - MUST return GAP frame if missing
-    - Is NOT a "fast path" that skips replay logic
+    Returns the exact frame whose `sequence_number` equals `sequence` if present; otherwise returns an existing GAP frame that contains `sequence`. If no covering frame exists, returns a synthetic GAP `ReplayFrame` with `position=-1` and `gap_start`/`gap_end` set to `sequence`.
+    
+    Returns:
+        ReplayFrame: The frame covering `sequence` — either an existing EVENT/LOG_DROP frame, an existing GAP frame containing the sequence, or a synthetic GAP frame for the sequence.
     """
     # First check for exact match on sequence_number
     for frame in replay.frames:
@@ -301,10 +300,27 @@ def get_frame_at_sequence(
 
 def _verify_chain(events: List[Dict[str, Any]]) -> Tuple[bool, str, str]:
     """
-    Verify chain integrity.
+    Validate a sequence of events for replay readiness.
+    
+    Checks that the event list is either empty or contains strictly increasing
+    `sequence_number` values and that every event has a non-empty `event_hash`.
+    
+    Parameters:
+        events (List[Dict[str, Any]]): Ordered list of event dictionaries. Each event is expected
+            to contain at least the keys `sequence_number` (int) and `event_hash` (str).
     
     Returns:
-        Tuple of (valid, error_code, error_message)
+        Tuple[bool, str, str]: `(valid, error_code, error_message)` where:
+            - `valid` is `True` when the chain passes all checks, `False` otherwise.
+            - `error_code` is `""` on success or one of:
+                - `"MISSING_SEQUENCE"` — an event is missing `sequence_number`.
+                - `"NON_MONOTONIC"` — sequence numbers are not strictly increasing.
+                - `"MISSING_HASH"` — an event is missing `event_hash`.
+            - `error_message` is a human-readable description of the failure or `""` on success.
+    
+    Behavior notes:
+        - An empty `events` list is considered valid.
+        - This function performs structural integrity checks only and does not re-compute or cryptographically verify hashes.
     """
     if not events:
         return (True, "", "")
@@ -335,7 +351,14 @@ def _determine_evidence_class(
     events: List[Dict[str, Any]],
     chain_seal: Optional[Dict[str, Any]]
 ) -> str:
-    """Determine evidence class from events and seal."""
+    """
+    Classify the evidence class for a chain based on whether it is sealed and whether any LOG_DROP events are present.
+    
+    If a chain seal is present and there are no LOG_DROP events, the result is "AUTHORITATIVE_EVIDENCE". If a chain seal is present and any LOG_DROP events exist, the result is "PARTIAL_AUTHORITATIVE_EVIDENCE". If no chain seal is present, the result is "NON_AUTHORITATIVE_EVIDENCE".
+    
+    Returns:
+        str: One of "AUTHORITATIVE_EVIDENCE", "PARTIAL_AUTHORITATIVE_EVIDENCE", or "NON_AUTHORITATIVE_EVIDENCE".
+    """
     # Check for drops
     has_drops = any(e.get('event_type') == 'LOG_DROP' for e in events)
     
