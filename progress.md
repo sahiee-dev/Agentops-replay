@@ -7,12 +7,12 @@
 
 ## Current Status
 
-| Metric           | Value                                  |
-| ---------------- | -------------------------------------- |
-| **Phase**        | Phase 5 — Backend & Compliance Exports |
-| **Spec Version** | v0.6                                   |
-| **Status**       | Ready to Execute                       |
-| **Last Updated** | January 24, 2026                       |
+| Metric           | Value                   |
+| ---------------- | ----------------------- |
+| **Phase**        | Phase 7 — Replay System |
+| **Spec Version** | v0.6                    |
+| **Status**       | Completed               |
+| **Last Updated** | January 29, 2026        |
 
 ---
 
@@ -146,40 +146,83 @@ Fingerprint: 4272bdc7...
 
 ## Upcoming Milestones
 
-### ⏳ Phase 5: Compliance Artifacts
+### ✅ Phase 5: Compliance Artifacts
 
-**Target:** Days 11-14 per goal.md
+**Date:** January 29, 2026
 
-**Requirements:**
+**Artifacts Created:**
 
-- [ ] Session digest (hash chain verification)
-- [ ] JSON export (canonical, RFC 8785)
-- [ ] PDF export (barebones, non-certifying)
-- [ ] GDPR exposure detection
-- [ ] Tool access audit
+- `backend/app/compliance/json_export.py` — RFC 8785 canonical JSON export (locked to verifier's JCS)
+- `backend/app/compliance/pdf_export.py` — Human-readable PDF from verified JSON
+- `backend/app/compliance/gdpr.py` — PII detection (WARNING) + redaction validation (ERROR)
+
+**Key Changes:**
+
+- [x] JSON export locked to verifier's JCS implementation
+- [x] Strict ISO 8601 formatting (YYYY-MM-DDTHH:MM:SS.sssZ)
+- [x] Explicit `evidence_class` field in export header
+- [x] PDF consumes verified JSON, not raw DB
+- [x] GDPR severity levels (ERROR/WARNING)
 
 ---
 
-### ⏳ Phase 6: Backend & Ingestion Service
+### ✅ Phase 6: Ingestion Service (Core)
+
+**Date:** January 29, 2026
+
+**Artifacts Created:**
+
+- `backend/app/services/ingestion/hasher.py` — Server-side hash recomputation
+- `backend/app/services/ingestion/sealer.py` — Chain sealing with authority invariants
+
+**Key Changes:**
+
+- [x] Server-side hash recomputation (never trust SDK)
+- [x] Rejection invariants: non-monotonic, gaps, duplicates
+- [x] CHAIN_SEAL emission logic
+- [x] No re-sealing invariant
+- [x] PARTIAL_AUTHORITATIVE for incomplete chains
+
+**Tests:**
+
+- `backend/tests/compliance/test_jcs_canonicalization.py` — Adversarial whitespace test
+
+---
+
+### ⏳ Phase 6: Remaining Work
 
 **Requirements:**
 
-- [ ] Ingestion service (horizontally scalable)
+- [ ] Ingestion service HTTP endpoints (FastAPI)
 - [ ] Immutable event store (PostgreSQL + append-only)
-- [ ] Server-side hash recomputation
-- [ ] CHAIN_SEAL emission
 - [ ] Atomic batch commits
+- [ ] Queue worker integration
 
----
+### ✅ Phase 7: Replay System
 
-### ⏳ Phase 7: Replay System
+**Date:** January 29, 2026
 
-**Requirements:**
+**Artifacts Created:**
 
-- [ ] Replay API (read-only GraphQL)
-- [ ] Deterministic playback
-- [ ] Explicit gap marking
-- [ ] No inference or interpolation
+- `backend/app/replay/` — Core replay package
+- `backend/app/replay/frames.py` — Frame types with single-origin invariant
+- `backend/app/replay/warnings.py` — Warning system with stable codes
+- `backend/app/replay/engine.py` — Verified-first replay engine
+- `backend/app/schemas/replay_v2.py` — Pydantic response models
+
+**Key Changes:**
+
+- [x] Verified-first: Replay only serves verified chains
+- [x] Frame-based: EVENT, GAP, LOG_DROP, REDACTION types
+- [x] VerificationStatus as enum (not string)
+- [x] Single-origin frame invariant enforced
+- [x] No-bypass constraint on frame endpoint
+- [x] Explicit gap marking (no smoothing)
+- [x] Anti-inference: No synthetic events
+
+**Tests:**
+
+- `backend/tests/replay/test_replay_engine.py` — All 5 core tests passing
 
 ---
 
