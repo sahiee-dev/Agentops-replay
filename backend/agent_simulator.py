@@ -23,7 +23,12 @@ class AgentSimulator:
         # Reset sequence counter for new session
         self._sequence_counter = 0
         
-        session_data = {"user_id": 2, "agent_name": agent_name, "status": "running"}
+        session_data = {
+            "user_id": 2,
+            "agent_name": agent_name,
+            "agent_type": agent_type,
+            "status": "running",
+        }
 
         response = requests.post(f"{self.base_url}/api/v1/sessions/", json=session_data)
         if response.status_code == 200:

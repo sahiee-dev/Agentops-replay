@@ -90,7 +90,7 @@ class CustomerSupportAgent:
             tool_name=tool_name,
             flags=flags,
             sequence_number=sequence_number,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         self.db.add(db_event)
@@ -284,7 +284,7 @@ class CustomerSupportAgent:
                 .first()
             )
             if session:
-                session.status = "completed"
+                session.status = SessionStatus.SEALED
                 self.db.commit()
 
             # Log session end

@@ -404,7 +404,13 @@ class IngestionService:
 
         # Update session status
         session.status = SessionStatus.SEALED
-        session.sealed_at = seal_result.seal_timestamp  # type: ignore[assignment]
-        session.evidence_class = seal_result.evidence_class  # type: ignore[assignment]
+        # Parse ISO-8601 timestamp string to datetime (handle trailing Z for UTC)
+        if seal_result.seal_timestamp:
+            ts_str = seal_result.seal_timestamp.replace("Z", "+00:00")
+            session.sealed_at = datetime.fromisoformat(ts_str)
+        else:
+            session.sealed_at = datetime.now(UTC)
+        # evidence_class may be None if the column is nullable
+        session.evidence_class = seal_result.evidence_class
 
         return seal_result

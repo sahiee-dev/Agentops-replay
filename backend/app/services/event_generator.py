@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 import logging
 
 from sqlalchemy.orm import Session
@@ -48,7 +48,7 @@ class EventGeneratorService:
                 tool_name=event_data["tool_name"],
                 flags=event_data["flags"],
                 sequence_number=i,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             )
             self.db.add(db_event)
             created_events.append(db_event)
@@ -115,7 +115,7 @@ class EventGeneratorService:
                 tool_name=event_data["tool_name"],
                 flags=event_data["flags"],
                 sequence_number=i,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             )
             self.db.add(db_event)
             created_events.append(db_event)
@@ -182,7 +182,7 @@ class EventGeneratorService:
                 tool_name=event_data["tool_name"],
                 flags=event_data["flags"],
                 sequence_number=i,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             )
             self.db.add(db_event)
             created_events.append(db_event)
@@ -249,7 +249,7 @@ class EventGeneratorService:
                 tool_name=event_data["tool_name"],
                 flags=event_data["flags"],
                 sequence_number=i,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             )
             self.db.add(db_event)
             created_events.append(db_event)

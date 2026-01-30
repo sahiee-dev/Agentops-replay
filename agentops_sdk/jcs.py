@@ -49,10 +49,7 @@ def _float_to_string(f: float) -> str:
 
     # Let's perform a check.
     if f == 0.0:
-        # Check sign bit
-        packed = struct.pack(">d", f)
-        if packed[0] & 0x80:
-            return "-0"
+        # RFC 8785 §3.2.2.3: Both positive and negative zero serialize as "0"
         return "0"
 
     # For other numbers, standard Python string representation usually follows

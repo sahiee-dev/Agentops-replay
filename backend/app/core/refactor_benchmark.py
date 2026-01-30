@@ -14,7 +14,7 @@ def load_samples(path: str) -> tuple[list[str], list[str]]:
     samples: list[str] = []
     files = [f for f in os.listdir(path) if f.endswith(".py")]
     for f in files:
-        with open(os.path.join(path, f)) as file:
+        with open(os.path.join(path, f), encoding="utf-8") as file:
             samples.append(file.read())
     return samples, files
 
@@ -36,7 +36,7 @@ if __name__ == "__main__":
     results = benchmark(samples, filenames)
 
     os.makedirs(os.path.dirname(RESULTS_FILE), exist_ok=True)
-    with open(RESULTS_FILE, "w") as f:
+    with open(RESULTS_FILE, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=4)
 
     print(

@@ -19,11 +19,11 @@ def learn_from_replays(db: DBSession | None = None) -> None:
     gen_created = db is None
     gen = None
     
-    if gen_created:
-        gen = get_db()
-        db = next(gen)
-    
     try:
+        if gen_created:
+            gen = get_db()
+            db = next(gen)
+        
         # Placeholder: HybridRefactor would analyze session data
         # if the appropriate fields existed on the Session model
         pass
