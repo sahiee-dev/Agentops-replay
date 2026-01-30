@@ -2,10 +2,10 @@
 
 import ast
 
-import astor
 from sentence_transformers import SentenceTransformer, util
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
 
 class HybridRefactor:
     def __init__(self):
@@ -17,7 +17,7 @@ class HybridRefactor:
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef) and node.name == "foo":
                     node.name = "optimized_foo"
-            return astor.to_source(tree)
+            return ast.unparse(tree)
         except Exception:
             return code
 

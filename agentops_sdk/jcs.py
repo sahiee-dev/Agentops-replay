@@ -20,10 +20,11 @@ import struct
 # In Python, json.dumps matches much of standard JSON, but JCS has specific float rules.
 # We will use a custom encoder.
 
+
 def _float_to_string(f: float) -> str:
     """
     Format a float according to RFC 8785 rules.
-    This effectively means leveraging the underlying Grisu2/Dragon4/Ryu algorithms 
+    This effectively means leveraging the underlying Grisu2/Dragon4/Ryu algorithms
     standard in modern languages, but checking specific edge cases.
     """
     if math.isnan(f) or math.isinf(f):
@@ -49,7 +50,7 @@ def _float_to_string(f: float) -> str:
     # Let's perform a check.
     if f == 0.0:
         # Check sign bit
-        packed = struct.pack('>d', f)
+        packed = struct.pack(">d", f)
         if packed[0] & 0x80:
             return "-0"
         return "0"
@@ -72,10 +73,11 @@ def _float_to_string(f: float) -> str:
     s = json.dumps(f, allow_nan=False)
 
     # JCS Constraint: No "+" in exponent. e.g. 1e+20 -> 1e20.
-    if 'e+' in s:
-        s = s.replace('e+', 'e')
+    if "e+" in s:
+        s = s.replace("e+", "e")
 
     return s
+
 
 def canonicalize(data) -> bytes:
     """
@@ -84,48 +86,49 @@ def canonicalize(data) -> bytes:
     """
 
     if data is None:
-        return b'null'
+        return b"null"
 
     if isinstance(data, bool):
-        return b'true' if data else b'false'
+        return b"true" if data else b"false"
 
     if isinstance(data, (int, float)):
         # Floats and Integers
         if isinstance(data, int):
-            return str(data).encode('utf-8')
-        return _float_to_string(data).encode('utf-8')
+            return str(data).encode("utf-8")
+        return _float_to_string(data).encode("utf-8")
 
     if isinstance(data, str):
-        # Strings: UTF-8 NFC normalization (Spec v0.5 requirement)
-        import unicodedata
-        normalized = unicodedata.normalize('NFC', data)
-        return json.dumps(normalized, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+        # Strings: RFC 8785 uses strings as-is without normalization
+        return json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode(
+            "utf-8"
+        )
 
     if isinstance(data, list):
         # Array: preserve order
         parts = []
         for item in data:
             parts.append(canonicalize(item))
-        return b'[' + b','.join(parts) + b']'
+        return b"[" + b",".join(parts) + b"]"
 
     if isinstance(data, dict):
         # Object: Sort keys by UTF-16BE code unit sequence (RFC 8785)
         # Python's default sort uses Unicode code points, which differs for non-BMP chars
         def utf16_sort_key(s: str) -> bytes:
             # Encode to UTF-16BE and use resulting byte sequence for comparison
-            return s.encode('utf-16-be')
+            return s.encode("utf-16-be")
 
         sorted_keys = sorted(data.keys(), key=utf16_sort_key)
 
         parts = []
         for key in sorted_keys:
             # Key
-            key_bytes = json.dumps(key, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+            key_bytes = json.dumps(
+                key, ensure_ascii=False, separators=(",", ":")
+            ).encode("utf-8")
             # Value
             val_bytes = canonicalize(data[key])
-            parts.append(key_bytes + b':' + val_bytes)
+            parts.append(key_bytes + b":" + val_bytes)
 
-        return b'{' + b','.join(parts) + b'}'
+        return b"{" + b",".join(parts) + b"}"
 
     raise TypeError(f"Type {type(data)} not serializable to JCS")
-

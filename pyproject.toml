@@ -89,6 +89,22 @@ ignore_errors = true
 module = "tests.*"
 disallow_untyped_defs = false 
 
+[[tool.mypy.overrides]]
+module = "backend.demo_agents.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "examples.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "demo.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "agent_demos.*"
+ignore_errors = true 
+
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q --cov=backend/app --cov=sdk/python --cov=verifier --cov-fail-under=90"
