@@ -17,6 +17,22 @@ dev = [
     "pytest-cov>=5.0.0,<6",
 ]
 
+[tool.setuptools.packages.find]
+include = [
+  "backend",
+  "backend.*",
+  "verifier",
+  "verifier.*",
+  "agentops_sdk",
+  "agentops_sdk.*",
+]
+exclude = [
+  "demo",
+  "agent_demos",
+  "frontend",
+  "sdk",
+]
+
 [tool.ruff]
 line-length = 88
 target-version = "py311"
