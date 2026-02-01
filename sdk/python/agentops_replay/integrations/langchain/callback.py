@@ -11,25 +11,23 @@ Design Philosophy:
 - Fail open for agent (don't crash), fail closed for integrity (record losses)
 """
 
-import sys
-import os
-import time
 import hashlib
 import json
 import logging
-from typing import Any, Dict, List, Optional, Union
+import time
+from datetime import datetime
+from typing import Any
 from uuid import UUID
-from datetime import datetime, timezone
-
-# Module logger for debug output
-logger = logging.getLogger(__name__)
 
 from .version import (
-    INTEGRATION_VERSION, 
-    get_langchain_version_string, 
+    INTEGRATION_VERSION,
     check_compatibility,
-    warn_if_incompatible
+    get_langchain_version_string,
+    warn_if_incompatible,
 )
+
+# Module logger for debug output (PEP8: after imports)
+logger = logging.getLogger(__name__)
 
 # Import agentops SDK
 try:
@@ -37,23 +35,23 @@ try:
     from agentops_sdk.events import EventType
 except ImportError:
     # Fallback for direct imports
-    AgentOpsClient = None
-    EventType = None
+    AgentOpsClient = None  # type: ignore
+    EventType = None  # type: ignore
 
 # Try to import LangChain
 try:
-    from langchain_core.callbacks.base import BaseCallbackHandler
-    from langchain_core.outputs import LLMResult
     from langchain_core.agents import AgentAction, AgentFinish
+    from langchain_core.callbacks.base import BaseCallbackHandler
     from langchain_core.messages import BaseMessage
+    from langchain_core.outputs import LLMResult
     LANGCHAIN_AVAILABLE = True
 except ImportError:
     # Stub for when LangChain is not installed
-    BaseCallbackHandler = object
-    LLMResult = None
-    AgentAction = None
-    AgentFinish = None
-    BaseMessage = None
+    BaseCallbackHandler = object  # type: ignore
+    LLMResult = None  # type: ignore
+    AgentAction = None  # type: ignore
+    AgentFinish = None  # type: ignore
+    BaseMessage = None  # type: ignore
     LANGCHAIN_AVAILABLE = False
 
 
@@ -76,28 +74,28 @@ def _safe_serialize(obj: Any, max_depth: int = 5) -> Any:
     """
     if max_depth <= 0:
         return "<max_depth_exceeded>"
-    
+
     if obj is None:
         return None
-    
+
     if isinstance(obj, (str, int, float, bool)):
         return obj
-    
+
     if isinstance(obj, (list, tuple)):
         return [_safe_serialize(item, max_depth - 1) for item in obj[:100]]  # Limit list size
-    
+
     if isinstance(obj, dict):
         return {
-            str(k): _safe_serialize(v, max_depth - 1) 
+            str(k): _safe_serialize(v, max_depth - 1)
             for k, v in list(obj.items())[:50]  # Limit dict size
         }
-    
+
     if isinstance(obj, UUID):
         return str(obj)
-    
+
     if isinstance(obj, datetime):
         return obj.isoformat()
-    
+
     if hasattr(obj, 'dict'):
         try:
             return _safe_serialize(obj.dict(), max_depth - 1)
@@ -106,7 +104,7 @@ def _safe_serialize(obj: Any, max_depth: int = 5) -> Any:
                 "Serialization via .dict() failed for %s: %s",
                 type(obj).__name__, e, exc_info=True
             )
-    
+
     if hasattr(obj, 'to_dict'):
         try:
             return _safe_serialize(obj.to_dict(), max_depth - 1)
@@ -115,7 +113,7 @@ def _safe_serialize(obj: Any, max_depth: int = 5) -> Any:
                 "Serialization via .to_dict() failed for %s: %s",
                 type(obj).__name__, e, exc_info=True
             )
-    
+
     if hasattr(obj, '__dict__'):
         try:
             return _safe_serialize(obj.__dict__, max_depth - 1)
@@ -124,7 +122,7 @@ def _safe_serialize(obj: Any, max_depth: int = 5) -> Any:
                 "Serialization via __dict__ failed for %s: %s",
                 type(obj).__name__, e, exc_info=True
             )
-    
+
     # Fallback: string representation
     try:
         return str(obj)[:1000]
@@ -181,14 +179,14 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         handler.end_session()
         handler.export_to_jsonl("session.jsonl")
     """
-    
+
     def __init__(
         self,
         agent_id: str,
         local_authority: bool = False,
         buffer_size: int = 10000,
         redact_pii: bool = False,
-        tags: Optional[List[str]] = None
+        tags: list[str] | None = None
     ):
         """
         Create a LangChain callback handler that records LangChain events to the AgentOps replay system.
@@ -203,37 +201,37 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             tags (Optional[List[str]]): Optional list of tags to attach to the session metadata.
         """
         super().__init__()
-        
+
         if not LANGCHAIN_AVAILABLE:
             raise ImportError(
                 "LangChain is not installed. Install with: "
                 "pip install langchain langchain-core"
             )
-        
+
         # Check compatibility and warn if needed
         warn_if_incompatible()
-        
+
         self.agent_id = agent_id
         self.local_authority = local_authority
         self.redact_pii = redact_pii
         self.tags = tags or []
-        
+
         # Initialize SDK client
         if AgentOpsClient is None:
             raise ImportError("AgentOps SDK not found. Check installation.")
-        
+
         self.client = AgentOpsClient(
             local_authority=local_authority,
             buffer_size=buffer_size
         )
-        
+
         # Session state
         self._session_active = False
-        self._session_start_time: Optional[float] = None
-        
+        self._session_start_time: float | None = None
+
         # Track run IDs for correlation
-        self._run_id_map: Dict[str, Dict[str, Any]] = {}
-        
+        self._run_id_map: dict[str, dict[str, Any]] = {}
+
         # Framework metadata
         self._framework_metadata = {
             "framework": "langchain",
@@ -241,32 +239,33 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             "integration_version": INTEGRATION_VERSION,
             "compatibility": check_compatibility()
         }
-    
+
     # =========================================================================
     # Session Management
     # =========================================================================
     
-    def start_session(self, additional_tags: Optional[List[str]] = None):
+    def start_session(self, additional_tags: list[str] | None = None):
         """
         Start a new AgentOps recording session and register session tags.
         
         Parameters:
-            additional_tags (Optional[List[str]]): Extra tags to attach to the session; these are combined with the handler's configured tags and a LangChain version tag.
+            additional_tags (list[str] | None): Extra tags to attach to the session; these are combined with the handler's configured tags and a LangChain version tag.
         
         Raises:
             RuntimeError: If a session is already active.
         """
         if self._session_active:
             raise RuntimeError("Session already active. Call end_session() first.")
-        
+
         all_tags = self.tags + (additional_tags or [])
         all_tags.append(f"langchain:{get_langchain_version_string()}")
-        
-        self.client.start_session(
-            agent_id=self.agent_id,
-            tags=all_tags
-        )
-        
+
+        if self.client:
+            self.client.start_session(
+                agent_id=self.agent_id,
+                tags=all_tags
+            )
+
         self._session_active = True
         self._session_start_time = time.time()
         self._run_id_map = {}
@@ -282,9 +281,12 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         """
         if not self._session_active:
             return
+
+        start_time = self._session_start_time or time.time()
+        duration_ms = int((time.time() - start_time) * 1000)
         
-        duration_ms = int((time.time() - self._session_start_time) * 1000)
-        self.client.end_session(status=status, duration_ms=duration_ms)
+        if self.client:
+            self.client.end_session(status=status, duration_ms=duration_ms)
         self._session_active = False
     
     def export_to_jsonl(self, filename: str):
@@ -300,20 +302,20 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         """Auto-start session if not active."""
         if not self._session_active:
             self.start_session()
-    
+
     # =========================================================================
     # LLM Callbacks
     # =========================================================================
-    
+
     def on_llm_start(
         self,
-        serialized: Dict[str, Any],
-        prompts: List[str],
+        serialized: dict[str, Any],
+        prompts: list[str],
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -328,14 +330,14 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             metadata (Optional[Dict[str, Any]]): Optional additional metadata to include in the event.
         """
         self._ensure_session()
-        
+
         # Store run info for correlation
         self._run_id_map[str(run_id)] = {
             "type": "llm",
             "start_time": time.time(),
             "model": serialized.get("name", "unknown")
         }
-        
+
         payload = {
             "run_id": str(run_id),
             "parent_run_id": str(parent_run_id) if parent_run_id else None,
@@ -348,15 +350,15 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             "metadata": _safe_serialize(metadata),
             **self._framework_metadata
         }
-        
+
         self.client.record(EventType.MODEL_REQUEST, payload)
-    
+
     def on_llm_end(
         self,
         response: LLMResult,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -370,10 +372,10 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             parent_run_id (Optional[UUID]): Optional parent run identifier for correlation.
         """
         self._ensure_session()
-        
+
         run_info = self._run_id_map.get(str(run_id), {})
         duration_ms = int((time.time() - run_info.get("start_time", time.time())) * 1000)
-        
+
         # Extract response content
         generations = []
         if response and response.generations:
@@ -384,7 +386,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
                         "text_hash": _compute_content_hash(gen.text) if self.redact_pii else None,
                         "generation_info": _safe_serialize(gen.generation_info) if hasattr(gen, 'generation_info') else None
                     })
-        
+
         payload = {
             "run_id": str(run_id),
             "parent_run_id": str(parent_run_id) if parent_run_id else None,
@@ -393,7 +395,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             "duration_ms": duration_ms,
             "llm_output": _safe_serialize(response.llm_output) if response and response.llm_output else None
         }
-        
+
         self.client.record(EventType.MODEL_RESPONSE, payload)
         
         # Clean up run_id_map to prevent memory leak
@@ -404,7 +406,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         error: BaseException,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -418,7 +420,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             parent_run_id (Optional[UUID]): The parent run identifier, if any.
         """
         self._ensure_session()
-        
+
         payload = {
             "run_id": str(run_id),
             "parent_run_id": str(parent_run_id) if parent_run_id else None,
@@ -426,7 +428,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             "error_message": str(error)[:500],  # Limit error message length
             "error_traceback": None  # Don't log full tracebacks (security)
         }
-        
+
         self.client.record(EventType.ERROR, payload)
         
         # Clean up run_id_map
@@ -435,17 +437,17 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
     # =========================================================================
     # Tool Callbacks
     # =========================================================================
-    
+
     def on_tool_start(
         self,
-        serialized: Dict[str, Any],
+        serialized: dict[str, Any],
         input_str: str,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        inputs: Optional[Dict[str, Any]] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        inputs: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -468,19 +470,19 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             - Emits an EventType.TOOL_CALL event via the AgentOps client with the constructed payload.
         """
         self._ensure_session()
-        
+
         self._run_id_map[str(run_id)] = {
             "type": "tool",
             "start_time": time.time(),
             "tool_name": serialized.get("name", "unknown")
         }
-        
+
         # Parse input_str as JSON if possible
         try:
             parsed_inputs = json.loads(input_str) if isinstance(input_str, str) else input_str
         except json.JSONDecodeError:
             parsed_inputs = {"raw_input": input_str}
-        
+
         payload = {
             "run_id": str(run_id),
             "parent_run_id": str(parent_run_id) if parent_run_id else None,
@@ -491,15 +493,15 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             "tags": tags,
             "metadata": _safe_serialize(metadata)
         }
-        
+
         self.client.record(EventType.TOOL_CALL, payload)
-    
+
     def on_tool_end(
         self,
         output: str,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -513,16 +515,16 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             parent_run_id (Optional[UUID]): Optional identifier of the parent run, if any.
         """
         self._ensure_session()
-        
+
         run_info = self._run_id_map.get(str(run_id), {})
         duration_ms = int((time.time() - run_info.get("start_time", time.time())) * 1000)
-        
+
         # Parse output as JSON if possible
         try:
             parsed_output = json.loads(output) if isinstance(output, str) else output
         except (json.JSONDecodeError, TypeError):
             parsed_output = {"raw_output": str(output)}
-        
+
         payload = {
             "run_id": str(run_id),
             "parent_run_id": str(parent_run_id) if parent_run_id else None,
@@ -531,7 +533,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             "result_hash": _compute_content_hash(parsed_output) if self.redact_pii else None,
             "duration_ms": duration_ms
         }
-        
+
         self.client.record(EventType.TOOL_RESULT, payload)
         
         # Clean up run_id_map
@@ -542,7 +544,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         error: BaseException,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -557,9 +559,9 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             Emits an event containing `run_id`, `parent_run_id`, `tool_name` (if known), `error_type`, and a trimmed `error_message`.
         """
         self._ensure_session()
-        
+
         run_info = self._run_id_map.get(str(run_id), {})
-        
+
         payload = {
             "run_id": str(run_id),
             "parent_run_id": str(parent_run_id) if parent_run_id else None,
@@ -567,7 +569,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             "error_type": type(error).__name__,
             "error_message": str(error)[:500]
         }
-        
+
         self.client.record(EventType.ERROR, payload)
         
         # Clean up run_id_map
@@ -576,13 +578,13 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
     # =========================================================================
     # Agent Callbacks
     # =========================================================================
-    
+
     def on_agent_action(
         self,
         action: AgentAction,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -596,7 +598,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             parent_run_id (Optional[UUID]): Identifier for the parent run, if any.
         """
         self._ensure_session()
-        
+
         payload = {
             "run_id": str(run_id),
             "parent_run_id": str(parent_run_id) if parent_run_id else None,
@@ -608,15 +610,15 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             ),
             "log": action.log if hasattr(action, 'log') else ""
         }
-        
+
         self.client.record(EventType.DECISION_TRACE, payload)
-    
+
     def on_agent_finish(
         self,
         finish: AgentFinish,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -630,7 +632,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             parent_run_id (Optional[UUID]): Optional parent run identifier for correlation.
         """
         self._ensure_session()
-        
+
         payload = {
             "run_id": str(run_id),
             "parent_run_id": str(parent_run_id) if parent_run_id else None,
@@ -641,22 +643,22 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             ),
             "log": finish.log if hasattr(finish, 'log') else ""
         }
-        
+
         self.client.record(EventType.DECISION_TRACE, payload)
-    
+
     # =========================================================================
     # Chain Callbacks (optional, for completeness)
     # =========================================================================
-    
+
     def on_chain_start(
         self,
-        serialized: Dict[str, Any],
-        inputs: Dict[str, Any],
+        serialized: dict[str, Any],
+        inputs: dict[str, Any],
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -673,19 +675,19 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             metadata (Optional[Dict[str, Any]]): Optional additional metadata for the chain run.
         """
         self._ensure_session()
-        
+
         self._run_id_map[str(run_id)] = {
             "type": "chain",
             "start_time": time.time(),
             "chain_name": serialized.get("name", "unknown")
         }
-    
+
     def on_chain_end(
         self,
-        outputs: Dict[str, Any],
+        outputs: dict[str, Any],
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -694,13 +696,13 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         This callback intentionally performs no actions because detailed outputs and results are captured by LLM and tool callbacks; the method exists to satisfy the LangChain callback interface and preserve run correlation.
         """
         pass  # We rely on tool/llm callbacks for detailed tracking
-    
+
     def on_chain_error(
         self,
         error: BaseException,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -714,7 +716,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             parent_run_id (Optional[UUID]): Optional identifier of the parent run for correlation.
         """
         self._ensure_session()
-        
+
         payload = {
             "run_id": str(run_id),
             "parent_run_id": str(parent_run_id) if parent_run_id else None,
@@ -722,7 +724,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             "error_message": str(error)[:500],
             "chain_type": "chain"
         }
-        
+
         self.client.record(EventType.ERROR, payload)
         
         # Clean up run_id_map to prevent memory leak
@@ -732,12 +734,12 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
     # Helper Methods
     # =========================================================================
     
-    def _extract_provider(self, serialized: Dict[str, Any]) -> str:
+    def _extract_provider(self, serialized: dict[str, Any]) -> str:
         """
         Infer a provider identifier from a serialized LLM configuration.
         
         Parameters:
-            serialized (Dict[str, Any]): Serialized LLM config expected to contain an "id" key with a list of identifier fragments.
+            serialized (dict[str, Any]): Serialized LLM config expected to contain an "id" key with a list of identifier fragments.
         
         Returns:
             str: A provider name such as "openai", "anthropic", "google", "azure", or "aws_bedrock"; if none match, returns the first element of the `id` list or "unknown" when no `id` is present.
@@ -745,10 +747,10 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         id_list = serialized.get("id", [])
         if not id_list:
             return "unknown"
-        
+
         # Look for known providers
         id_str = ".".join(str(x) for x in id_list).lower()
-        
+
         if "openai" in id_str:
             return "openai"
         if "anthropic" in id_str:
@@ -759,9 +761,9 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             return "azure"
         if "bedrock" in id_str:
             return "aws_bedrock"
-        
+
         return id_list[0] if id_list else "unknown"
-    
+
     def _maybe_redact(self, content: Any, field_name: str) -> Any:
         """
         Return a safe-serializable representation of content or a redaction placeholder.
@@ -777,6 +779,6 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         """
         if not self.redact_pii:
             return _safe_serialize(content)
-        
+
         # When redacting, replace content with placeholder but preserve hash
         return f"[REDACTED:{field_name}]"

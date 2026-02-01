@@ -1,15 +1,18 @@
 """Test configuration and fixtures."""
 
-import pytest
 import os
 import sys
 
+import pytest
+
 # Add paths
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../verifier'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../verifier"))
 
 # Set test database URL
-os.environ["DATABASE_URL"] = "postgresql://postgres:postgres@localhost:5432/agentops_test"
+os.environ["DATABASE_URL"] = (
+    "postgresql://postgres:postgres@localhost:5432/agentops_test"
+)
 
 from app.database import Base, engine
 
@@ -19,12 +22,12 @@ def setup_test_database():
     """Create test database tables before tests."""
     # Drop all tables
     Base.metadata.drop_all(bind=engine)
-    
+
     # Create all tables
     Base.metadata.create_all(bind=engine)
-    
+
     yield
-    
+
     # Cleanup
     Base.metadata.drop_all(bind=engine)
 
@@ -32,9 +35,9 @@ def setup_test_database():
 @pytest.fixture(scope="function")
 def db():
     """Database session fixture with automatic cleanup."""
-    from sqlalchemy import text
     from app.database import SessionLocal
-    
+    from sqlalchemy import text
+
     db = SessionLocal()
     try:
         yield db
