@@ -1,9 +1,18 @@
-# EVENT_LOG_SPEC.md (v0.5)
+# EVENT_LOG_SPEC.md (v0.6)
 
 ## 0. Purpose
 
-This document defines the **Event Log Specification (ELS) v0.5** for AgentOps Replay.
+This document defines the **Event Log Specification (ELS) v0.6** for AgentOps Replay.
 This specification is the Constitutional Spine of the project.
+
+**Versioning Note:**
+
+- v0.5 logs are re-interpreted, not re-validated
+- Evidence classification is retroactive
+- No historical log becomes invalid solely due to reclassification
+
+**Language Convention:**
+This specification uses RFC 2119 keywords: MUST, MUST NOT, SHOULD, SHOULD NOT, MAY.
 
 ## 1. Event Envelope (Frozen Forever)
 
@@ -16,7 +25,7 @@ message EventEnvelope {
   uint64 timestamp_monotonic = 5;
   EventType event_type = 6;
   string source_sdk_ver = 7;
-  string schema_ver = 8;        // "v0.5" (MUST match ELS version)
+  string schema_ver = 8;        // "v0.6" (Canonical; "v0.5" accepted for legacy re-interpretation)
   string payload_hash = 9;
   string prev_event_hash = 10;
   string event_hash = 11;
@@ -35,19 +44,57 @@ message EventEnvelope {
 
 The **Ingestion Service** is the default Chain Authority.
 
-**Local Authority Mode Exception:**
+**Bounded Modes:**
 
-1.  If `chain_authority == "sdk"` for **all events** in a session, the SDK is the authority.
-2.  In this mode, the SDK computes `event_hash` and may emit `CHAIN_SEAL`.
-3.  **Mixed authority is INVALID:** A session with both "sdk" and "server" events fails verification.
+1.  **Server Authority Mode (Default):**
+    - `chain_authority == "server"` for ALL events in session
+    - Ingestion service MUST recompute `prev_event_hash` independently
+    - SDK-provided `prev_event_hash` MUST be ignored
+    - Server MUST emit `CHAIN_SEAL` to achieve `AUTHORITATIVE_EVIDENCE` status
+
+2.  **Local Authority Mode (Testing Only):**
+    - `chain_authority == "sdk"` for ALL events in session
+    - SDK computes `event_hash` and `prev_event_hash`
+    - SDK MAY emit `CHAIN_SEAL` for local testing
+    - Sessions MUST be labeled `NON_AUTHORITATIVE_EVIDENCE`
+
+3.  **Mixed Authority:**
+    - REJECTED. Session with both "sdk" and "server" events MUST fail verification.
+    - Verifier MUST emit `MIXED_AUTHORITY` violation.
 
 ### 1.3 Payload Canonicalization
 
-- **RFC 8785 (JCS)**
+- **RFC 8785 (JCS)** - REQUIRED for all payload hashing
 - **Floats:** IEEE-754 double
 - **Strings:** UTF-8 NFC
 - **Integers:** Signed 64-bit
-- **Redaction:** `[REDACTED]` + `_hash` (optionally salted)
+- **Redaction:** `[REDACTED]` + `_hash` (MAY be salted)
+
+### 1.4 Source of Truth for Chain Continuity
+
+**SERVER AUTHORITY MODE:**
+
+- The server MUST recompute `prev_event_hash` independently
+- SDK-provided `prev_event_hash` MUST be ignored
+- Disagreement between SDK and server MUST result in `CHAIN_BROKEN` error
+- Chain state is server-authoritative
+- NO warnings or forks are permitted
+
+**LOCAL AUTHORITY MODE:**
+
+- The SDK computes `prev_event_hash`
+- Server MUST validate but MUST NOT recompute
+- This mode is ONLY for testing and development
+- Sessions MUST be labeled `NON_AUTHORITATIVE_EVIDENCE`
+
+**MIXED AUTHORITY:**
+
+- REJECTED. Session MUST fail verification.
+
+**Disagreement Handling:**
+
+- Error: Verification MUST fail
+- Chain is either valid or invalid, no gray area
 
 ## 2. Event Types (Closed Set)
 
@@ -70,11 +117,77 @@ enum EventType {
 
 ### 2.1 CHAIN_SEAL Authority Rules
 
-- **Default:** Server-generated only (`chain_authority == "server"`).
-- **Local Authority Exception:** SDK may emit `CHAIN_SEAL` if `chain_authority == "sdk"` for the entire session.
-- **Mixed authority sessions:** INVALID.
+- **Server Mode:** Server MUST emit `CHAIN_SEAL` for `AUTHORITATIVE_EVIDENCE` status
+- **Local Mode:** SDK MAY emit `CHAIN_SEAL` if `chain_authority == "sdk"` for entire session
+- **Mixed authority sessions:** INVALID, MUST fail verification
 
-## 3. Ordering & Causality
+**Required CHAIN_SEAL Payload (Server Authority):**
+
+```json
+{
+  "ingestion_service_id": "prod-ingest-01",
+  "seal_timestamp": "2026-01-23T12:00:00.000Z",
+  "session_digest": "sha256:abc123..."
+}
+```
+
+All three fields are REQUIRED for server authority `CHAIN_SEAL`. Missing fields MUST cause `INVALID_SEAL` violation.
+
+### 2.2 LOG_DROP Semantics (SPEC-LOCKED)
+
+**Purpose:** `LOG_DROP` events represent buffer overflow or network loss. They MUST be forensically traceable.
+
+**Sequence Space:**
+
+- `LOG_DROP` events MUST DO consume exactly one sequence number.
+- `LOG_DROP` is an _event_, not a gap. It preserves the chain continuity.
+- Example: If Event 5 is dropped, the `LOG_DROP` event is Sequence 5.
+
+**Hash Participation:**
+
+- `LOG_DROP` participates in the hash chain exactly like any other event.
+- `prev_event_hash` of `LOG_DROP` must match the previous event's hash.
+- `event_hash` of `LOG_DROP` is calculated primarily on the `dropped_count`.
+
+**Payload Requirements:**
+
+```json
+{
+  "event_type": "LOG_DROP",
+  "payload": {
+    "dropped_count": 5, // REQUIRED: events lost in this drop
+    "cumulative_drops": 12, // REQUIRED: total drops in session
+    "drop_reason": "BUFFER_FULL", // REQUIRED: SDK_CRASH | BUFFER_FULL | NETWORK_LOSS
+    "sequence_range": [100, 104] // OPTIONAL: if known
+  }
+}
+```
+
+**Verifier Treatment:**
+
+- `LOG_DROP` does NOT break the chain (chain is valid).
+- `LOG_DROP` presence automatically downgrades evidence class to `PARTIAL_AUTHORITATIVE_EVIDENCE`.
+- `LOG_DROP` is a "known unknown"—evidence of absence, not absence of evidence.
+
+## 3. Compliance Artifacts
+
+### 3.1 JSON Export (The Evidence)
+
+The JSON Export is the **Primary Evidence Artifact**.
+
+- It MUST be RFC 8785 canonical.
+- It MUST be machine-verifiable.
+
+### 3.2 PDF Export (Presentation Only)
+
+The PDF Export is a **Secondary Representation**.
+
+- It is NOT evidence. It is a rendering of evidence.
+- It MUST contain the "Evidence Support Statement" disclaimer.
+- It MUST be deterministically generated from the JSON Source.
+- **Invariant:** `PDF(JSON)` must be reproducible byte-wise identical for the same version of the renderer.
+
+## 4. Ordering & Causality
 
 - `sequence_number` starts at 0, increments by 1.
 - Gaps detectable via `prev_event_hash` mismatch.
@@ -91,8 +204,39 @@ To verify session `S`:
 
 ## 5. Failure Semantics
 
-| Scenario            | Behavior         | Detectable? |
-| ------------------- | ---------------- | ----------- |
-| **Mixed Authority** | Session INVALID  | Yes         |
-| **SDK Crash**       | No `SESSION_END` | Yes         |
-| **Network Loss**    | Emit `LOG_DROP`  | Yes         |
+| Scenario               | Behavior           | Detectable? | Evidence Class        |
+| ---------------------- | ------------------ | ----------- | --------------------- |
+| **Mixed Authority**    | Session INVALID    | Yes         | FAIL                  |
+| **SDK Crash**          | No `SESSION_END`   | Yes         | PARTIAL_AUTHORITATIVE |
+| **Network Loss**       | Emit `LOG_DROP`    | Yes         | PARTIAL_AUTHORITATIVE |
+| **Missing CHAIN_SEAL** | Unsealed           | Yes         | PARTIAL_AUTHORITATIVE |
+| **Invalid CHAIN_SEAL** | Malformed metadata | Yes         | FAIL                  |
+
+## 6. Evidence Classification
+
+Every session MUST be classified into exactly one of three states:
+
+**AUTHORITATIVE_EVIDENCE:**
+
+- Server authority (`chain_authority="server"`)
+- Valid `CHAIN_SEAL` with required metadata
+- Complete session (has `SESSION_END`)
+- No `LOG_DROP` events
+- Chain cryptographically valid
+
+**PARTIAL_AUTHORITATIVE_EVIDENCE:**
+
+- Server authority (`chain_authority="server"`)
+- Cryptographically valid chain
+- BUT one or more of:
+  - Missing `CHAIN_SEAL` (unsealed)
+  - Missing `SESSION_END` (incomplete)
+  - Contains `LOG_DROP` events (data loss occurred)
+
+**NON_AUTHORITATIVE_EVIDENCE:**
+
+- SDK/local authority (`chain_authority="sdk"`)
+- Chain may be cryptographically valid
+- Explicitly flagged as testing/development only
+
+See CHAIN_AUTHORITY_INVARIANTS.md for full specification.
