@@ -30,17 +30,48 @@ SIGNED_FIELDS = [
 
 class VerificationError(Exception):
     def __init__(self, code: str, message: str, context: dict[str, Any] | None = None):
+        """
+        Initialize the VerificationError with a machine-readable code, a human-readable message, and optional contextual data.
+        
+        Parameters:
+            code (str): Short machine-readable error code identifying the verification failure.
+            message (str): Human-readable description of the error.
+            context (dict[str, Any] | None): Optional additional context (metadata) about the error; defaults to an empty dict.
+        """
         self.code = code
         self.message = message
         self.context = context or {}
 
 
 def sha256(data: bytes) -> str:
+    """
+    Compute the SHA-256 hexadecimal digest of the given bytes.
+    
+    Parameters:
+        data (bytes): Input data to hash.
+    
+    Returns:
+        str: Hexadecimal SHA-256 digest of `data`.
+    """
     return hashlib.sha256(data).hexdigest()
 
 
 def classify_evidence(authority: str, sealed: bool, complete: bool) -> str:
-    """Classify session as authoritative, partial authoritative, or non-authoritative evidence."""
+    """
+    Classify session evidence based on the producing authority, whether the chain is sealed, and whether the session is complete.
+    
+    Parameters:
+        authority (str): The source of the session (commonly "server" or "sdk").
+        sealed (bool): True if the session chain is cryptographically sealed.
+        complete (bool): True if the session contains a proper session end and no unresolved drops.
+    
+    Returns:
+        str: One of:
+            - "AUTHORITATIVE_EVIDENCE" when produced by a server and both sealed and complete.
+            - "PARTIAL_AUTHORITATIVE_EVIDENCE" when produced by a server but unsealed or incomplete.
+            - "NON_AUTHORITATIVE_EVIDENCE" when produced by an SDK authority.
+            - "UNKNOWN_EVIDENCE" for any other authority values.
+    """
     if authority == "server":
         if sealed and complete:
             return "AUTHORITATIVE_EVIDENCE"
@@ -57,8 +88,29 @@ def verify_session(
     events: list[dict[str, Any]], policy: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     """
-    Core verification pipeline.
-    Returns structured report.
+    Verify a sequence of replay events and produce a structured verification report.
+    
+    Performs structural, sequence, chain-integrity, payload- and event-hash validation, detects sealing and log-drop conditions, and classifies evidence according to spec v0.6. The pipeline stops at the first verification failure (fail-fast). If a policy is provided with "reject_local_authority": True, sessions signed by the local SDK authority will be marked as policy violations and fail.
+    
+    Parameters:
+        events (list[dict[str, Any]]): Ordered list of event envelopes to verify; each envelope must include the required signed fields and payload.
+        policy (dict[str, Any] | None): Optional policy controls (supported key: "reject_local_authority").
+    
+    Returns:
+        dict[str, Any]: Verification report with keys including:
+            - session_id: session identifier extracted from the events.
+            - status: "PASS" or "FAIL".
+            - violations: list of violation objects recorded on failure or policy enforcement.
+            - sealed: boolean indicating whether a valid CHAIN_SEAL was observed.
+            - authority: detected chain authority ("server", "sdk", or "unknown").
+            - evidence_class: one of the evidence classification strings (e.g., "AUTHORITATIVE_EVIDENCE").
+            - partial_reasons: list of reasons the session is considered partial.
+            - replay_fingerprint: calculated chain hash when verification passes, otherwise None.
+            - event_count: number of input events.
+            - complete: boolean indicating whether the session appears complete (session end present, no drops, passing verification).
+            - total_drops: cumulative dropped event count from LOG_DROP events.
+            - partial: boolean set when evidence has been degraded (e.g., due to LOG_DROP).
+            - warnings: optional list of non-fatal warnings (e.g., invalid drop counts).
     """
     report: dict[str, Any] = {
         "session_id": None,
@@ -314,6 +366,22 @@ def verify_session(
 
 
 def _validate_envelope(event: dict[str, Any], index: int):
+    """
+    Validate that an event envelope contains required fields and an allowed schema version.
+    
+    Checks that the event dict includes the required envelope keys and that `schema_ver`
+    is either the current SPEC_VERSION or "v0.5". Raises a VerificationError with a
+    specific error code when a required field is missing or when the schema version
+    is not allowed.
+    
+    Parameters:
+        event (dict[str, Any]): The event envelope to validate.
+        index (int): The event's index in the input sequence (used for contextual errors).
+    
+    Raises:
+        VerificationError: With code `MISSING_FIELD` if a required key is absent.
+        VerificationError: With code `SCHEMA_VERSION_MISMATCH` if `schema_ver` is not allowed.
+    """
     required = [
         "event_id",
         "session_id",
@@ -337,6 +405,23 @@ def _validate_envelope(event: dict[str, Any], index: int):
 
 
 def main():
+    """
+    Run the AgentOps Replay Verifier command-line tool (Spec v0.6).
+    
+    Parses a log file (Compliance Export JSON, JSON array, or JSON Lines), verifies the replay using the verifier pipeline, and prints the verification report in either human-readable text or JSON. Exits with code 0 on success and 1 on failure (including load errors and verification failures).
+    
+    Command-line arguments:
+      file
+        Path to the input log file (supports Compliance Export JSON, JSON array, or JSONL).
+      --format
+        Output format: "text" (default) or "json".
+      --reject-local-authority
+        When present, treat sessions with SDK/local authority as policy violations that cause failure.
+    
+    Behavior notes:
+      - If the input is a Compliance Export, the tool performs an additional metadata check and emits a METADATA_MISMATCH warning if the export's claimed evidence_class differs from the verifier's result (does not convert to failure).
+      - When formatting as text, prints a concise summary including session id, status, evidence class, sealed/complete flags, authority, total drops, violations, policy-violation details, and the replay fingerprint on successful verification.
+    """
     parser = argparse.ArgumentParser(description="AgentOps Replay Verifier (Spec v0.6)")
     parser.add_argument("file", help="Path to .jsonl log file")
     parser.add_argument(

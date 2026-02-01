@@ -27,12 +27,28 @@ except ImportError:
     class MockJCS:
         @staticmethod
         def canonicalize(obj):
+            """
+            Produce a canonical UTF-8 byte representation of a JSON-serializable object.
+            
+            Parameters:
+                obj: A JSON-serializable Python object (e.g., dict, list, str, number).
+            
+            Returns:
+                bytes: UTF-8 encoded JSON with keys sorted and compact separators for stable, deterministic serialization.
+            """
             return json.dumps(obj, sort_keys=True, separators=(',', ':')).encode('utf-8')
     jcs = MockJCS()
 
 
 def create_mock_events():
-    """Generates a consistent set of events for replay testing"""
+    """
+    Generate a fixed sequence of event dictionaries used for replay determinism tests.
+    
+    Each event contains the keys: `event_id`, `sequence_number`, `event_type`, `timestamp_wall`, `payload` (a canonicalized JSON string), `event_hash`, and `chain_authority`.
+    
+    Returns:
+        events (list[dict]): A list of five events representing a session start, a tool call, a tool result, a log drop, and a session end.
+    """
     # Payloads must be strings in DB/Engine
     
     events = [
@@ -94,7 +110,21 @@ def create_mock_events():
     return events
 
 def diff_dicts(d1, d2, path=""):
-    """Recursively finds differences between two dictionaries"""
+    """
+    Compare two nested structures (dictionaries, lists, and primitives) for structural and value equality.
+    
+    Recursively compares mapping keys and values, list elements by index, and primitive values for equality.
+    On the first detected mismatch this function prints a diagnostic message indicating the path and nature
+    of the mismatch and returns False. If no differences are found, it returns True.
+    
+    Parameters:
+        d1: The first structure to compare; may be a dict, list, or primitive value.
+        d2: The second structure to compare; may be a dict, list, or primitive value.
+        path (str): Internal caller-visible path used in diagnostic messages to locate mismatches.
+    
+    Returns:
+        True if the two structures are equal in shape and value, False otherwise.
+    """
     if isinstance(d1, dict) and isinstance(d2, dict):
         for k in d1.keys():
             if k not in d2:
@@ -126,6 +156,14 @@ def diff_dicts(d1, d2, path=""):
 
 
 def test_replay_determinism():
+    """
+    Test that building a replay from the same verified session events and seal produces identical outputs across runs.
+    
+    Creates a fixed set of mock events and a mock seal, loads the verified session twice, builds a replay for each run, and asserts the serialized replay outputs are bit-for-bit identical. Also verifies specific deterministic properties in the resulting frames (e.g., the frame with sequence_number 1 contains a payload whose `tool` field equals "calc").
+    
+    Raises:
+        AssertionError: If replay outputs differ between runs or if the deterministic property checks fail.
+    """
     print("\n>>> START REPLAY DETERMINISM TEST <<<")
     
     events_data = create_mock_events()
@@ -197,4 +235,3 @@ if __name__ == "__main__":
         import traceback
         traceback.print_exc()
         exit(1)
-
