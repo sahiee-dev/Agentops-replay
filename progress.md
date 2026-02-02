@@ -7,12 +7,12 @@
 
 ## Current Status
 
-| Metric           | Value                 |
-| ---------------- | --------------------- |
-| **Phase**        | **V1 Evidence Core**  |
-| **Spec Version** | v0.6.1 (Locked)       |
-| **Status**       | **COMPLETE (Locked)** |
-| **Last Updated** | February 01, 2026     |
+| Metric           | Value                    |
+| ---------------- | ------------------------ |
+| **Phase**        | **Production Reference** |
+| **Spec Version** | v1.0.0 (Released)        |
+| **Status**       | **PRODUCTION READY**     |
+| **Last Updated** | February 02, 2026        |
 
 ---
 
@@ -259,6 +259,35 @@ Fingerprint: 4272bdc7...
 - [x] **Spec-Lock:** `LOG_DROP` semantics are now law, not implementation detail.
 - [x] **PDF Demotion:** Explicitly defined as "Presentation Only" in spec.
 - [x] **Auditor Readiness:** "Cold Start" docs exist for third-party reviewers.
+
+### ✅ Phase 9: Production Reference Deployment (The "Real" System)
+
+**Date:** February 02, 2026
+
+**Activity:** Built the complete, audit-grade Reference Deployment with separated authority and formal evidence classification.
+
+**Artifacts Created:**
+
+- [PRODUCTION_INGESTION_CONTRACT.md](PRODUCTION_INGESTION_CONTRACT.md) — The system of record definition.
+- [PRODUCTION_EVIDENCE_CONTRACT.md](PRODUCTION_EVIDENCE_CONTRACT.md) — The output guarantee.
+- [EVIDENCE_CLASSIFICATION_SPEC.md](EVIDENCE_CLASSIFICATION_SPEC.md) — Formal Class A/B/C definitions.
+- `agentops_ingest/` — Production Ingestion Service (Validator, Sealer, Store).
+- `agentops_verify/` — Production Verifier (Offline, Stateless, Deterministic).
+- `reference_demo/e2e_test.py` — End-to-End validation script.
+
+**Key Achievements:**
+
+- [x] **Separated Authority:** SDKs are untreated claims; Ingestion is the sole authority.
+- [x] **Production Verifier:** Offline, dependency-free verifier with machine-readable exit codes.
+- [x] **Evidence Classification:** Implemented Class A (Authoritative), Class B (Degraded), Class C (Failed).
+- [x] **Hard Invariants:** Cross-session poisoning and replay attacks explicitly defeated.
+- [x] **End-to-End Proven:** `session_golden_verified.json` generated with Class A status.
+
+**Validation:**
+
+- **Ingestion Tests:** 19/19 passing (Schema, JCS, Authority Leaks, Replay Attacks).
+- **Verifier Tests:** 13/13 passing (Chain Integrity, Tampering, Classification).
+- **E2E Result:** PASS (Exit Code 0), Class A Evidence.
 
 ---
 

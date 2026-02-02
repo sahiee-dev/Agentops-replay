@@ -1,0 +1,4 @@
+# agentops-ingest dependencies
+
+flask>=2.3.0
+sqlalchemy>=2.0.0

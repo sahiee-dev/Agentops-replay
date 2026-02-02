@@ -1,0 +1,66 @@
+[
+  {
+    "event_id": "evt-001",
+    "session_id": "e2e-test-session-001",
+    "sequence_number": 0,
+    "timestamp_wall": "2023-10-01T12:00:00Z",
+    "event_type": "SESSION_START",
+    "payload": {
+      "agent_id": "test-agent",
+      "environment": "e2e-test"
+    },
+    "payload_hash": "14cbc0247a5c2720b9b8c1f6156a595a081d0cc2b6de8513baff9f6e4804886a",
+    "prev_event_hash": null,
+    "event_hash": "ac0d0d0e792dfb77b8491665bf840e4ba7361d726aaebf91f926f527ce7649a8",
+    "chain_authority": "agentops-ingest-v1"
+  },
+  {
+    "event_id": "evt-002",
+    "session_id": "e2e-test-session-001",
+    "sequence_number": 1,
+    "timestamp_wall": "2023-10-01T12:00:01Z",
+    "event_type": "AGENT_DECISION",
+    "payload": {
+      "input_facts": [
+        "user_query"
+      ],
+      "outcome": "PROCESS_REQUEST"
+    },
+    "payload_hash": "520ec38535812c7abaf8758863bbbce302be9ecaa310be9e2a2762d9b04d8597",
+    "prev_event_hash": "ac0d0d0e792dfb77b8491665bf840e4ba7361d726aaebf91f926f527ce7649a8",
+    "event_hash": "332e1255f39a3a0cb4fff4bc8b3a4b38479dba8aca9463e38cb94aaa2ef833ba",
+    "chain_authority": "agentops-ingest-v1"
+  },
+  {
+    "event_id": "evt-003",
+    "session_id": "e2e-test-session-001",
+    "sequence_number": 2,
+    "timestamp_wall": "2023-10-01T12:00:02Z",
+    "event_type": "TOOL_CALL",
+    "payload": {
+      "arguments": {
+        "user_id": "[REDACTED]"
+      },
+      "tool_name": "lookup_user"
+    },
+    "payload_hash": "c22358fb13e4804eb612a038b177b940ef9ec3d27cdb1b2724a802001bf338a7",
+    "prev_event_hash": "332e1255f39a3a0cb4fff4bc8b3a4b38479dba8aca9463e38cb94aaa2ef833ba",
+    "event_hash": "d9c7ee5f90f1bf20ccdc844a94b32001b07aab3f8dfdf7c816253932eef8526e",
+    "chain_authority": "agentops-ingest-v1"
+  },
+  {
+    "event_id": "evt-004",
+    "session_id": "e2e-test-session-001",
+    "sequence_number": 3,
+    "timestamp_wall": "2023-10-01T12:00:03Z",
+    "event_type": "SESSION_END",
+    "payload": {
+      "duration_ms": 3000,
+      "status": "success"
+    },
+    "payload_hash": "74935ed6ff0cb2f603aac3219854864771d50933af0ef480235235563addaddb",
+    "prev_event_hash": "d9c7ee5f90f1bf20ccdc844a94b32001b07aab3f8dfdf7c816253932eef8526e",
+    "event_hash": "3c8aed16f9602b6b531e0cfbb4c517168f53021d9dcb2f97c27235ce289dd457",
+    "chain_authority": "agentops-ingest-v1"
+  }
+]
