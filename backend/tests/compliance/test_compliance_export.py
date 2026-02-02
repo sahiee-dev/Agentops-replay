@@ -108,7 +108,7 @@ def test_compliance_artifacts(tmp_path):
     
     e0 = EventChain(
         event_id=uuid.UUID(evt0_dict["event_id"]),
-        session_id=1,
+        session_id=session_id,
         sequence_number=0,
         event_type="SESSION_START",
         timestamp_wall=datetime.fromisoformat("2024-01-01T12:00:00+00:00"),
@@ -140,7 +140,7 @@ def test_compliance_artifacts(tmp_path):
     
     e1 = EventChain(
         event_id=uuid.UUID(evt1_dict["event_id"]),
-        session_id=1,
+        session_id=session_id,
         sequence_number=1,
         event_type="SESSION_END",
         timestamp_wall=datetime.fromisoformat("2024-01-01T12:00:01+00:00"),
@@ -177,7 +177,7 @@ def test_compliance_artifacts(tmp_path):
     
     e2 = EventChain(
         event_id=uuid.UUID(evt2_dict["event_id"]),
-        session_id=1,
+        session_id=session_id,
         sequence_number=2,
         event_type="CHAIN_SEAL",
         timestamp_wall=datetime.fromisoformat("2024-01-01T12:00:02+00:00"),

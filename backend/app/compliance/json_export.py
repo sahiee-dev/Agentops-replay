@@ -79,7 +79,7 @@ def generate_json_export(session_id: str, db: DBSession) -> dict[str, Any]:
     # Get events
     events = (
         db.query(EventChain)
-        .filter(EventChain.session_id == session.id)
+        .filter(EventChain.session_id == session.session_id_str)
         .order_by(EventChain.sequence_number)
         .all()
     )
