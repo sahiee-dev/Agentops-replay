@@ -19,12 +19,10 @@ from .errors import (
     sequence_rewind,
     log_gap,
     session_closed,
+    invalid_first_sequence,
 )
 
-# Import JCS from SDK
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Import JCS from SDK (should be installed as dependency)
 from agentops_sdk import jcs
 
 
@@ -107,7 +105,7 @@ def seal_event(
         # First event in session
         if claim.sequence_number != 0:
             # First event must be sequence 0
-            raise IngestException(sequence_rewind(-1, claim.sequence_number))
+            raise IngestException(invalid_first_sequence(claim.sequence_number))
         prev_event_hash = None
     
     # 2. Compute Event Hash (The Seal)

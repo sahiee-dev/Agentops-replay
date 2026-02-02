@@ -28,9 +28,6 @@ from .errors import (
 )
 
 # Import JCS from SDK (shared canonical implementation)
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agentops_sdk import jcs
 
 
@@ -227,10 +224,18 @@ def verify_session(
             verification_mode = "REDACTED"
         
         # Update chain tracking
-        prev_expected_hash = event.get("event_hash")
-        if first_event_hash is None:
-            first_event_hash = event.get("event_hash")
-        final_event_hash = event.get("event_hash")
+        # CRITICAL: Use computed hash to prevent tamper propagation
+        try:
+            prev_expected_hash = computed_event_hash
+            if first_event_hash is None:
+                first_event_hash = computed_event_hash
+            final_event_hash = computed_event_hash
+        except NameError:
+            # Fallback if computation failed
+            prev_expected_hash = event.get("event_hash")
+            if first_event_hash is None:
+                first_event_hash = event.get("event_hash")
+            final_event_hash = event.get("event_hash")
     
     # Determine final status
     fatal_count = sum(1 for f in findings if f.severity == FindingSeverity.FATAL)

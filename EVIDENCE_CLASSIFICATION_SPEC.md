@@ -109,18 +109,21 @@ Class C evidence MUST trigger:
 
 ```
 function classify(report: VerificationReport) -> EvidenceClass:
-    if report.status == FAIL:
+    # Normalize PASS with degradation indicators to DEGRADED
+    normalized_status = report.status
+    if report.status == PASS:
+        if has_log_drops(report) or has_gaps(report):
+            normalized_status = DEGRADED
+
+    # Classify based on normalized status
+    if normalized_status == FAIL:
         return CLASS_C
 
-    if report.status == DEGRADED:
+    if normalized_status == DEGRADED:
         return CLASS_B
 
-    if report.status == PASS:
-        if has_log_drops(report):
-            return CLASS_B
-        if has_gaps(report):
-            return CLASS_B
-        return CLASS_A
+    # PASS with no degradation indicators
+    return CLASS_A
 ```
 
 Classification is **deterministic** and **derived**, not asserted.

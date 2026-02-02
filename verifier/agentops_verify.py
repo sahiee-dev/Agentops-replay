@@ -362,7 +362,8 @@ def main():
                     # It is a Compliance Export
                     events = data["events"]
                     export_metadata = data
-                    print(f"Detected Compliance Export (Format v{data.get('export_version', 'unknown')})")
+                    if args.format != "json":
+                        print(f"Detected Compliance Export (Format v{data.get('export_version', 'unknown')})")
                 else:
                     # It might be a single event or other JSON? Treat as line? 
                     # If it's a list, maybe it's a list of events (not export format but valid JSON array)

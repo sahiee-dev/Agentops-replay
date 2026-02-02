@@ -27,9 +27,6 @@ from .errors import (
 )
 
 # Import JCS from SDK (shared canonical implementation)
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agentops_sdk import jcs
 
 
@@ -116,7 +113,8 @@ def validate_claim(raw_event: Dict[str, Any]) -> ValidatedClaim:
     # 6. Verify client-provided hash (if present)
     if "payload_hash" in raw_event:
         client_hash = raw_event["payload_hash"]
-        if client_hash != computed_hash:
+        # Normalize comparison to be case-insensitive
+        if client_hash.lower() != computed_hash.lower():
             raise IngestException(payload_hash_mismatch(computed_hash, client_hash))
     
     # Build ValidatedClaim
@@ -155,8 +153,9 @@ def _validate_schema(raw_event: Dict[str, Any]) -> None:
     if not isinstance(raw_event["session_id"], str):
         raise IngestException(schema_invalid({"field": "session_id", "error": "must be string"}))
     
-    if not isinstance(raw_event["sequence_number"], int):
-        raise IngestException(schema_invalid({"field": "sequence_number", "error": "must be integer"}))
+    # Reject booleans (isinstance(True, int) is True in Python)
+    if not isinstance(raw_event["sequence_number"], int) or isinstance(raw_event["sequence_number"], bool):
+        raise IngestException(schema_invalid({"field": "sequence_number", "error": "must be integer, not boolean"}))
     
     if raw_event["sequence_number"] < 0:
         raise IngestException(schema_invalid({"field": "sequence_number", "error": "must be >= 0"}))

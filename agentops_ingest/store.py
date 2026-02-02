@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import (
-    create_engine, Column, String, Integer, Text, DateTime,
+    create_engine, Column, String, Integer, Float, Text, DateTime,
     UniqueConstraint, Index
 )
 from sqlalchemy.orm import sessionmaker, Session as DBSession
@@ -40,7 +40,7 @@ class EventRow(Base):
     
     # Timestamps
     timestamp_wall = Column(String(64), nullable=False)
-    timestamp_monotonic = Column(Integer, nullable=True)
+    timestamp_monotonic = Column(Float, nullable=True)
     
     # Event Data
     event_type = Column(String(64), nullable=False)

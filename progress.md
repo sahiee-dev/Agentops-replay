@@ -9,9 +9,9 @@
 
 | Metric           | Value                    |
 | ---------------- | ------------------------ |
-| **Phase**        | **Production Reference** |
+| **Phase**        | **Production Hardening** |
 | **Spec Version** | v1.0.0 (Released)        |
-| **Status**       | **PRODUCTION READY**     |
+| **Status**       | **AUDITED & FIXED**      |
 | **Last Updated** | February 02, 2026        |
 
 ---
@@ -288,6 +288,20 @@ Fingerprint: 4272bdc7...
 - **Ingestion Tests:** 19/19 passing (Schema, JCS, Authority Leaks, Replay Attacks).
 - **Verifier Tests:** 13/13 passing (Chain Integrity, Tampering, Classification).
 - **E2E Result:** PASS (Exit Code 0), Class A Evidence.
+
+### ✅ Phase 9.5: Issue Resolution & Hardening
+
+**Date:** February 02, 2026
+
+**Activity:** Fixed 28 items identified in post-production audit, including specification clarifications, ingestion security hardening, and verifier logic improvements.
+
+**Key Fixes:**
+
+- [x] **Spec Clarifications:** Fixed grammar in `EVENT_LOG_SPEC.md`, clarified `LOG_DROP` hash computation, and refined `EVIDENCE_CLASSIFICATION_SPEC.md`.
+- [x] **Ingestion Hardening:** Enforced strict `Content-Type` validation, secure exception handling (no leakage), and numeric type safety (Float timestamps).
+- [x] **Verifier Integrity:** Patched chain tracking logic to use internal computed hashes, preventing tamper propagation.
+- [x] **Dependency Hygiene:** Removed all `sys.path` hacks in favor of proper package imports.
+- [x] **Test Robustness:** Improved test isolation (`tmp_path`) and environmental handling in backend/compliance tests.
 
 ---
 

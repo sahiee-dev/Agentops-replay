@@ -19,6 +19,7 @@ class EventType(str, Enum):
     ANNOTATION = "ANNOTATION"
     CHAIN_SEAL = "CHAIN_SEAL"
     LOG_DROP = "LOG_DROP"
+    AGENT_DECISION = "AGENT_DECISION"
 
 # Strict Schema Validation Helpers (Scaffold for now to enforce types)
 REQUIRED_FIELDS = {

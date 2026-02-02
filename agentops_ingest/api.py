@@ -48,7 +48,8 @@ def create_app(database_url: str) -> Flask:
     @app.before_request
     def enforce_content_type():
         if request.method == 'POST':
-            if request.content_type != 'application/json':
+            # Accept application/json with or without charset parameter
+            if not request.content_type or not request.content_type.startswith('application/json'):
                 return jsonify({
                     "error_code": "INGEST_CONTENT_TYPE_INVALID",
                     "classification": "HARD_REJECT",
@@ -161,12 +162,17 @@ def _process_single_event(store: EventStore, raw_event: Dict[str, Any]) -> Dict[
     except IngestException as e:
         return e.error.to_dict()
     except Exception as e:
-        # Unexpected error - fail closed
+        # Log full exception server-side (import logging at top if needed)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Unexpected ingestion error: {e}", exc_info=True)
+        
+        # Return generic error to client
         return {
             "error_code": "INGEST_INTERNAL_ERROR",
-            "classification": "HARD_REJECT",
+            "classification": ErrorClassification.HARD_REJECT.value,
             "message": "Internal error",
-            "details": {"error": str(e)}
+            "details": {}
         }
 
 

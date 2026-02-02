@@ -11,6 +11,11 @@ class Session(Base):
     agent_name = Column(String(100), nullable=True, index=True)
     status = Column(String(50), nullable=True, index=True)
     started_at = Column(DateTime, nullable=False, index=True, server_default=func.now())
+    sealed_at = Column(DateTime, nullable=True)
+    session_id_str = Column(String(36), unique=True, index=True, nullable=False)
+    chain_authority = Column(String(50), nullable=True)
+    total_drops = Column(Integer, default=0)
+    ingestion_service_id = Column(String(100), nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="sessions")

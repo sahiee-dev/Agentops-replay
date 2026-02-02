@@ -22,6 +22,7 @@ class IngestErrorCode(str, Enum):
     AUTHORITY_LEAK = "INGEST_AUTHORITY_LEAK"
     PAYLOAD_HASH_MISMATCH = "INGEST_PAYLOAD_HASH_MISMATCH"
     SEQUENCE_REWIND = "INGEST_SEQUENCE_REWIND"
+    INVALID_FIRST_SEQUENCE = "INGEST_INVALID_FIRST_SEQUENCE"
     SESSION_CLOSED = "INGEST_SESSION_CLOSED"
     
     # PARTIAL_ACCEPT (202) - Strict mode rejects these
@@ -107,6 +108,15 @@ def sequence_rewind(last_seq: int, received_seq: int) -> IngestError:
         classification=ErrorClassification.HARD_REJECT,
         message="Sequence number <= last accepted sequence",
         details={"last_sequence": last_seq, "received_sequence": received_seq}
+    )
+
+
+def invalid_first_sequence(received: int) -> IngestError:
+    return IngestError(
+        error_code=IngestErrorCode.INVALID_FIRST_SEQUENCE,
+        classification=ErrorClassification.HARD_REJECT,
+        message="First event must have sequence_number=0",
+        details={"received": received}
     )
 
 

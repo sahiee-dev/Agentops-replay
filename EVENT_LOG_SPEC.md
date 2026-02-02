@@ -139,7 +139,7 @@ All three fields are REQUIRED for server authority `CHAIN_SEAL`. Missing fields 
 
 **Sequence Space:**
 
-- `LOG_DROP` events MUST DO consume exactly one sequence number.
+- `LOG_DROP` events MUST consume exactly one sequence number.
 - `LOG_DROP` is an _event_, not a gap. It preserves the chain continuity.
 - Example: If Event 5 is dropped, the `LOG_DROP` event is Sequence 5.
 
@@ -147,7 +147,7 @@ All three fields are REQUIRED for server authority `CHAIN_SEAL`. Missing fields 
 
 - `LOG_DROP` participates in the hash chain exactly like any other event.
 - `prev_event_hash` of `LOG_DROP` must match the previous event's hash.
-- `event_hash` of `LOG_DROP` is calculated primarily on the `dropped_count`.
+- `event_hash` of `LOG_DROP` is computed as `SHA-256(JCS(signed_fields_object))` where `signed_fields_object` contains all signed fields (`event_id`, `session_id`, `sequence_number`, `timestamp_wall`, `event_type`, `payload_hash`, `prev_event_hash`). The `dropped_count` value is contained within the `payload` and contributes to `event_hash` only via `payload_hash`.
 
 **Payload Requirements:**
 

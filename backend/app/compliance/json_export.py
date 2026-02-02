@@ -36,9 +36,9 @@ def _format_iso8601(dt: datetime) -> str:
             "Timestamp is required but was None. Caller must handle optional timestamps explicitly."
         )
     # Ensure UTC
-    if dt.tzinfo is None:
+    if dt.utcoffset() is None:
         dt = dt.replace(tzinfo=UTC)
-    elif dt.tzinfo != UTC:
+    elif dt.utcoffset() != UTC.utcoffset(dt):
         dt = dt.astimezone(UTC)
     # Format with milliseconds and Z suffix
     return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z"
