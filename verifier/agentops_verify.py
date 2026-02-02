@@ -351,6 +351,7 @@ def main():
     args = parser.parse_args()
 
     events = []
+    export_metadata = None
     try:
         with open(args.file) as f:
             for line in f:

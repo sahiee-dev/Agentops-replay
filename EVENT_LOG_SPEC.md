@@ -167,7 +167,35 @@ All three fields are REQUIRED for server authority `CHAIN_SEAL`. Missing fields 
 - LOG_DROP MAY occur before SESSION_END
 - If SESSION_END is dropped, session MUST be marked `UNSEALED`
 
-## 3. Ordering & Causality
+- `LOG_DROP` participates in the hash chain exactly like any other event.
+- `prev_event_hash` of `LOG_DROP` must match the previous event's hash.
+- `event_hash` of `LOG_DROP` is calculated using the standard envelope hashing rules (section 1.1).
+
+**Verifier Treatment:**
+
+- `LOG_DROP` does NOT break the chain (chain is valid).
+- `LOG_DROP` presence automatically downgrades evidence class to `PARTIAL_AUTHORITATIVE_EVIDENCE`.
+- `LOG_DROP` is a "known unknown"—evidence of absence, not absence of evidence.
+
+## 3. Compliance Artifacts
+
+### 3.1 JSON Export (The Evidence)
+
+The JSON Export is the **Primary Evidence Artifact**.
+
+- It MUST be RFC 8785 canonical.
+- It MUST be machine-verifiable.
+
+### 3.2 PDF Export (Presentation Only)
+
+The PDF Export is a **Secondary Representation**.
+
+- It is NOT evidence. It is a rendering of evidence.
+- It MUST contain the "Evidence Support Statement" disclaimer.
+- It MUST be deterministically generated from the JSON Source.
+- **Invariant:** `PDF(JSON)` must be reproducible byte-wise identical for the same version of the renderer.
+
+## 4. Ordering & Causality
 
 - `sequence_number` starts at 0, increments by 1.
 - Gaps detectable via `prev_event_hash` mismatch.
