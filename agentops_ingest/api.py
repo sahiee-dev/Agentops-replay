@@ -100,6 +100,14 @@ def create_app(database_url: str) -> Flask:
         # Process each event
         results = []
         for raw_event in events:
+            if not isinstance(raw_event, dict):
+                 return jsonify({
+                    "error_code": "INGEST_SCHEMA_INVALID",
+                    "classification": "HARD_REJECT",
+                    "message": "Each batch item must be an object",
+                    "details": {"index": events.index(raw_event), "type": str(type(raw_event))}
+                }), 400
+            
             result = _process_single_event(store, raw_event)
             results.append(result)
             

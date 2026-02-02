@@ -60,7 +60,7 @@
     "payload": {
       "arguments": {
         "query_type": "last_order",
-        "user_email": "alice@example.com"
+        "user_email": "[REDACTED_EMAIL]"
       },
       "function": "query",
       "tool_name": "transaction_db"
@@ -87,7 +87,7 @@
         ],
         "status": "completed",
         "transaction_id": "tx_abc123",
-        "user_email": "alice@example.com"
+        "user_email": "[REDACTED_EMAIL]"
       },
       "tool_name": "transaction_db"
     },

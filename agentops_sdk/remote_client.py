@@ -77,7 +77,10 @@ class RemoteAgentOpsClient(AgentOpsClient):
         # Track consecutive failures for kill-switch
         self.consecutive_failures = 0
         self.max_consecutive_failures = 3
+        self.consecutive_failures = 0
+        self.max_consecutive_failures = 3
         self.server_offline = False
+        self.total_dropped_events = 0
 
     def start_session(self, agent_id: str, tags: list[str] = None):
         """
@@ -172,6 +175,7 @@ class RemoteAgentOpsClient(AgentOpsClient):
 
             # Emit LOG_DROP deterministically
             dropped_count = len(self.pending_events)
+            self.total_dropped_events += dropped_count
             print(
                 f"📝 Emitting LOG_DROP for {dropped_count} events (5 retries exhausted)"
             )
@@ -180,8 +184,9 @@ class RemoteAgentOpsClient(AgentOpsClient):
             super().record(
                 EventType.LOG_DROP,
                 {
-                    "dropped_events": dropped_count,
-                    "reason": "persistent_server_failure",
+                    "dropped_count": dropped_count,
+                    "cumulative_drops": self.total_dropped_events,
+                    "drop_reason": "persistent_server_failure",
                     "retry_count": self.max_retries,
                     "error": str(e),
                 },

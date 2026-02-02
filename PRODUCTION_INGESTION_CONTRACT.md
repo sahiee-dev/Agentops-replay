@@ -91,7 +91,7 @@ The Ingestion Service applies the **Seal** to every accepted event.
 1.  **Prev Hash**: Derived from the previous accepted event's `event_hash`.
 2.  **Authority**: Field `chain_authority` is set to the current Ingestion Service Identity (e.g., `agentops-ingest-v1`).
 3.  **Event Hash**: Computed as:
-    ```
+    ```text
     SHA256( JCS({
         "event_id": ...,
         "session_id": ...,

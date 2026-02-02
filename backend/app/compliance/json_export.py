@@ -37,7 +37,7 @@ def _format_iso8601(dt: datetime) -> str:
         )
     # Ensure UTC
     if dt.utcoffset() is None:
-        dt = dt.replace(tzinfo=UTC)
+        raise ValueError("Timestamp was naive. Callers must supply timezone-aware datetimes (e.g. datetime.now(timezone.utc)).")
     elif dt.utcoffset() != UTC.utcoffset(dt):
         dt = dt.astimezone(UTC)
     # Format with milliseconds and Z suffix

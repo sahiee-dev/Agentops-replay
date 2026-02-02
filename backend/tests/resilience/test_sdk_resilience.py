@@ -80,8 +80,8 @@ class TestSDKResilience:
         last_event = mock_client.buffer.queue[-1]
         assert last_event.event_type == EventType.LOG_DROP
         payload_dict = json.loads(last_event.payload)
-        assert payload_dict["reason"] == "persistent_server_failure"
-        assert payload_dict["dropped_events"] == 1
+        assert payload_dict["drop_reason"] == "persistent_server_failure"
+        assert payload_dict["dropped_count"] == 1
         
         # Failure count incremented
         assert mock_client.consecutive_failures == 1

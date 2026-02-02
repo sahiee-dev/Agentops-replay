@@ -18,6 +18,9 @@ from .errors import (
     IngestException,
     sequence_rewind,
     log_gap,
+    IngestError,
+    IngestErrorCode,
+    ErrorClassification,
     session_closed,
     invalid_first_sequence,
 )
@@ -77,7 +80,17 @@ def seal_event(
     Raises:
         IngestException on sequence violations
     """
-    # 1. Sequence Validation
+    # 0. Check Session Alignment
+    if chain_state is not None and chain_state.session_id != claim.session_id:
+         raise IngestException(IngestError(
+             error_code=IngestErrorCode.SCHEMA_INVALID, 
+             classification=ErrorClassification.HARD_REJECT,
+             message=f"Session ID mismatch: chain_state={chain_state.session_id} vs claim={claim.session_id}",
+             details={"chain_session": chain_state.session_id, "claim_session": claim.session_id}
+         ))
+
+    # 1. Sequence Continuity
+    expected_seq = 0
     if chain_state is not None:
         # Check if session is closed
         if chain_state.is_closed:

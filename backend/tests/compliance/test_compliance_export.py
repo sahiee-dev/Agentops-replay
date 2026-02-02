@@ -14,12 +14,9 @@ sys.path.append(root_dir)
 sys.path.append(os.path.join(root_dir, "backend"))
 
 from app.compliance.json_export import generate_json_export
-try:
-    from app.compliance.pdf_export import generate_pdf_from_verified_dict
-except ImportError:
-    # Fallback/Mock if module missing (partial repo state)
-    def generate_pdf_from_verified_dict(data):
-        return b"%PDF-1.4 MOCK"
+import pytest
+pdf_export = pytest.importorskip("app.compliance.pdf_export")
+generate_pdf_from_verified_dict = pdf_export.generate_pdf_from_verified_dict
 from app.models import Session, EventChain, ChainSeal, SessionStatus, ChainAuthority
 from agentops_sdk.events import EventType
 

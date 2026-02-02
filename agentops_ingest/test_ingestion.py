@@ -232,13 +232,7 @@ class TestCrossSessionPoisoning:
     
     def test_sequence_isolation_across_sessions(self):
         """Sequence numbers are per-session, not global."""
-        # Session A at seq 5
-        chain_a = ChainState(
-            session_id="session-A",
-            last_sequence=5,
-            last_event_hash="aaa",
-            is_closed=False,
-        )
+
         
         # Session B at seq 0 (new session)
         # Attempting seq 0 should work for B, even though A is at 5
@@ -262,15 +256,13 @@ class TestCrossSessionPoisoning:
         event_b = make_valid_event(seq=1, session_id="session-B")
         claim_b = validate_claim(event_b)
         
-        # Sealing B with A's chain state should still produce B's hash
-        # (session_id in preimage prevents cross-contamination)
-        sealed_b = seal_event(claim_b, chain_state=chain_a, strict_mode=True)
+        # Sealing B with A's chain state MUST fail now (Guard added)
+        with pytest.raises(IngestException) as exc_info:
+            seal_event(claim_b, chain_state=chain_a, strict_mode=True)
         
-        # The sealed event should have session-B in its data
-        assert sealed_b.session_id == "session-B"
-        # prev_event_hash comes from chain_a, but that's a logic error
-        # the caller (api/store) must ensure chain_state matches session_id
-        # This test documents the boundary
+        # Check error message
+        assert "Session ID mismatch" in str(exc_info.value)
+        # assert sealed_b.session_id == "session-B"  # No longer reachable
 
 
 # --- REPLAY ATTACK TESTS ---

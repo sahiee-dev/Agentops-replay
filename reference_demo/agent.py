@@ -59,17 +59,9 @@ def run_golden_path():
         
         # Initialize Client
         client = AgentOpsClient(local_authority=False)
+        client.start_session(agent_id="support-agent-001", tags=["refund_bot", "incident_repro"])
         
-        # 1. Start Session
-        # Tags: "refund_bot", "incident_repro"
-        client.record(EventType.SESSION_START, {
-            "agent_id": "support-agent-001",
-            "environment": "dev",
-            "framework": "python-sdk-raw",
-            "framework_version": "0.0.1",
-            "sdk_version": "0.1.0",
-            "tags": ["refund_bot", "incident_repro"]
-        })
+        # 1. Start Session (handled by start_session)
         
         # 2. Decision: LOOKUP_TRANSACTION
         client.record(EventType.AGENT_DECISION, {

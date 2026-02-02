@@ -174,7 +174,7 @@ class TestDegradedStatus:
         events = make_sealed_chain(2)
         
         # Add a LOG_DROP event
-        drop_payload = {"dropped_events": 5, "reason": "buffer_overflow"}
+        drop_payload = {"dropped_count": 5, "cumulative_drops": 5, "drop_reason": "buffer_overflow"}
         payload_jcs = jcs.canonicalize(drop_payload)
         payload_hash = hashlib.sha256(payload_jcs).hexdigest()
         
@@ -227,7 +227,7 @@ class TestEvidenceClassification:
         events = make_sealed_chain(2)
         
         # Add LOG_DROP
-        drop_payload = {"dropped_events": 3, "reason": "buffer_overflow"}
+        drop_payload = {"dropped_count": 3, "cumulative_drops": 3, "drop_reason": "buffer_overflow"}
         payload_jcs = jcs.canonicalize(drop_payload)
         payload_hash = hashlib.sha256(payload_jcs).hexdigest()
         
