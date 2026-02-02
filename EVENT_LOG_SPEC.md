@@ -170,19 +170,6 @@ All three fields are REQUIRED for server authority `CHAIN_SEAL`. Missing fields 
 - `LOG_DROP` participates in the hash chain exactly like any other event.
 - `prev_event_hash` of `LOG_DROP` must match the previous event's hash.
 - `event_hash` of `LOG_DROP` is calculated using the standard envelope hashing rules (section 1.1).
-**Payload Requirements:**
-
-```json
-{
-  "event_type": "LOG_DROP",
-  "payload": {
-    "dropped_count": 5, // REQUIRED: events lost in this drop
-    "cumulative_drops": 12, // REQUIRED: total drops in session
-    "drop_reason": "BUFFER_FULL", // REQUIRED: SDK_CRASH | BUFFER_FULL | NETWORK_LOSS
-    "sequence_range": [100, 104] // OPTIONAL: if known
-  }
-}
-```
 
 **Verifier Treatment:**
 
