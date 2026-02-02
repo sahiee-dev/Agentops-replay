@@ -7,7 +7,6 @@ CRITICAL: Uses verifier's JCS implementation to prevent drift.
 
 import os
 import sys
-import json
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -16,7 +15,7 @@ from sqlalchemy.orm import Session as DBSession
 
 # Add verifier to path for JCS import (LOCKED to verifier implementation)
 _verifier_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "verifier")
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "verifier")
 )
 if _verifier_path not in sys.path:
     sys.path.insert(0, _verifier_path)
@@ -102,7 +101,7 @@ def generate_json_export(session_id: str, db: DBSession) -> dict[str, Any]:
             "event_type": event.event_type,
             "source_sdk_ver": event.source_sdk_ver,
             "schema_ver": event.schema_ver,
-            "payload": json.loads(event.payload_canonical),  # AUTHORITATIVE: canonical text for verification
+            "payload": event.payload_canonical,  # AUTHORITATIVE: canonical text for verification
             "payload_hash": event.payload_hash,
             "prev_event_hash": event.prev_event_hash,
             "event_hash": event.event_hash,

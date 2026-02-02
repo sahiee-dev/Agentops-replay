@@ -1,5 +1,15 @@
-from .user import User
-from .session import Session
+from .chain_seal import ChainSeal
 from .event import Event
+from .event_chain import EventChain
+from .session import ChainAuthority, Session, SessionStatus
+from .user import User
 
-__all__ = ["User", "Session", "Event"]
+__all__ = [
+    "ChainAuthority",
+    "ChainSeal",
+    "Event",
+    "EventChain",
+    "Session",
+    "SessionStatus",
+    "User",
+]

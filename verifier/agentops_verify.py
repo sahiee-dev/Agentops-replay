@@ -353,36 +353,10 @@ def main():
     events = []
     export_metadata = None
     try:
-        # Try reading as full JSON first (Export format)
         with open(args.file) as f:
-            content = f.read()
-            try:
-                data = json.loads(content)
-                if isinstance(data, dict) and "events" in data and isinstance(data["events"], list):
-                    # It is a Compliance Export
-                    events = data["events"]
-                    export_metadata = data
-                    print(f"Detected Compliance Export (Format v{data.get('export_version', 'unknown')})")
-                else:
-                    # It might be a single event or other JSON? Treat as line? 
-                    # If it's a list, maybe it's a list of events (not export format but valid JSON array)
-                    if isinstance(data, list):
-                        events = data
-                    else:
-                        # Fallback to lines if it was just one JSON object that wasn't an export
-                        # But read() consumed it.
-                        pass
-            except json.JSONDecodeError:
-                # Not a single JSON files, try JSONL
-                pass
-            
-            if not events:
-                # Try JSONL
-                events = []
-                for line in content.splitlines():
-                    if line.strip():
-                        events.append(json.loads(line))
-                        
+            for line in f:
+                if line.strip():
+                    events.append(json.loads(line))
     except Exception as e:
         print(
             json.dumps(
@@ -396,22 +370,6 @@ def main():
 
     policy = {"reject_local_authority": args.reject_local_authority}
     report = verify_session(events, policy)
-    
-    # If using Export format, verify the summary matches
-    if export_metadata and report["status"] == "PASS":
-        # Meta-Verification: Does export claim match reality?
-        claimed_class = export_metadata.get("evidence_class")
-        actual_class = report["evidence_class"]
-        
-        if claimed_class != actual_class:
-            report["warnings"] = report.get("warnings", [])
-            report["warnings"].append({
-                "type": "METADATA_MISMATCH",
-                "message": f"Export claims {claimed_class} but verifier found {actual_class}"
-            })
-            # Should this fail verification? 
-            # Ideally yes, if the evidence is lying about itself.
-            # But let's keep it as warning for now unless intended otherwise.
 
     if args.format == "json":
         print(json.dumps(report, indent=2))

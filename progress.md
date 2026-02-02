@@ -7,12 +7,12 @@
 
 ## Current Status
 
-| Metric           | Value                 |
-| ---------------- | --------------------- |
-| **Phase**        | **V1 Evidence Core**  |
-| **Spec Version** | v0.6.1 (Locked)       |
-| **Status**       | **COMPLETE (Locked)** |
-| **Last Updated** | February 01, 2026     |
+| Metric           | Value                   |
+| ---------------- | ----------------------- |
+| **Phase**        | Phase 7 — Replay System |
+| **Spec Version** | v0.6                    |
+| **Status**       | Completed               |
+| **Last Updated** | January 29, 2026        |
 
 ---
 
@@ -241,27 +241,6 @@ Fingerprint: 4272bdc7...
 
 ---
 
-### ✅ Phase 8: Hardening & External Validation (The "Trust Gate")
-
-**Date:** February 01, 2026
-
-**Activity:** Addressed critical "Launch Blocker" feedback regarding determinism and spec-drift.
-
-**Artifacts Created:**
-
-- `EVENT_LOG_SPEC.md` (v0.6.1) — Spec-locked `LOG_DROP` and PDF status.
-- `backend/tests/replay/test_replay_determinism.py` — Proven byte-for-bit replay determinism.
-- `docs/COLD_START_VERIFICATION.md` — Guide for hostile/independent verification.
-
-**Key Outcomes:**
-
-- [x] **Replay Determinism:** PROVEN. Re-runs produce identical JSON output.
-- [x] **Spec-Lock:** `LOG_DROP` semantics are now law, not implementation detail.
-- [x] **PDF Demotion:** Explicitly defined as "Presentation Only" in spec.
-- [x] **Auditor Readiness:** "Cold Start" docs exist for third-party reviewers.
-
----
-
 ## Architecture Overview
 
 ```
@@ -309,11 +288,11 @@ Compliance Export (JSON/PDF)
 From PRD:
 
 1. ✅ Verifier passes 100% of adversarial tests
-2. ✅ System survives simulated network partition
-3. ✅ Compliance export accepted by legal team (Validated via Test Suite)
+2. [ ] System survives simulated network partition
+3. [ ] Compliance export accepted by legal team
 4. [ ] Security audit complete (internal)
-5. ✅ Incident response playbook validated (Simulated)
-6. ✅ Reference deployment on production agent (internal validation)
+5. [ ] Incident response playbook validated
+6. [ ] Reference deployment on production agent (internal)
 
 **Blockers:** Any verifier bug, any silent data loss, any chain repair.
 

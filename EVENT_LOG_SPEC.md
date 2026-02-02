@@ -133,17 +133,39 @@ enum EventType {
 
 All three fields are REQUIRED for server authority `CHAIN_SEAL`. Missing fields MUST cause `INVALID_SEAL` violation.
 
-### 2.2 LOG_DROP Semantics (SPEC-LOCKED)
+### 2.2 LOG_DROP Semantics
 
 **Purpose:** `LOG_DROP` events represent buffer overflow or network loss. They MUST be forensically traceable.
 
 **Sequence Space:**
 
-- `LOG_DROP` events MUST DO consume exactly one sequence number.
-- `LOG_DROP` is an _event_, not a gap. It preserves the chain continuity.
-- Example: If Event 5 is dropped, the `LOG_DROP` event is Sequence 5.
+- LOG_DROP events MUST consume a sequence number
+- Sequence MUST remain monotonic: if event N is dropped, LOG_DROP appears at sequence N
 
-**Hash Participation:**
+**Payload Requirements:**
+
+```json
+{
+  "event_type": "LOG_DROP",
+  "payload": {
+    "dropped_count": 5, // REQUIRED: events lost in this drop
+    "cumulative_drops": 12, // REQUIRED: total drops in session
+    "drop_reason": "BUFFER_FULL", // REQUIRED: SDK_CRASH | BUFFER_FULL | NETWORK_LOSS
+    "sequence_range": [100, 104] // OPTIONAL: if known
+  }
+}
+```
+
+**Replay Behavior:**
+
+- Replay MUST continue after LOG_DROP
+- Replay MUST mark the session as `PARTIAL_AUTHORITATIVE_EVIDENCE`
+- Auditors MUST be shown cumulative drop count
+
+**SESSION_END Behavior:**
+
+- LOG_DROP MAY occur before SESSION_END
+- If SESSION_END is dropped, session MUST be marked `UNSEALED`
 
 - `LOG_DROP` participates in the hash chain exactly like any other event.
 - `prev_event_hash` of `LOG_DROP` must match the previous event's hash.
