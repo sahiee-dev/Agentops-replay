@@ -47,7 +47,7 @@ class SealedEvent:
     event_hash: str
     chain_authority: str
     # Optional metadata
-    timestamp_monotonic: Optional[int] = None
+    timestamp_monotonic: Optional[float] = None
     source_sdk_ver: Optional[str] = None
     schema_ver: Optional[str] = None
 

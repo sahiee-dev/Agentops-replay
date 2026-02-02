@@ -23,6 +23,9 @@ def send_batch_with_retry(
     attempt = 0
     last_error = None
     
+    if max_retries <= 0:
+        raise ValueError(f"max_retries must be > 0 (got {max_retries})")
+    
     while attempt < max_retries:
         try:
             response = client.post(
