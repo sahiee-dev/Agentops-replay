@@ -27,9 +27,18 @@ from jcs import canonicalize  # AUTHORITATIVE: verifier's RFC 8785 implementatio
 
 def _format_iso8601(dt: datetime) -> str:
     """
-    Format datetime to strict ISO 8601: YYYY-MM-DDTHH:MM:SS.sssZ
-
-    No local offsets. No truncated seconds. Always UTC with Z suffix.
+    Format a datetime as an ISO 8601 UTC timestamp with millisecond precision and a trailing 'Z' suffix.
+    
+    The input is normalized to UTC (naive datetimes are treated as UTC) before formatting and the result always includes three fractional digits for milliseconds in the form YYYY-MM-DDTHH:MM:SS.mmmZ.
+    
+    Parameters:
+        dt (datetime): The datetime to format; may be naive or timezone-aware.
+    
+    Returns:
+        str: ISO 8601 UTC timestamp string in the form YYYY-MM-DDTHH:MM:SS.mmmZ.
+    
+    Raises:
+        ValueError: If `dt` is None.
     """
     if dt is None:
         raise ValueError(
@@ -46,23 +55,19 @@ def _format_iso8601(dt: datetime) -> str:
 
 def generate_json_export(session_id: str, db: DBSession) -> dict[str, Any]:
     """
-    Generate RFC 8785 canonical JSON export.
-
-    Includes:
-    - Full event chain
-    - Verification metadata
-    - Evidence class (AUTHORITATIVE/PARTIAL_AUTHORITATIVE/NON_AUTHORITATIVE)
-    - Chain-of-custody statement
-
-    Args:
-        session_id: Session UUID string
-        db: Database session
-
+    Generate an RFC 8785 (JCS) canonical JSON export for a given session.
+    
+    The export includes the full ordered event chain (using each event's canonical payload text), evidence class, chain-of-custody metadata, session metadata, and optional chain seal information.
+    
+    Parameters:
+        session_id (str): Session UUID string identifying the session to export.
+        db (DBSession): Database session used to load Session, EventChain, and ChainSeal records.
+    
     Returns:
-        Canonical export dictionary
-
+        dict: Canonical export dictionary containing keys such as `export_version`, `export_timestamp`, `session_id`, `evidence_class`, `chain_authority`, `session_metadata`, `seal`, `events`, and `chain_of_custody`.
+    
     Raises:
-        ValueError: If session not found
+        ValueError: If `session_id` is not a valid UUID string or if the session is not found.
     """
     # Validate session_id format
     try:

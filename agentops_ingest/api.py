@@ -37,7 +37,23 @@ MAX_BATCH_SIZE = 100
 
 def create_app(database_url: str) -> Flask:
     """
-    Create the Flask application for the Ingestion Service.
+    Create and configure the Flask application used by the ingestion service.
+    
+    The application enforces a maximum request payload size, requires POST requests to use
+    Content-Type starting with "application/json", and registers the ingestion and export
+    HTTP routes used by the service:
+    
+    - POST /v1/ingest/events: accepts a single event (object) or a batch (array) of events,
+      enforces a maximum batch size, processes each event through the ingestion pipeline,
+      and returns 201 on full success or 400 when a hard rejection occurs.
+    - GET /v1/sessions/<session_id>/export: returns sealed session events or 404 if none found.
+    - GET /health: returns service health status.
+    
+    Parameters:
+        database_url (str): Database connection URL used to initialize the EventStore.
+    
+    Returns:
+        app (Flask): Configured Flask application instance for the ingestion service.
     """
     app = Flask(__name__)
     app.config['MAX_CONTENT_LENGTH'] = MAX_PAYLOAD_SIZE
@@ -47,6 +63,18 @@ def create_app(database_url: str) -> Flask:
     
     @app.before_request
     def enforce_content_type():
+        """
+        Enforces that POST requests have a Content-Type header of "application/json".
+        
+        If the current request is a POST and the Content-Type header is missing or does not start with "application/json", returns a 400 JSON error response with fields:
+        - error_code: "INGEST_CONTENT_TYPE_INVALID"
+        - classification: "HARD_REJECT"
+        - message: "Content-Type must be application/json"
+        - details: {"received": <received content type>}
+        
+        Returns:
+            response_or_none: A Flask JSON response tuple with status 400 when the Content-Type is invalid, `None` otherwise.
+        """
         if request.method == 'POST':
             # Accept application/json with or without charset parameter
             if not request.content_type or not request.content_type.startswith('application/json'):
@@ -60,10 +88,14 @@ def create_app(database_url: str) -> Flask:
     @app.route('/v1/ingest/events', methods=['POST'])
     def ingest_events():
         """
-        POST /v1/ingest/events
+        Handle POST /v1/ingest/events by accepting a single event object or a batch of events, processing each through the ingestion pipeline, and returning per-event results.
         
-        Accepts single event or batch of events.
-        Append-only. No update. No delete.
+        Processes each event in order and stops further processing on the first event that yields a HARD_REJECT classification. Enforces a maximum batch size of MAX_BATCH_SIZE and expects a JSON object or array as the request body.
+        
+        Returns:
+            A JSON response containing a `results` list with one result object per processed event.
+            - If all events are accepted: responds with status 201 and the `results` list of accepted entries.
+            - If the request JSON is invalid, the body is neither object nor array, the batch exceeds MAX_BATCH_SIZE, or any event yields a HARD_REJECT: responds with status 400 and `results` (if applicable) or an error object with `error_code`, `classification`, `message`, and `details` fields. 
         """
         try:
             data = request.get_json(force=True)
@@ -113,9 +145,13 @@ def create_app(database_url: str) -> Flask:
     @app.route('/v1/sessions/<session_id>/export', methods=['GET'])
     def export_session(session_id: str):
         """
-        GET /v1/sessions/<session_id>/export
+        Export all sealed events for the given session.
         
-        Read-only export of sealed session.
+        Parameters:
+            session_id (str): Identifier of the session to export.
+        
+        Returns:
+            tuple: A Flask JSON response and status code. On success, returns the session's sealed events as JSON with HTTP 200. If no events are found, returns an error object with `error_code` "SESSION_NOT_FOUND", a `message`, `details` containing the `session_id`, and HTTP 404.
         """
         from .export import export_session as do_export
         events = do_export(store, session_id)
@@ -131,6 +167,12 @@ def create_app(database_url: str) -> Flask:
     
     @app.route('/health', methods=['GET'])
     def health():
+        """
+        Return a simple health check response.
+        
+        Returns:
+            A JSON response body `{"status": "ok"}` paired with HTTP status code `200`.
+        """
         return jsonify({"status": "ok"}), 200
     
     return app
@@ -138,9 +180,12 @@ def create_app(database_url: str) -> Flask:
 
 def _process_single_event(store: EventStore, raw_event: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Process a single event through the ingestion pipeline.
+    Process a single raw event through validation, sealing, and persistence.
     
-    Returns result dict (never raises to caller).
+    The function returns a result dictionary describing either a successful acceptance or a structured error. If validation, sealing, or storage succeeds the result represents an accepted event (including event identifiers); if an IngestException occurs the embedded error is returned; if an unexpected exception occurs a generic `INGEST_INTERNAL_ERROR` with `HARD_REJECT` classification is returned. The function itself does not raise exceptions to the caller.
+    
+    Returns:
+        dict: A result dictionary. On success contains acceptance fields (e.g. event identifiers and classification). On failure contains error fields: `error_code`, `classification`, `message`, and `details`.
     """
     try:
         # 1. Validate
@@ -178,7 +223,12 @@ def _process_single_event(store: EventStore, raw_event: Dict[str, Any]) -> Dict[
 
 def run_server(database_url: str, host: str = "0.0.0.0", port: int = 8080):
     """
-    Run the ingestion server.
+    Start the HTTP ingestion Flask server configured with the provided database URL.
+    
+    Parameters:
+        database_url (str): Connection URL used to initialize the EventStore for the app.
+        host (str): Host interface to bind the server to.
+        port (int): TCP port to listen on.
     """
     app = create_app(database_url)
     app.run(host=host, port=port, debug=False)

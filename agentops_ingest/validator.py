@@ -90,10 +90,23 @@ class ValidatedClaim:
 
 def validate_claim(raw_event: Dict[str, Any]) -> ValidatedClaim:
     """
-    Validate an incoming event claim.
+    Validate and normalize an incoming ingest event claim into a ValidatedClaim.
     
-    Raises IngestException on any failure.
-    Returns ValidatedClaim on success.
+    Performs authority-leak checks, strict schema validation, ISO-8601-with-timezone timestamp parsing, RFC 8785 JCS canonicalization of the payload, and SHA-256 payload-hash recomputation and optional verification. On success returns a ValidatedClaim populated with the parsed timestamp, canonical payload bytes, and computed payload hash.
+    
+    Parameters:
+        raw_event (Dict[str, Any]): Incoming event envelope. Required keys: `event_id`, `session_id`, `sequence_number`, `timestamp_wall`, `event_type`, and `payload`. Optional keys: `payload_hash`, `timestamp_monotonic`, `source_sdk_ver`, `schema_ver`.
+    
+    Returns:
+        ValidatedClaim: An immutable, validated claim containing identifiers, parsed timestamp (`timestamp_parsed`), canonical payload bytes (`payload_jcs`), computed `payload_hash`, and any provided optional hints.
+    
+    Raises:
+        IngestException: If validation fails, with specific error constructors for:
+            - authority_leak (forbidden client-provided fields),
+            - schema_invalid (missing/invalid fields or types),
+            - timestamp_invalid (malformed or timezone-naive timestamps),
+            - jcs_invalid (payload canonicalization errors),
+            - payload_hash_mismatch (client-provided hash does not match computed hash).
     """
     # 1. Authority Leak Detection (FIRST - fail fast)
     _check_authority_leak(raw_event)
@@ -134,14 +147,38 @@ def validate_claim(raw_event: Dict[str, Any]) -> ValidatedClaim:
 
 
 def _check_authority_leak(raw_event: Dict[str, Any]) -> None:
-    """Reject if client tries to assert authority."""
+    """
+    Reject events that include forbidden client-provided authority fields.
+    
+    Raises IngestException with an authority_leak error if any field from FORBIDDEN_CLIENT_FIELDS
+    is present in the incoming event and its value is not None.
+    
+    Parameters:
+        raw_event (dict): Incoming event envelope to validate.
+    
+    Raises:
+        IngestException: with authority_leak() when a forbidden client field is provided.
+    """
     for field in FORBIDDEN_CLIENT_FIELDS:
         if field in raw_event and raw_event[field] is not None:
             raise IngestException(authority_leak())
 
 
 def _validate_schema(raw_event: Dict[str, Any]) -> None:
-    """Validate required fields and types."""
+    """
+    Validate that an incoming event envelope contains all required top-level fields and that those fields have the expected types and allowed values.
+    
+    Checks performed:
+    - All fields in REQUIRED_ENVELOPE_FIELDS are present.
+    - `event_id` and `session_id` are strings.
+    - `sequence_number` is an integer (booleans are rejected) and is >= 0.
+    - `timestamp_wall` is a string.
+    - `event_type` is a string and one of VALID_EVENT_TYPES.
+    - `payload` is a JSON object (dict).
+    
+    Raises:
+        IngestException: with `schema_invalid` payload when any required field is missing or a field has an invalid type or value (details include the offending field and error information).
+    """
     missing = [f for f in REQUIRED_ENVELOPE_FIELDS if f not in raw_event]
     if missing:
         raise IngestException(schema_invalid({"missing_fields": missing}))
@@ -179,7 +216,17 @@ def _validate_schema(raw_event: Dict[str, Any]) -> None:
 
 
 def _validate_timestamp(ts_str: str) -> datetime:
-    """Validate ISO-8601 timestamp with timezone."""
+    """
+    Validate and parse an ISO-8601 timestamp string that includes an explicit timezone.
+    
+    Parses the input string into a timezone-aware datetime.
+    
+    Returns:
+        datetime: A timezone-aware datetime parsed from the input string.
+    
+    Raises:
+        IngestException: Raised via `timestamp_invalid` when the input does not match the expected ISO-8601-with-timezone format, when the parsed value is missing timezone information, or when parsing fails.
+    """
     if not ISO8601_REGEX.match(ts_str):
         raise IngestException(timestamp_invalid({
             "received": ts_str,
@@ -209,7 +256,18 @@ def _validate_timestamp(ts_str: str) -> datetime:
 
 
 def _canonicalize_payload(payload: Dict[str, Any]) -> bytes:
-    """Canonicalize payload using JCS (RFC 8785)."""
+    """
+    Produce RFC 8785 JCS canonicalized bytes for the given JSON-like payload.
+    
+    Parameters:
+        payload (Dict[str, Any]): JSON object (mapping) to canonicalize.
+    
+    Returns:
+        bytes: Canonical JCS-encoded bytes of the payload.
+    
+    Raises:
+        IngestException: with `jcs_invalid` when canonicalization fails.
+    """
     try:
         return jcs.canonicalize(payload)
     except Exception as e:
