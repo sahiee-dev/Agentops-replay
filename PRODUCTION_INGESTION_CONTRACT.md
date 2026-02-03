@@ -49,6 +49,8 @@ The Ingestion Service exposes **EXACTLY ONE** write path.
   - **NO** Out-of-order writes (Sequence must be contiguous).
   - **Invariant**: `sequence_number` MUST start at 0 and increment by exactly +1.
 
+> **Note**: These invariants apply to **Production/Strict Mode**. See "Permissive Mode" below for non-production exceptions.
+
 ## 3. Validation & Rejection Rules (Taxonomy)
 
 For every incoming payload, the Ingestion Service MUST make a definitive decision. "Best effort" is forbidden.
@@ -67,8 +69,9 @@ The payload does not exist. It is discarded.
 
 The payload is stored but explicitly downgraded.
 
-- **Gap Detected**: `sequence_number` > `last_sequence + 1`.
-  - **Strict Mode** (see EVENT_LOG_SPEC.md#LOG_DROP): Gaps are REJECTED (HARD REJECT).
+- **Gap Detected**: `sequence_number` > `last_sequence + 1` (Permissive Mode Only).
+  - **Strict Mode** (Default): Gaps are REJECTED (HARD REJECT).
+  - **Permissive Mode**: Gaps are Accepted with Warnings (Class B evidence).
   - **Permissive Mode**: Gaps are recorded as `LOG_DROP` events (see EVENT_LOG_SPEC.md#LOG_DROP for `LOG_DROP` definition, fields, and semantics).
 
 ### C. ACCEPT (201 Created)
