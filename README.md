@@ -68,12 +68,35 @@ python3 verifier/agentops_verify.py my_session.jsonl
 # Output: PASS ✅
 ```
 
+### 4. LangChain Integration
+
+```python
+from agentops_replay.integrations.langchain import AgentOpsCallbackHandler
+
+# Initialize the callback handler
+handler = AgentOpsCallbackHandler(
+    agent_id="my-langchain-agent",
+    local_authority=True,  # Use False for production (server sealing)
+    redact_pii=False       # Set True to hash sensitive data
+)
+
+# Use with any LangChain component
+handler.start_session()
+agent.invoke({"input": "your query"}, config={"callbacks": [handler]})
+handler.end_session()
+handler.export_to_jsonl("session.jsonl")
+```
+
+See [`examples/langchain_demo/`](examples/langchain_demo/) for a complete working example.
+
 ## Project Structure
 
 ```
-├── CONSTITUTION.md          # Immutable project principles
-├── EVENT_LOG_SPEC.md        # v0.5 - The truth
-├── SCHEMA.md                # Strict payload definitions
+├── CONSTITUTION.md                  # Immutable project principles
+├── CHAIN_AUTHORITY_INVARIANTS.md    # v1.0 - Cryptographic authority separation
+├── FAILURE_MODES.md                 # v1.0 - Component failure semantics
+├── EVENT_LOG_SPEC.md                # v0.6 - The truth
+├── SCHEMA.md                        # Strict payload definitions
 ├── verifier/
 │   ├── agentops_verify.py   # Standalone verification tool
 │   ├── jcs.py               # RFC 8785 canonicalization
@@ -83,7 +106,10 @@ python3 verifier/agentops_verify.py my_session.jsonl
 │   ├── events.py            # Strict event types
 │   ├── envelope.py          # Event proposals
 │   └── buffer.py            # Ring buffer + LOG_DROP
+├── sdk/python/agentops_replay/
+│   └── integrations/langchain/  # LangChain callback handler
 └── examples/
+    ├── langchain_demo/      # LangChain agent demo
     └── sdk_demo.py          # Working example
 ```
 
@@ -99,9 +125,18 @@ python3 verifier/agentops_verify.py my_session.jsonl
 
 ## Current Status
 
-**Phase 2 Complete**: Reference Verifier operational ✅  
-**Phase 3 Complete**: Python SDK functional ✅  
-**Phase 4**: Framework integrations (in progress)
+**Phase 4 Complete**: LangChain Integration ✅  
+**Status**: Green (validated)
+
+### Recent Updates (Day 3)
+
+- LangChain callback handler implemented
+- Demo agent with tools (lookup_order, issue_refund, send_email)
+- PII incident simulation documented
+- Mock demo mode (no API key required)
+- Full verification workflow tested
+
+**Next**: Phase 5 (Compliance Artifacts)
 
 ## Development
 
@@ -124,10 +159,12 @@ python3 verifier/agentops_verify.py verifier/test_vectors/invalid_hash.jsonl  # 
 ## Roadmap
 
 - [x] Constitutional layer (CONSTITUTION.md)
-- [x] Event Log Spec v0.5
+- [x] Chain authority invariants (CHAIN_AUTHORITY_INVARIANTS.md)
+- [x] Failure mode documentation (FAILURE_MODES.md)
+- [x] Event Log Spec v0.6
 - [x] Standalone verifier (`agentops-verify`)
 - [x] Python SDK (local authority mode)
-- [ ] LangChain integration
+- [x] LangChain integration
 - [ ] Ingestion service (server authority)
 - [ ] Compliance report generators
 - [ ] Long-term storage backend

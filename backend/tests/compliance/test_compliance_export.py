@@ -27,26 +27,74 @@ import jcs
 
 class MockDB:
     def __init__(self, session, events, seal):
+        """
+        Initialize the mock database with a session object, a list of event chain entries, and an optional chain seal.
+        
+        Parameters:
+            session (Session): The Session ORM object to return for session queries.
+            events (list[EventChain]): Ordered list of EventChain objects to return for event queries.
+            seal (ChainSeal | None): ChainSeal object to return for seal queries; may be None if absent.
+        """
         self.session_obj = session
         self.events = events
         self.seal = seal
 
     def query(self, model):
+        """
+        Set the active model for subsequent query operations and return the mock database for chaining.
+        
+        Parameters:
+            model: ORM model class to query against; subsequent calls to filter/order_by/all/first operate on this model.
+        
+        Returns:
+            The MockDB instance to allow method chaining.
+        """
         self.current_model = model
         return self
 
     def filter(self, *args, **kwargs):
+        """
+        Ignore any provided filter arguments and return the same MockDB instance to allow method chaining.
+        
+        Parameters:
+            *args: Positional filter expressions (ignored).
+            **kwargs: Keyword filter expressions (ignored).
+        
+        Returns:
+            self (MockDB): The same MockDB instance for chaining calls.
+        """
         return self
 
     def order_by(self, *args):
+        """
+        No-op ordering method that accepts ordering criteria and returns the queryable mock for fluent chaining.
+        
+        Parameters:
+            *args: Ordering expressions or fields to order by; these are accepted but ignored.
+        
+        Returns:
+            self: The same MockDB instance to allow method chaining.
+        """
         return self
 
     def all(self):
+        """
+        Return the stored EventChain entries when the current query model is EventChain.
+        
+        Returns:
+            list[EventChain]: The list of stored events if the current model is EventChain, otherwise an empty list.
+        """
         if self.current_model == EventChain:
             return self.events
         return []
 
     def first(self):
+        """
+        Return the first record for the currently selected model.
+        
+        Returns:
+            Session instance when the current model is `Session`, `ChainSeal` instance when the current model is `ChainSeal`, `None` otherwise.
+        """
         if self.current_model == Session:
             return self.session_obj
         if self.current_model == ChainSeal:
@@ -75,6 +123,16 @@ def test_compliance_artifacts():
     def hash_event(evt_dict):
         # Calculate event hash
         # Signed fields only
+        """
+        Compute the SHA-256 event hash over the canonicalized subset of signed event fields.
+        
+        Parameters:
+            evt_dict (dict): Event object containing keys "event_id", "session_id", "sequence_number",
+                "timestamp_wall", "event_type", "payload_hash", and "prev_event_hash".
+        
+        Returns:
+            str: Hexadecimal SHA-256 digest of the canonicalized signed fields.
+        """
         signed_fields = ["event_id", "session_id", "sequence_number", "timestamp_wall", "event_type", "payload_hash", "prev_event_hash"]
         signed_obj = {k: evt_dict[k] for k in signed_fields}
         canonical = jcs.canonicalize(signed_obj)

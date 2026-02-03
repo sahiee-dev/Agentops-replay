@@ -1,68 +1,75 @@
-# Goals: V1 Launch Readiness ("The Hardening") [x]
+# Goals: Compliance & Ingestion Foundation
 
-**Date:** February 01, 2026
-**Theme:** "Trust Through Adversarial Hardening"
+**Date:** January 29, 2026
+**Theme:** "From Evidence to Authority"
 
-The "V1 Evidence Core" has passed internal validation. To move from "Functional" to "System of Record", we must prove determinism and external verifiability.
-
----
-
-## 🔒 Goal 1: Spec-Lock Failure Semantics [x]
-
-**Objective:** rigorously define `LOG_DROP` behavior in the specification to prevent future drift.
-
-- **Task:** Update `EVENT_LOG_SPEC.md` with explicit rules for `LOG_DROP`.
-- **Success Criteria:**
-  - [x] Ordering is defined (does it increment sequence?).
-  - [x] Hashing rules are explicit (does it participate in the chain?).
-  - [x] Verifier handling is specified (terminal vs. gap).
+Today's objective is to complete the Compliance layer (Phase 5) and lay the authoritative foundation for the Ingestion Service (Phase 6). This transitions the system from a passive recorder (SDK) to an active arbiter of truth.
 
 ---
 
-## 📉 Goal 2: Demote PDF Artifact [x]
+## 🎯 Goal 1: Complete Phase 5 (Compliance Artifacts)
 
-**Objective:** Explicitly codify that PDF is a _representation_, not _evidence_, preventing legal misuse.
+**Objective:** Deliver audit-grade export capabilities that legal/compliance teams can use immediately.
 
-- **Task:** Update `EVENT_LOG_SPEC.md` and `backend/app/compliance/pdf_export.py` (if needed) to reinforce "Presentation Only" status.
-- **Success Criteria:**
-  - [x] Spec explicitly states PDF is non-authoritative.
-  - [x] PDF generation logic is verified to be deterministic (JSON -> PDF).
+### 1.1 Finalize Canonical JSON Export
 
----
+- **File:** `backend/app/compliance/json_export.py`
+- **Requirements:**
+  - [ ] RFC 8785 JCS Compliance (re-verify)
+  - [ ] Strict ISO 8601 formatting (Z-suffix)
+  - [ ] Full chain-of-custody metadata
+  - [ ] Evidence class assertion
 
-## 🔁 Goal 3: Prove Replay Determinism [x]
+### 1.2 Implement PDF Evidence Export
 
-**Objective:** Prove that the Replay Engine produces bit-identical output for the same log, every single time.
+- **New File:** `backend/app/compliance/pdf_export.py`
+- **Requirements:**
+  - Executive Summary (Status, Verification Result)
+  - Timeline View (Readable event chain)
+  - Technical Verification Annex (Hashes, Seals)
+  - Legal Disclaimer Injection
 
-- **Task:** Create `backend/tests/replay/test_replay_determinism.py`.
-- **Success Criteria:**
-  - [x] Test: Same Log -> Engine -> Run 1 == Run 2 (Byte-for-byte).
-  - [x] Test covers timestamps, JSON key ordering, floating point serialization.
+### 1.3 GDPR & Privacy Controls
 
----
-
-## 🌍 Goal 4: External "Cold Start" Verification [x]
-
-**Objective:** specific instructions for a third-party auditor to verify artifacts _without_ finding us or our repo first.
-
-- **Task:** Create `docs/COLD_START_VERIFICATION.md`.
-- **Success Criteria:**
-  - [x] Document assumes NO access to the repo.
-  - [x] Uses the exported artifact + open-source verifier script.
-  - [x] step-by-step auditing flow.
+- **New File:** `backend/app/compliance/gdpr.py`
+- **Requirements:**
+  - PII Detection logic (heuristic)
+  - `[REDACTED]` pattern validation
+  - Hash preservation check
 
 ---
 
-## 📊 Success Metrics
+## 🚀 Goal 2: Kickstart Phase 6 (Ingestion Service)
 
-1. **Determinism:** 100% byte-match on Replay output across 100 runs. [x]
-2. **Spec Completeness:** `LOG_DROP` rules cover 100% of edge cases (gaps, consecutive drops). [x]
-3. **Auditor Simulation:** A "clean room" test of the Cold Start guide works. [x]
+**Objective:** Build the server-side authority that seals the evidence.
+
+### 2.1 Ingestion Service Scaffolding
+
+- **Directory:** `backend/app/services/ingestion/`
+- **Components:**
+  - Service entry point related to FastAPI/Queue worker
+  - Dependency injection for Storage/Auth
+
+### 2.2 Server-Side Hash Recomputation
+
+- **File:** `backend/app/services/ingestion/hasher.py`
+- **Critical Requirement:**
+  - NEVER trust SDK hashes
+  - Re-calculate `prev_hash` -> `curr_hash` chain
+  - Validate sequence monotonicity
+
+### 2.3 Chain Sealing Logic
+
+- **File:** `backend/app/services/ingestion/sealer.py`
+- **Logic:**
+  - Finalize batch
+  - Compute Session Digest
+  - Emit `CHAIN_SEAL` event
 
 ---
 
-# ✅ V1 VERDICT: COMPLETE
+## 📊 Success Criteria for Today
 
-> **AgentOps Replay V1 Evidence Core is complete.**
-> The system is deterministic, specification-locked, and independently verifiable.
-> **LOCKED.**
+1. `json_export.py` produces verifiable outputs against the `verifier` CLI.
+2. `pdf_export.py` generates a readable PDF with correct legal disclaimers.
+3. Ingestion service can take a raw list of events and reject a tampered chain.

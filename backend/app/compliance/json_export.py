@@ -7,7 +7,6 @@ CRITICAL: Uses verifier's JCS implementation to prevent drift.
 
 import os
 import sys
-import json
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -16,7 +15,7 @@ from sqlalchemy.orm import Session as DBSession
 
 # Add verifier to path for JCS import (LOCKED to verifier implementation)
 _verifier_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "verifier")
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "verifier")
 )
 if _verifier_path not in sys.path:
     sys.path.insert(0, _verifier_path)
@@ -27,9 +26,16 @@ from jcs import canonicalize  # AUTHORITATIVE: verifier's RFC 8785 implementatio
 
 def _format_iso8601(dt: datetime) -> str:
     """
-    Format datetime to strict ISO 8601: YYYY-MM-DDTHH:MM:SS.sssZ
-
-    No local offsets. No truncated seconds. Always UTC with Z suffix.
+    Format a datetime to strict UTC ISO 8601 with millisecond precision and a trailing 'Z'.
+    
+    Parameters:
+        dt (datetime): The timestamp to format; must be non-None.
+    
+    Returns:
+        str: The timestamp formatted as "YYYY-MM-DDTHH:MM:SS.sssZ" in UTC.
+    
+    Raises:
+        ValueError: If `dt` is None.
     """
     if dt is None:
         raise ValueError(
@@ -46,23 +52,18 @@ def _format_iso8601(dt: datetime) -> str:
 
 def generate_json_export(session_id: str, db: DBSession) -> dict[str, Any]:
     """
-    Generate RFC 8785 canonical JSON export.
-
-    Includes:
-    - Full event chain
-    - Verification metadata
-    - Evidence class (AUTHORITATIVE/PARTIAL_AUTHORITATIVE/NON_AUTHORITATIVE)
-    - Chain-of-custody statement
-
-    Args:
-        session_id: Session UUID string
-        db: Database session
-
+    Generate an RFC 8785 canonical JSON export for the specified session.
+    
+    Builds a deterministic export containing the full canonical event chain (using each event's `payload_canonical`), export and session metadata, an evidence class, chain_of_custody information, and an optional seal section.
+    
+    Parameters:
+        session_id (str): Session UUID string identifying the session to export.
+    
     Returns:
-        Canonical export dictionary
-
+        dict: Canonical export dictionary with keys including `export_version`, `export_timestamp`, `session_id`, `evidence_class`, `chain_authority`, `session_metadata`, `seal`, `events`, and `chain_of_custody`.
+    
     Raises:
-        ValueError: If session not found
+        ValueError: If `session_id` is not a valid UUID or if no session exists for the given `session_id`.
     """
     # Validate session_id format
     try:
@@ -102,7 +103,7 @@ def generate_json_export(session_id: str, db: DBSession) -> dict[str, Any]:
             "event_type": event.event_type,
             "source_sdk_ver": event.source_sdk_ver,
             "schema_ver": event.schema_ver,
-            "payload": json.loads(event.payload_canonical),  # AUTHORITATIVE: canonical text for verification
+            "payload": event.payload_canonical,  # AUTHORITATIVE: canonical text for verification
             "payload_hash": event.payload_hash,
             "prev_event_hash": event.prev_event_hash,
             "event_hash": event.event_hash,
@@ -158,12 +159,13 @@ def _determine_evidence_class(
     session: Session, chain_seal: ChainSeal, event_count: int
 ) -> str:
     """
-    Determine evidence class per CHAIN_AUTHORITY_INVARIANTS.md.
-
-    Returns one of:
-    - AUTHORITATIVE_EVIDENCE: Server-sealed, complete chain
-    - PARTIAL_AUTHORITATIVE_EVIDENCE: Server-sealed, incomplete chain
-    - NON_AUTHORITATIVE_EVIDENCE: SDK-only, no seal
+    Determine the evidence class for a session based on seal presence, completeness, and event count.
+    
+    Returns:
+        One of the following string values:
+        - `AUTHORITATIVE_EVIDENCE`: Chain is server-sealed, has zero drops, and contains at least one event.
+        - `PARTIAL_AUTHORITATIVE_EVIDENCE`: Chain is server-sealed but is incomplete (has drops, is unsealed, or has zero events).
+        - `NON_AUTHORITATIVE_EVIDENCE`: No server seal is present.
     """
     if chain_seal is None:
         return "NON_AUTHORITATIVE_EVIDENCE"
@@ -177,8 +179,9 @@ def _determine_evidence_class(
 
 def serialize_canonical(export: dict[str, Any]) -> bytes:
     """
-    Serialize export to RFC 8785 canonical bytes.
-
-    Uses verifier's JCS implementation (LOCKED).
+    Serialize an export dictionary into RFC 8785 canonical form.
+    
+    Returns:
+        canonical_bytes (bytes): UTF-8 encoded bytes of the export serialized according to RFC 8785 (JSON Canonicalization Scheme).
     """
     return canonicalize(export)

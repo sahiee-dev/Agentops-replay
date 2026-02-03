@@ -37,16 +37,22 @@ class RemoteAgentOpsClient(AgentOpsClient):
         buffer_size: int = 1000,
     ):
         """
-        Initialize remote client.
-
-        Args:
-            server_url: Base URL for ingestion service
-            api_key: API key for authentication (optional)
-            max_retries: Maximum retry attempts
-            retry_min_wait: Minimum wait between retries
-            retry_max_wait: Maximum wait between retries
-            batch_size: Number of events to batch before sending
-            buffer_size: Local buffer size
+        Create a RemoteAgentOpsClient configured to send batched events to a remote ingestion server and to preserve a local buffer as a fallback.
+        
+        Parameters:
+            server_url (str | None): Base URL for the ingestion service. If None, reads AGENTOPS_SERVER_URL or uses "http://localhost:8000".
+            api_key (str | None): Optional API key; if provided (or present in AGENTOPS_API_KEY) it is attached as a Bearer token to HTTP requests.
+            max_retries (int): Maximum number of retry attempts for sending a batch.
+            retry_min_wait (float): Minimum backoff (seconds) between retry attempts.
+            retry_max_wait (float): Maximum backoff (seconds) between retry attempts.
+            batch_size (int): Number of events to accumulate locally before sending a batch to the server.
+            local_authority (bool): Ignored in remote mode; retained for API compatibility.
+            buffer_size (int): Size of the local in-memory event buffer (delegated to the base client).
+        
+        Behavior:
+            - Stores retry, batching, and server configuration on the instance.
+            - Initializes an HTTP client configured with JSON content type and optional Authorization header.
+            - Prepares local buffering and batching state (pending_events, remote_session_id, server_offline flag, and failure counters).
         """
         super().__init__(local_authority=False, buffer_size=buffer_size)
 
@@ -81,10 +87,13 @@ class RemoteAgentOpsClient(AgentOpsClient):
 
     def start_session(self, agent_id: str, tags: list[str] = None):
         """
-        Start session on remote server.
-
-        SERVER AUTHORITY: Server creates session and assigns authority.
-        FAIL-OPEN: If server unreachable, falls back to local buffer only.
+        Start a remote session on the server and fall back to local buffering if the server is unreachable.
+        
+        On success stores the server-assigned session id in `self.remote_session_id`, clears the offline state and consecutive-failure counter. On failure marks the client as server-offline so the SDK continues in local-buffer-only mode. Always delegates to the parent `start_session` to preserve local buffering and session state.
+        
+        Parameters:
+            agent_id (str): Identifier for the agent to start the session for.
+            tags (list[str] | None): Optional list of tags to attach to the session.
         """
         try:
             response = self.http_client.post(
@@ -111,11 +120,13 @@ class RemoteAgentOpsClient(AgentOpsClient):
 
     def record(self, event_type: EventType, payload: dict[str, Any]):
         """
-        Record event and batch to server.
-
-        BATCHING: Events buffered locally and sent in batches
-        RETRY: Exponential backoff on failures
-        LOG_DROP: Deterministic emission on persistent failure
+        Record an event locally and queue it for remote batching and transmission.
+        
+        This delegates to the base implementation to preserve the local buffer, converts the most recently buffered event into the server-compatible event shape, and appends it to the local batch queue. If the client is marked offline the event is only recorded locally. When the queued batch reaches the configured batch size this method triggers a flush to the remote server.
+        
+        Parameters:
+            event_type (EventType): Category of the event being recorded; used for the local buffer entry and included in the queued server event.
+            payload (dict[str, Any]): Event payload to record and include in the queued server event.
         """
         # Always call parent to maintain local buffer
         super().record(event_type, payload)
@@ -125,7 +136,7 @@ class RemoteAgentOpsClient(AgentOpsClient):
             return
 
         # Convert last buffered event to server format
-        last_proposal = self.buffer.queue[-1] if self.buffer.queue else None
+        last_proposal = self.buffer.events[-1] if self.buffer.events else None
         if last_proposal:
             server_event = {
                 "event_id": last_proposal.event_id,
@@ -145,9 +156,9 @@ class RemoteAgentOpsClient(AgentOpsClient):
 
     def _flush_batch(self):
         """
-        Flush pending events to server with retry.
-
-        CONSTITUTIONAL: Emit LOG_DROP if all retries exhausted.
+        Flush pending batched events to the remote server and handle persistent failures.
+        
+        Attempts to send buffered events for the active remote session. On success, clears the pending queue and resets the consecutive failure counter. If sending fails persistently, emits a local `LOG_DROP` event recording the dropped count and error, clears the pending queue, increments the consecutive failure counter, and when the failure count reaches the configured threshold activates a kill-switch by setting `server_offline` to True so the client continues in local-buffer-only mode.
         """
         if not self.pending_events or not self.remote_session_id:
             return
@@ -203,9 +214,13 @@ class RemoteAgentOpsClient(AgentOpsClient):
 
     def end_session(self, status: str, duration_ms: int):
         """
-        End session and flush remaining events.
-
-        CONSTITUTIONAL: SESSION_END required for CHAIN_SEAL.
+        End the current session, flush any queued events, and attempt to seal the remote session.
+        
+        Records a local session end, flushes any pending batched events to the server when the server is reachable, and, if a remote session exists, attempts to seal it on the server. If sealing fails or the server is offline, the function leaves the server session open and logs a warning but does not raise.
+        
+        Parameters:
+            status (str): Final session status string.
+            duration_ms (int): Session duration in milliseconds.
         """
         # Record SESSION_END
         super().end_session(status, duration_ms)
@@ -231,6 +246,10 @@ class RemoteAgentOpsClient(AgentOpsClient):
                 print("   Session remains open on server")
 
     def __del__(self):
-        """Cleanup HTTP client."""
+        """
+        Close the HTTP client if it was initialized.
+        
+        Releases underlying network resources held by the client's HTTP connection when the object is destroyed.
+        """
         if hasattr(self, "http_client"):
             self.http_client.close()
