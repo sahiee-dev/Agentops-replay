@@ -1,0 +1,179 @@
+[
+  {
+    "event_id": "00000000-0000-4000-8000-000000000002",
+    "session_id": "00000000-0000-4000-8000-000000000001",
+    "sequence_number": 0,
+    "timestamp_wall": "2023-10-01T12:00:00Z",
+    "timestamp_monotonic": 1000100,
+    "event_type": "SESSION_START",
+    "source_sdk_ver": "python-sdk-0.1",
+    "schema_ver": "v0.5",
+    "payload_hash": "ec4203525cd41aa95aa1ae21cacdb654c315718db447f589f6e229b734d097bf",
+    "prev_event_hash": null,
+    "event_hash": null,
+    "payload": {
+      "agent_id": "support-agent-001",
+      "environment": "dev",
+      "framework": "python-sdk-raw",
+      "framework_version": "0.0.1",
+      "sdk_version": "0.1.0",
+      "tags": [
+        "refund_bot",
+        "incident_repro"
+      ]
+    },
+    "chain_authority": null
+  },
+  {
+    "event_id": "00000000-0000-4000-8000-000000000003",
+    "session_id": "00000000-0000-4000-8000-000000000001",
+    "sequence_number": 1,
+    "timestamp_wall": "2023-10-01T12:00:00Z",
+    "timestamp_monotonic": 1000200,
+    "event_type": "AGENT_DECISION",
+    "source_sdk_ver": "python-sdk-0.1",
+    "schema_ver": "v0.5",
+    "payload_hash": "1e97c0ede21fe24ec41caf3c7ee9c512e704a1b1853c6049dc4aa4f811bd2103",
+    "prev_event_hash": "5e5d1945fd83008af692fab55dd522ef9eec961373ce91eb813035cfaab8cbad",
+    "event_hash": null,
+    "payload": {
+      "input_facts": [
+        "user_request"
+      ],
+      "outcome": "LOOKUP_TRANSACTION",
+      "policy_version": "refund_v1"
+    },
+    "chain_authority": null
+  },
+  {
+    "event_id": "00000000-0000-4000-8000-000000000004",
+    "session_id": "00000000-0000-4000-8000-000000000001",
+    "sequence_number": 2,
+    "timestamp_wall": "2023-10-01T12:00:00Z",
+    "timestamp_monotonic": 1000300,
+    "event_type": "TOOL_CALL",
+    "source_sdk_ver": "python-sdk-0.1",
+    "schema_ver": "v0.5",
+    "payload_hash": "8de32a620f80734a1606838b513deb95dcdf76610969c5dd426e63fda9a58834",
+    "prev_event_hash": "91bfe16f69b9858f50105ed8c43c421093c57e9d8d8de2c03f0b7cf705f5c543",
+    "event_hash": null,
+    "payload": {
+      "arguments": {
+        "query_type": "last_order",
+        "user_email": "[REDACTED_EMAIL]"
+      },
+      "function": "query",
+      "tool_name": "transaction_db"
+    },
+    "chain_authority": null
+  },
+  {
+    "event_id": "00000000-0000-4000-8000-000000000005",
+    "session_id": "00000000-0000-4000-8000-000000000001",
+    "sequence_number": 3,
+    "timestamp_wall": "2023-10-01T12:00:00Z",
+    "timestamp_monotonic": 1000400,
+    "event_type": "TOOL_RESULT",
+    "source_sdk_ver": "python-sdk-0.1",
+    "schema_ver": "v0.5",
+    "payload_hash": "dba72a3acffbff0b647905e5713d90f2ebd8fb48a30caf0941ca95926d75a11a",
+    "prev_event_hash": "75c6b2beed2472002c91f5a058305f32ff1b8ed518a06a2889fb876886ad3022",
+    "event_hash": null,
+    "payload": {
+      "result": {
+        "amount": 29.99,
+        "items": [
+          "widget_pro"
+        ],
+        "status": "completed",
+        "transaction_id": "tx_abc123",
+        "user_email": "[REDACTED_EMAIL]"
+      },
+      "tool_name": "transaction_db"
+    },
+    "chain_authority": null
+  },
+  {
+    "event_id": "00000000-0000-4000-8000-000000000006",
+    "session_id": "00000000-0000-4000-8000-000000000001",
+    "sequence_number": 4,
+    "timestamp_wall": "2023-10-01T12:00:00Z",
+    "timestamp_monotonic": 1000500,
+    "event_type": "AGENT_DECISION",
+    "source_sdk_ver": "python-sdk-0.1",
+    "schema_ver": "v0.5",
+    "payload_hash": "d05000cef5122a499b9b6dd69aaab2d6d73d325816e637036755fe0c6ff1162e",
+    "prev_event_hash": "3ea5ced8372dba543a2ca92856ccd578478ac62ebaf6e6fe133c36f096415b63",
+    "event_hash": null,
+    "payload": {
+      "input_facts": [
+        "transaction_amount",
+        "user_status"
+      ],
+      "outcome": "APPROVE_REFUND",
+      "policy_version": "refund_v1"
+    },
+    "chain_authority": null
+  },
+  {
+    "event_id": "00000000-0000-4000-8000-000000000007",
+    "session_id": "00000000-0000-4000-8000-000000000001",
+    "sequence_number": 5,
+    "timestamp_wall": "2023-10-01T12:00:00Z",
+    "timestamp_monotonic": 1000600,
+    "event_type": "TOOL_CALL",
+    "source_sdk_ver": "python-sdk-0.1",
+    "schema_ver": "v0.5",
+    "payload_hash": "370ee5548b6c0e6f748eaf757f5e00831d6ee820ce9c726bfd8b111026948247",
+    "prev_event_hash": "405c4931eacb8c4ae68ef02386ed9899498835b79d050644bb13712380ca7337",
+    "event_hash": null,
+    "payload": {
+      "arguments": {
+        "reason": "customer_request",
+        "transaction_id": "tx_abc123"
+      },
+      "function": "process_refund",
+      "tool_name": "refund_payment"
+    },
+    "chain_authority": null
+  },
+  {
+    "event_id": "00000000-0000-4000-8000-000000000008",
+    "session_id": "00000000-0000-4000-8000-000000000001",
+    "sequence_number": 6,
+    "timestamp_wall": "2023-10-01T12:00:00Z",
+    "timestamp_monotonic": 1000700,
+    "event_type": "TOOL_RESULT",
+    "source_sdk_ver": "python-sdk-0.1",
+    "schema_ver": "v0.5",
+    "payload_hash": "f24d3e650acd41fc3ac6a162b2372f23b55c749d528ec598f1b41e43bb4577f4",
+    "prev_event_hash": "e4f3b15c56f889d9b85aa8f968ee6751064942d70217fa83a632abea6251b21e",
+    "event_hash": null,
+    "payload": {
+      "result": {
+        "refund_id": "ref_xyz789",
+        "success": true
+      },
+      "tool_name": "refund_payment"
+    },
+    "chain_authority": null
+  },
+  {
+    "event_id": "00000000-0000-4000-8000-000000000009",
+    "session_id": "00000000-0000-4000-8000-000000000001",
+    "sequence_number": 7,
+    "timestamp_wall": "2023-10-01T12:00:00Z",
+    "timestamp_monotonic": 1000800,
+    "event_type": "SESSION_END",
+    "source_sdk_ver": "python-sdk-0.1",
+    "schema_ver": "v0.5",
+    "payload_hash": "3fe1a038cb2ffc5aa7ba5e057b53f47958f7b867c880b6bb687d0bc83f5c661c",
+    "prev_event_hash": "0cc5684ef92a73968ba2ba5e4d70e9790114345ca41f8844750bd98a11ae750e",
+    "event_hash": null,
+    "payload": {
+      "duration_ms": 1500,
+      "status": "success"
+    },
+    "chain_authority": null
+  }
+]
