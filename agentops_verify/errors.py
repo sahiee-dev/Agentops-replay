@@ -137,5 +137,12 @@ class VerificationReport:
     
     @property
     def exit_code(self) -> int:
-        """Machine-verifiable exit code (Contract Locked)."""
+        """
+        Provide the machine-verifiable exit code for the report's verification status.
+        
+        Maps the report's VerificationStatus to its integer exit code using the module's EXIT_CODES mapping.
+        
+        Returns:
+            int: Exit code corresponding to the report's status; defaults to 2 (FAIL) if the status is not present in EXIT_CODES.
+        """
         return EXIT_CODES.get(self.status, 2)  # Default to FAIL (2) if undefined status
