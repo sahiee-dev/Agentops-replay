@@ -291,10 +291,11 @@ def _check_redaction_integrity(obj: Any, findings: List[Finding], event_seq: int
                 # Validation: Check sibling hash exists in CURRENT dict
                 hash_key = f"{k}_hash"
                 if hash_key not in obj:
+                    full_field = f"{path}.{k}" if path else k
                     findings.append(Finding(
                         finding_type=FindingType.REDACTION_INTEGRITY_VIOLATION,
                         severity=FindingSeverity.FATAL,
-                        message=f"Redacted field '{path}.{k}' missing integrity hash",
+                        message=f"Redacted field '{full_field}' missing integrity hash",
                         sequence_number=event_seq,
                         event_id=event_id,
                         details={"missing_field": hash_key}
