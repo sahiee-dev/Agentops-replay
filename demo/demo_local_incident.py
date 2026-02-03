@@ -9,6 +9,14 @@ from agentops_sdk.client import AgentOpsClient
 from agentops_sdk.events import EventType
 
 def main():
+    """
+    Run a local incident simulation that records a session with a PII-containing tool result and verifies the produced log.
+    
+    This function:
+    - Starts a local AgentOpsClient session and records events demonstrating a tool call, a tool result containing PII, a model request, and an error.
+    - Ends the session, flushes the session log to a JSONL file named incident_log_<session_id>.jsonl, and invokes an external verifier script on that file.
+    - Exits the process with status 1 if verification fails; otherwise leaves the generated log file for inspection.
+    """
     print("="*60)
     print("AgentOps LOCAL INCIDENT SIMULATION")
     print("Scenario: PII Leak in Tool Output")
