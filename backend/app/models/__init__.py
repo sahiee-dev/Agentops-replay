@@ -1,15 +1,8 @@
-from .chain_seal import ChainSeal
-from .event import Event
-from .event_chain import EventChain
-from .session import ChainAuthority, Session, SessionStatus
 from .user import User
+from .session import Session
+from .event import Event
+from .chain_seal import ChainSeal
+from .event_chain import EventChain
+from .enums import SessionStatus, ChainAuthority
 
-__all__ = [
-    "ChainAuthority",
-    "ChainSeal",
-    "Event",
-    "EventChain",
-    "Session",
-    "SessionStatus",
-    "User",
-]
+__all__ = ["User", "Session", "Event", "ChainSeal", "EventChain", "SessionStatus", "ChainAuthority"]

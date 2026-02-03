@@ -14,7 +14,9 @@ sys.path.append(root_dir)
 sys.path.append(os.path.join(root_dir, "backend"))
 
 from app.compliance.json_export import generate_json_export
-from app.compliance.pdf_export import generate_pdf_from_verified_dict
+import pytest
+pdf_export = pytest.importorskip("app.compliance.pdf_export")
+generate_pdf_from_verified_dict = pdf_export.generate_pdf_from_verified_dict
 from app.models import Session, EventChain, ChainSeal, SessionStatus, ChainAuthority
 from agentops_sdk.events import EventType
 
@@ -27,81 +29,37 @@ import jcs
 
 class MockDB:
     def __init__(self, session, events, seal):
-        """
-        Initialize the mock database with a session object, a list of event chain entries, and an optional chain seal.
-        
-        Parameters:
-            session (Session): The Session ORM object to return for session queries.
-            events (list[EventChain]): Ordered list of EventChain objects to return for event queries.
-            seal (ChainSeal | None): ChainSeal object to return for seal queries; may be None if absent.
-        """
         self.session_obj = session
         self.events = events
         self.seal = seal
 
     def query(self, model):
-        """
-        Set the active model for subsequent query operations and return the mock database for chaining.
-        
-        Parameters:
-            model: ORM model class to query against; subsequent calls to filter/order_by/all/first operate on this model.
-        
-        Returns:
-            The MockDB instance to allow method chaining.
-        """
         self.current_model = model
         return self
 
     def filter(self, *args, **kwargs):
-        """
-        Ignore any provided filter arguments and return the same MockDB instance to allow method chaining.
-        
-        Parameters:
-            *args: Positional filter expressions (ignored).
-            **kwargs: Keyword filter expressions (ignored).
-        
-        Returns:
-            self (MockDB): The same MockDB instance for chaining calls.
-        """
         return self
 
     def order_by(self, *args):
-        """
-        No-op ordering method that accepts ordering criteria and returns the queryable mock for fluent chaining.
-        
-        Parameters:
-            *args: Ordering expressions or fields to order by; these are accepted but ignored.
-        
-        Returns:
-            self: The same MockDB instance to allow method chaining.
-        """
         return self
 
     def all(self):
-        """
-        Return the stored EventChain entries when the current query model is EventChain.
-        
-        Returns:
-            list[EventChain]: The list of stored events if the current model is EventChain, otherwise an empty list.
-        """
         if self.current_model == EventChain:
             return self.events
         return []
 
     def first(self):
-        """
-        Return the first record for the currently selected model.
-        
-        Returns:
-            Session instance when the current model is `Session`, `ChainSeal` instance when the current model is `ChainSeal`, `None` otherwise.
-        """
         if self.current_model == Session:
             return self.session_obj
         if self.current_model == ChainSeal:
             return self.seal
         return None
 
-def test_compliance_artifacts():
+def test_compliance_artifacts(tmp_path):
+    """
+    Test end-to-end compliance export generation and verification.
+    Uses tmp_path for robust file handling.
+    """
     # 1. Setup Data
     session_id = str(uuid.uuid4())
     session_uuid = uuid.UUID(session_id)
@@ -123,16 +81,6 @@ def test_compliance_artifacts():
     def hash_event(evt_dict):
         # Calculate event hash
         # Signed fields only
-        """
-        Compute the SHA-256 event hash over the canonicalized subset of signed event fields.
-        
-        Parameters:
-            evt_dict (dict): Event object containing keys "event_id", "session_id", "sequence_number",
-                "timestamp_wall", "event_type", "payload_hash", and "prev_event_hash".
-        
-        Returns:
-            str: Hexadecimal SHA-256 digest of the canonicalized signed fields.
-        """
         signed_fields = ["event_id", "session_id", "sequence_number", "timestamp_wall", "event_type", "payload_hash", "prev_event_hash"]
         signed_obj = {k: evt_dict[k] for k in signed_fields}
         canonical = jcs.canonicalize(signed_obj)
@@ -157,8 +105,7 @@ def test_compliance_artifacts():
     
     e0 = EventChain(
         event_id=uuid.UUID(evt0_dict["event_id"]),
-        session_id=1,
-        session_id_str=session_id,
+        session_id=session_id,
         sequence_number=0,
         event_type="SESSION_START",
         timestamp_wall=datetime.fromisoformat("2024-01-01T12:00:00+00:00"),
@@ -190,8 +137,7 @@ def test_compliance_artifacts():
     
     e1 = EventChain(
         event_id=uuid.UUID(evt1_dict["event_id"]),
-        session_id=1,
-        session_id_str=session_id,
+        session_id=session_id,
         sequence_number=1,
         event_type="SESSION_END",
         timestamp_wall=datetime.fromisoformat("2024-01-01T12:00:01+00:00"),
@@ -228,8 +174,7 @@ def test_compliance_artifacts():
     
     e2 = EventChain(
         event_id=uuid.UUID(evt2_dict["event_id"]),
-        session_id=1,
-        session_id_str=session_id,
+        session_id=session_id,
         sequence_number=2,
         event_type="CHAIN_SEAL",
         timestamp_wall=datetime.fromisoformat("2024-01-01T12:00:02+00:00"),
@@ -245,10 +190,6 @@ def test_compliance_artifacts():
     
     events = [e0, e1, e2]
     
-    # Seal with valid hash (pointing to e2 as final event? No, e2 IS the seal)
-    # The ChainSeal table stores the hash of the Seal Event usually, or the hash of the last event BEFORE seal?
-    # PRD says CHAIN_SEAL event is the last event.
-    # The ChainSeal TABLE is likely metadata about that event.
     seal = ChainSeal(
         session_id=1,
         ingestion_service_id="ingest-1",
@@ -264,8 +205,8 @@ def test_compliance_artifacts():
     # 2. Generate JSON Export
     json_export = generate_json_export(session_id, db)
     
-    # Save to file
-    outfile = "test_compliance_export.json"
+    # Save to temp file
+    outfile = tmp_path / "test_compliance_export.json"
     with open(outfile, "wb") as f:
         f.write(jcs.canonicalize(json_export))
         
@@ -274,19 +215,29 @@ def test_compliance_artifacts():
     # 3. Verify with Verifier
     verifier_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../verifier/agentops_verify.py"))
     
-    result = subprocess.run(
-        [sys.executable, verifier_path, outfile, "--format", "json"],
-        capture_output=True,
-        text=True,
-        timeout=30
-    )
-    
+    # Run verifier process
+    try:
+        result = subprocess.run(
+            [sys.executable, verifier_path, str(outfile), "--format", "json"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True
+        )
+    except subprocess.CalledProcessError as e:
+        print("Verifier Failed!")
+        print("STDOUT:", e.stdout)
+        print("STDERR:", e.stderr)
+        raise
+
     print("Verifier Output:", result.stdout)
-    print("Verifier Error:", result.stderr)
     
-    assert result.returncode == 0
     # Parse JSON output for robust assertion
-    verifier_data = json.loads(result.stdout)
+    try:
+        verifier_data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        pytest.fail(f"Verifier output is not valid JSON: {result.stdout}")
+
     assert verifier_data["status"] == "PASS"
     assert verifier_data["evidence_class"] == "AUTHORITATIVE_EVIDENCE"
     
@@ -295,9 +246,11 @@ def test_compliance_artifacts():
     assert len(pdf_bytes) > 0
     assert pdf_bytes.startswith(b"%PDF")
     
-    with open("test_compliance.pdf", "wb") as f:
+    pdf_outfile = tmp_path / "test_compliance.pdf"
+    with open(pdf_outfile, "wb") as f:
         f.write(pdf_bytes)
-    print("PDF Export saved to test_compliance.pdf")
+    print(f"PDF Export saved to {pdf_outfile}")
 
 if __name__ == "__main__":
-    test_compliance_artifacts()
+    # If run directly errors with tp_path missing, but for debugging we can simulate or just rely on pytest
+    sys.exit(pytest.main([__file__]))

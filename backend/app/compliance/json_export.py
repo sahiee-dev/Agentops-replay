@@ -42,9 +42,9 @@ def _format_iso8601(dt: datetime) -> str:
             "Timestamp is required but was None. Caller must handle optional timestamps explicitly."
         )
     # Ensure UTC
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    elif dt.tzinfo != UTC:
+    if dt.utcoffset() is None:
+        raise ValueError("Timestamp was naive. Callers must supply timezone-aware datetimes (e.g. datetime.now(timezone.utc)).")
+    elif dt.utcoffset() != UTC.utcoffset(dt):
         dt = dt.astimezone(UTC)
     # Format with milliseconds and Z suffix
     return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z"
@@ -80,7 +80,7 @@ def generate_json_export(session_id: str, db: DBSession) -> dict[str, Any]:
     # Get events
     events = (
         db.query(EventChain)
-        .filter(EventChain.session_id == session.id)
+        .filter(EventChain.session_id == session.session_id_str)
         .order_by(EventChain.sequence_number)
         .all()
     )
