@@ -7,12 +7,12 @@
 
 ## Current Status
 
-| Metric           | Value                    |
-| ---------------- | ------------------------ |
-| **Phase**        | **Production Hardening** |
-| **Spec Version** | v1.0.0 (Released)        |
-| **Status**       | **AUDITED & FIXED**      |
-| **Last Updated** | February 02, 2026        |
+| Metric           | Value                   |
+| ---------------- | ----------------------- |
+| **Phase**        | Phase 7 — Replay System |
+| **Spec Version** | v0.6                    |
+| **Status**       | Completed               |
+| **Last Updated** | January 29, 2026        |
 
 ---
 
@@ -241,90 +241,6 @@ Fingerprint: 4272bdc7...
 
 ---
 
-### ✅ Phase 8: Hardening & External Validation (The "Trust Gate")
-
-**Date:** February 01, 2026
-
-**Activity:** Addressed critical "Launch Blocker" feedback regarding determinism and spec-drift.
-
-**Artifacts Created:**
-
-- `EVENT_LOG_SPEC.md` (v0.6.1) — Spec-locked `LOG_DROP` and PDF status.
-- `backend/tests/replay/test_replay_determinism.py` — Proven byte-for-bit replay determinism.
-- `docs/COLD_START_VERIFICATION.md` — Guide for hostile/independent verification.
-
-**Key Outcomes:**
-
-- [x] **Replay Determinism:** PROVEN. Re-runs produce identical JSON output.
-- [x] **Spec-Lock:** `LOG_DROP` semantics are now law, not implementation detail.
-- [x] **PDF Demotion:** Explicitly defined as "Presentation Only" in spec.
-- [x] **Auditor Readiness:** "Cold Start" docs exist for third-party reviewers.
-
-### ✅ Phase 9: Production Reference Deployment (The "Real" System)
-
-**Date:** February 02, 2026
-
-**Activity:** Built the complete, audit-grade Reference Deployment with separated authority and formal evidence classification.
-
-**Artifacts Created:**
-
-- [PRODUCTION_INGESTION_CONTRACT.md](PRODUCTION_INGESTION_CONTRACT.md) — The system of record definition.
-- [PRODUCTION_EVIDENCE_CONTRACT.md](PRODUCTION_EVIDENCE_CONTRACT.md) — The output guarantee.
-- [EVIDENCE_CLASSIFICATION_SPEC.md](EVIDENCE_CLASSIFICATION_SPEC.md) — Formal Class A/B/C definitions.
-- `agentops_ingest/` — Production Ingestion Service (Validator, Sealer, Store).
-- `agentops_verify/` — Production Verifier (Offline, Stateless, Deterministic).
-- `reference_demo/e2e_test.py` — End-to-End validation script.
-
-**Key Achievements:**
-
-- [x] **Separated Authority:** SDKs are untreated claims; Ingestion is the sole authority.
-- [x] **Production Verifier:** Offline, dependency-free verifier with machine-readable exit codes.
-- [x] **Evidence Classification:** Implemented Class A (Authoritative), Class B (Degraded), Class C (Failed).
-- [x] **Hard Invariants:** Cross-session poisoning and replay attacks explicitly defeated.
-- [x] **End-to-End Proven:** `session_golden_verified.json` generated with Class A status.
-
-**Validation:**
-
-- **Ingestion Tests:** 19/19 passing (Schema, JCS, Authority Leaks, Replay Attacks).
-- **Verifier Tests:** 13/13 passing (Chain Integrity, Tampering, Classification).
-- **E2E Result:** PASS (Exit Code 0), Class A Evidence.
-
-### ✅ Phase 9.5: Issue Resolution & Hardening
-
-**Date:** February 02, 2026
-
-**Activity:** Fixed 28 items identified in post-production audit, including specification clarifications, ingestion security hardening, and verifier logic improvements.
-
-**Key Fixes:**
-
-- [x] **Spec Clarifications:** Fixed grammar in `EVENT_LOG_SPEC.md`, clarified `LOG_DROP` hash computation, and refined `EVIDENCE_CLASSIFICATION_SPEC.md`.
-- [x] **Ingestion Hardening:** Enforced strict `Content-Type` validation, secure exception handling (no leakage), and numeric type safety (Float timestamps).
-- [x] **Verifier Integrity:** Patched chain tracking logic to use internal computed hashes, preventing tamper propagation.
-- [x] **Dependency Hygiene:** Removed all `sys.path` hacks in favor of proper package imports.
-- [x] **Test Robustness:** Improved test isolation (`tmp_path`) and environmental handling in backend/compliance tests.
-
-### ✅ Phase 10: Verifier Hardening & Spec Lock (The "Red Team" Gate)
-
-**Date:** February 03, 2026
-
-**Activity:** Deep hardening of Verifier and Specifications against adversarial sequence and redaction attacks.
-
-**Key Achievements:**
-
-- [x] **Strict Verifier Invariants:** Updated `verifier.py` to enforced strictly contiguous, 0-based integer sequence (+1 increment) and recursive Redaction Integrity checks.
-- [x] **Spec Lock:** Updated `EVENT_LOG_SPEC.md` and `EVIDENCE_CLASSIFICATION_SPEC.md` with verbatim, non-negotiable invariant language provided by user.
-- [x] **Verifier Failure Contract:** Defined, Implemented, and TESTED a strict contract (Spec + Code + Test) ensuring fatal errors always emit **Exit Code 2** and **CLASS_C**.
-- [x] **Adversarial Testing:** Added `agentops_verify/test_adversarial.py` with 3 failure vectors (Gap, Duplicate, Redaction Tamper) that ALL fail correctly.
-- [x] **Cold Start:** Added "integrate in <10 minutes" guide to `reference_demo/agent.py`.
-
-**Validation Results:**
-
-- **Adversarial Tests:** 3/3 PASS (Verifier correctly REJECTS invalid logs).
-- **Contract Tests:** 2/2 PASS (Verifier adheres to Error -> 2 -> C contract).
-- **Existing Tests:** 13/13 PASS.
-
----
-
 ## Architecture Overview
 
 ```
@@ -372,11 +288,11 @@ Compliance Export (JSON/PDF)
 From PRD:
 
 1. ✅ Verifier passes 100% of adversarial tests
-2. ✅ System survives simulated network partition
-3. ✅ Compliance export accepted by legal team (Validated via Test Suite)
+2. [ ] System survives simulated network partition
+3. [ ] Compliance export accepted by legal team
 4. [ ] Security audit complete (internal)
-5. ✅ Incident response playbook validated (Simulated)
-6. ✅ Reference deployment on production agent (internal validation)
+5. [ ] Incident response playbook validated
+6. [ ] Reference deployment on production agent (internal)
 
 **Blockers:** Any verifier bug, any silent data loss, any chain repair.
 
