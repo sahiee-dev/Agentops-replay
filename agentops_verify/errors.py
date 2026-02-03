@@ -31,6 +31,7 @@ class FindingType(str, Enum):
     AUTHORITY_INVALID = "AUTHORITY_INVALID"
     SEQUENCE_VIOLATION = "SEQUENCE_VIOLATION"
     POLICY_VIOLATION = "POLICY_VIOLATION"
+    REDACTION_INTEGRITY_VIOLATION = "REDACTION_INTEGRITY_VIOLATION"
     
     # Degrading (cause DEGRADED)
     LOG_DROP_DETECTED = "LOG_DROP_DETECTED"
@@ -45,6 +46,13 @@ class FindingSeverity(str, Enum):
     WARNING = "WARNING"  # Causes DEGRADED
     INFO = "INFO"  # No status impact
 
+
+# Strict Exit Code Contract
+EXIT_CODES = {
+    VerificationStatus.PASS: 0,
+    VerificationStatus.DEGRADED: 1,
+    VerificationStatus.FAIL: 2,
+}
 
 @dataclass
 class Finding:
@@ -129,10 +137,5 @@ class VerificationReport:
     
     @property
     def exit_code(self) -> int:
-        """Machine-verifiable exit code."""
-        if self.status == VerificationStatus.PASS:
-            return 0
-        elif self.status == VerificationStatus.DEGRADED:
-            return 1
-        else:
-            return 2
+        """Machine-verifiable exit code (Contract Locked)."""
+        return EXIT_CODES.get(self.status, 2)  # Default to FAIL (2) if undefined status

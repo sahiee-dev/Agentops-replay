@@ -87,11 +87,12 @@ When presenting Class B evidence, the following MUST be disclosed:
 - Hash mismatch detected
 - Unknown/untrusted authority
 - Payload tampering detected
+- **Sequence Gap / Duplication**: Any deviation from strict 0-indexed incrementing sequence.
 
 **Use Cases**:
 
 - Engineering debugging ONLY
-- Not admissible for any compliance purpose
+- **MUST NOT** be used for audit, compliance, or incident reconstruction.
 - Not presentable to third parties
 
 **Trust Level**: NONE
@@ -248,3 +249,45 @@ This specification does NOT define:
 - Performance metrics ("was response time acceptable?")
 
 Classification concerns **evidence integrity**, not **content correctness**.
+
+## 9. Redaction Invariants
+
+### Redaction Structural Invariant
+
+If any field value is exactly equal to the literal string `"[REDACTED]"`, the corresponding `*_hash` field MUST be present and MUST correctly match the hash of the redacted original content.
+
+Violation of this rule results in `REDACTION_INTEGRITY_VIOLATION` (Fatal).
+
+### Redaction Policy Invariant
+
+If verifier configuration sets `allow_redacted = false`, the presence of any `"[REDACTED]"` field MUST result in `POLICY_VIOLATION` (Fatal).
+
+## 10. Evidence Classification Rule
+
+If a session fails verification due to `SEQUENCE_VIOLATION`, `REDACTION_INTEGRITY_VIOLATION`, or any other fatal integrity error, the resulting evidence MUST be classified as **CLASS C (FAILED EVIDENCE)**.
+
+**CLASS C** evidence MUST NOT be used for audit, compliance reporting, or incident reconstruction.
+
+## 11. Verifier Failure Contract (Locked)
+
+Each fatal verifier error MUST emit:
+
+- A stable `error_code` (string)
+- A stable process exit code (integer)
+- A deterministic evidence classification
+
+| Error Code                      | Exit Code | Evidence Class | Fatal |
+| :------------------------------ | :-------- | :------------- | :---- |
+| `SEQUENCE_VIOLATION`            | 2         | CLASS_C        | Yes   |
+| `REDACTION_INTEGRITY_VIOLATION` | 2         | CLASS_C        | Yes   |
+| `POLICY_VIOLATION`              | 2         | CLASS_C        | Yes   |
+| `HASH_MISMATCH`                 | 2         | CLASS_C        | Yes   |
+| `CHAIN_BREAK`                   | 2         | CLASS_C        | Yes   |
+| `PAYLOAD_TAMPER`                | 2         | CLASS_C        | Yes   |
+| `AUTHORITY_INVALID`             | 2         | CLASS_C        | Yes   |
+
+**Rules:**
+
+1. Exit codes are part of the public contract.
+2. Changing them requires a major version bump.
+3. Verifier MUST exit non-zero (Code 2) on any CLASS C result.

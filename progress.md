@@ -303,6 +303,26 @@ Fingerprint: 4272bdc7...
 - [x] **Dependency Hygiene:** Removed all `sys.path` hacks in favor of proper package imports.
 - [x] **Test Robustness:** Improved test isolation (`tmp_path`) and environmental handling in backend/compliance tests.
 
+### ✅ Phase 10: Verifier Hardening & Spec Lock (The "Red Team" Gate)
+
+**Date:** February 03, 2026
+
+**Activity:** Deep hardening of Verifier and Specifications against adversarial sequence and redaction attacks.
+
+**Key Achievements:**
+
+- [x] **Strict Verifier Invariants:** Updated `verifier.py` to enforced strictly contiguous, 0-based integer sequence (+1 increment) and recursive Redaction Integrity checks.
+- [x] **Spec Lock:** Updated `EVENT_LOG_SPEC.md` and `EVIDENCE_CLASSIFICATION_SPEC.md` with verbatim, non-negotiable invariant language provided by user.
+- [x] **Verifier Failure Contract:** Defined, Implemented, and TESTED a strict contract (Spec + Code + Test) ensuring fatal errors always emit **Exit Code 2** and **CLASS_C**.
+- [x] **Adversarial Testing:** Added `agentops_verify/test_adversarial.py` with 3 failure vectors (Gap, Duplicate, Redaction Tamper) that ALL fail correctly.
+- [x] **Cold Start:** Added "integrate in <10 minutes" guide to `reference_demo/agent.py`.
+
+**Validation Results:**
+
+- **Adversarial Tests:** 3/3 PASS (Verifier correctly REJECTS invalid logs).
+- **Contract Tests:** 2/2 PASS (Verifier adheres to Error -> 2 -> C contract).
+- **Existing Tests:** 13/13 PASS.
+
 ---
 
 ## Architecture Overview

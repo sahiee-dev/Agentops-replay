@@ -47,6 +47,7 @@ The Ingestion Service exposes **EXACTLY ONE** write path.
   - **NO** Updates (PUT/PATCH forbidden).
   - **NO** Deletions (DELETE forbidden).
   - **NO** Out-of-order writes (Sequence must be contiguous).
+  - **Invariant**: `sequence_number` MUST start at 0 and increment by exactly +1.
 
 ## 3. Validation & Rejection Rules (Taxonomy)
 

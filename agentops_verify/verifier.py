@@ -212,8 +212,13 @@ def verify_session(
             ))
             verification_mode = "DEGRADED"
         
-        # 8. Check for redaction markers
-        if _contains_redaction(payload):
+        # 8. Check for redaction (Structural + Policy)
+        redaction_findings = _check_redaction_integrity(payload, event_seq, event_id)
+        findings.extend(redaction_findings)
+        
+        has_redaction = any(f.finding_type == FindingType.REDACTION_DETECTED or f.finding_type == FindingType.REDACTION_INTEGRITY_VIOLATION for f in redaction_findings)
+        
+        if has_redaction:
             if not allow_redacted:
                 findings.append(Finding(
                     finding_type=FindingType.POLICY_VIOLATION,
@@ -223,13 +228,6 @@ def verify_session(
                     event_id=event_id,
                 ))
             else:
-                findings.append(Finding(
-                    finding_type=FindingType.REDACTION_DETECTED,
-                    severity=FindingSeverity.INFO,
-                    message=f"Redacted content at seq {event_seq}",
-                    sequence_number=event_seq,
-                    event_id=event_id,
-                ))
                 verification_mode = "REDACTED"
         
         # Update chain tracking
@@ -269,18 +267,74 @@ def verify_session(
     )
 
 
-def _contains_redaction(payload: Dict[str, Any]) -> bool:
-    """Check if payload contains redaction markers."""
-    def check_value(v: Any) -> bool:
-        if isinstance(v, str):
-            return "[REDACTED]" in v or "***" in v
-        elif isinstance(v, dict):
-            return any(check_value(val) for val in v.values())
-        elif isinstance(v, list):
-            return any(check_value(item) for item in v)
-        return False
+def _check_redaction_integrity(payload: Any, seq: int, event_id: str) -> List[Finding]:
+    """
+    Recursively check for redaction markers and enforce integrity:
+    If value is "[REDACTED]", sibling/parent must have corresponding *_hash.
+    """
+    findings = []
     
-    return check_value(payload)
+    def walk(obj: Any, parent: Optional[Dict] = None):
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                # Check for [REDACTED] value
+                if isinstance(v, str) and (v == "[REDACTED]" or v == "***"):
+                    # Structural Integrity Check
+                    # Expect corresponding hash field, e.g., "email" -> "email_hash"
+                    hash_key = f"{k}_hash"
+                    has_hash = False
+                    
+                    if parent and hash_key in parent: 
+                        # This works if the hash is in the parent object (unlikely for nested dicts usually, strictness varies)
+                        # Wait, standard pattern: 
+                        # {"user": {"email": "[REDACTED]", "email_hash": "..."}} (Sibling)
+                        # OR {"user": {"email": "[REDACTED]"}, "user_hash": "..."} (Parent)
+                        # User Spec: "corresponding *_hash field MUST be present"
+                        pass
+                    
+                    # Check sibling (in the same dict 'obj')
+                    if hash_key in obj:
+                        has_hash = True
+                        # Verify it's a valid hash string (basic check)
+                        if not isinstance(obj[hash_key], str) or len(obj[hash_key]) < 64:
+                             findings.append(Finding(
+                                finding_type=FindingType.REDACTION_INTEGRITY_VIOLATION,
+                                severity=FindingSeverity.FATAL,
+                                message=f"Redaction hash malformed for field '{k}' at seq {seq}",
+                                sequence_number=seq,
+                                event_id=event_id,
+                                details={"field": k, "hash_key": hash_key}
+                            ))
+                    else:
+                        # Missing hash
+                         findings.append(Finding(
+                            finding_type=FindingType.REDACTION_INTEGRITY_VIOLATION,
+                            severity=FindingSeverity.FATAL,
+                            message=f"Redaction integrity failure: Missing hash for field '{k}' at seq {seq}",
+                            sequence_number=seq,
+                            event_id=event_id,
+                            details={"field": k, "missing_key": hash_key}
+                        ))
+                    
+                    # Always log detection
+                    findings.append(Finding(
+                        finding_type=FindingType.REDACTION_DETECTED,
+                        severity=FindingSeverity.INFO,
+                        message=f"Redacted content found in field '{k}'",
+                        sequence_number=seq,
+                        event_id=event_id,
+                        details={"field": k}
+                    ))
+                
+                else:
+                    walk(v, obj)
+                    
+        elif isinstance(obj, list):
+            for item in obj:
+                walk(item, parent) # Parent remains same for list items? Or None? List items don't have keys.
+    
+    walk(payload)
+    return findings
 
 
 def verify_file(filepath: str, **kwargs) -> VerificationReport:
