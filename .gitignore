@@ -4,46 +4,71 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
-venv/
-ENV/
-*.egg-info/
-dist/
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Generated files
-sdk_session.jsonl
-*.jsonl
-!verifier/test_vectors/*.jsonl
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Database
+*.db
+*.sqlite3
 
 # Logs
 *.log
+logs/
 
-# Temporary
-tmp/
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+
+# Dependencies
+package-lock.json
+yarn.lock
+
+# Uploads
+uploads/
 temp/
-.cache/
 
-# Frontend (from existing repo)
-frontend/node_modules/
-frontend/.vite-cache/
-frontend/dist/
+# Docker
+.docker/
 
-# Backend
-backend/__pycache__/
-backend/*.pyc
-backend/results/
-
-# Artifacts directory
-.gemini/
+# Monitoring
+prometheus_data/
+grafana_data/

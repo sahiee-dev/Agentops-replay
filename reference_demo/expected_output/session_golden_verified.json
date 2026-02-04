@@ -1,7 +1,7 @@
 [
   {
     "event_id": "evt-001",
-    "session_id": "e2e-test-session-001",
+    "session_id": "00000000-0000-0000-0000-e2e000000001",
     "sequence_number": 0,
     "timestamp_wall": "2023-10-01T12:00:00Z",
     "event_type": "SESSION_START",
@@ -16,7 +16,7 @@
   },
   {
     "event_id": "evt-002",
-    "session_id": "e2e-test-session-001",
+    "session_id": "00000000-0000-0000-0000-e2e000000001",
     "sequence_number": 1,
     "timestamp_wall": "2023-10-01T12:00:01Z",
     "event_type": "AGENT_DECISION",
@@ -33,7 +33,7 @@
   },
   {
     "event_id": "evt-003",
-    "session_id": "e2e-test-session-001",
+    "session_id": "00000000-0000-0000-0000-e2e000000001",
     "sequence_number": 2,
     "timestamp_wall": "2023-10-01T12:00:02Z",
     "event_type": "TOOL_CALL",
@@ -50,7 +50,7 @@
   },
   {
     "event_id": "evt-004",
-    "session_id": "e2e-test-session-001",
+    "session_id": "00000000-0000-0000-0000-e2e000000001",
     "sequence_number": 3,
     "timestamp_wall": "2023-10-01T12:00:03Z",
     "event_type": "SESSION_END",

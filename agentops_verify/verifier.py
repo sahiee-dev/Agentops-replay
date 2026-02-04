@@ -216,14 +216,23 @@ def verify_session(
         
         # 8. Check for redaction markers
         if _contains_redaction(payload):
-            findings.append(Finding(
-                finding_type=FindingType.REDACTION_DETECTED,
-                severity=FindingSeverity.INFO,
-                message=f"Redacted content at seq {event_seq}",
-                sequence_number=event_seq,
-                event_id=event_id,
-            ))
-            verification_mode = "REDACTED"
+            if not allow_redacted:
+                findings.append(Finding(
+                    finding_type=FindingType.POLICY_VIOLATION,
+                    severity=FindingSeverity.FATAL,
+                    message=f"Redacted content forbidden at seq {event_seq}",
+                    sequence_number=event_seq,
+                    event_id=event_id,
+                ))
+            else:
+                findings.append(Finding(
+                    finding_type=FindingType.REDACTION_DETECTED,
+                    severity=FindingSeverity.INFO,
+                    message=f"Redacted content at seq {event_seq}",
+                    sequence_number=event_seq,
+                    event_id=event_id,
+                ))
+                verification_mode = "REDACTED"
         
         # Update chain tracking
         # CRITICAL: Use computed hash to prevent tamper propagation

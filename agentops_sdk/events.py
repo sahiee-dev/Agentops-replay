@@ -25,7 +25,7 @@ class EventType(str, Enum):
 REQUIRED_FIELDS = {
     EventType.SESSION_START: ["agent_id", "environment", "framework", "framework_version", "sdk_version"],
     EventType.SESSION_END: ["status", "duration_ms"],
-    EventType.LOG_DROP: ["dropped_events", "reason"],
+    EventType.LOG_DROP: ["dropped_count", "cumulative_drops", "drop_reason"],
     EventType.CHAIN_SEAL: ["final_event_hash"], 
 }
 

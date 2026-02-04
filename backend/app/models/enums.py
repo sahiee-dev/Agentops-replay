@@ -9,4 +9,3 @@ class SessionStatus(str, Enum):
 class ChainAuthority(str, Enum):
     SERVER = "server"
     SDK = "sdk"
-    LOCAL = "local"

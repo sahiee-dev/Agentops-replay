@@ -18,6 +18,9 @@ from .errors import (
     IngestException,
     sequence_rewind,
     log_gap,
+    IngestError,
+    IngestErrorCode,
+    ErrorClassification,
     session_closed,
     invalid_first_sequence,
 )
@@ -44,7 +47,7 @@ class SealedEvent:
     event_hash: str
     chain_authority: str
     # Optional metadata
-    timestamp_monotonic: Optional[int] = None
+    timestamp_monotonic: Optional[float] = None
     source_sdk_ver: Optional[str] = None
     schema_ver: Optional[str] = None
 
@@ -79,7 +82,17 @@ def seal_event(
     Raises:
         IngestException: if the session is closed, a sequence rewind is detected, a sequence gap is detected (when strict_mode is True), or the first event does not have sequence number 0.
     """
-    # 1. Sequence Validation
+    # 0. Check Session Alignment
+    if chain_state is not None and chain_state.session_id != claim.session_id:
+         raise IngestException(IngestError(
+             error_code=IngestErrorCode.SCHEMA_INVALID, 
+             classification=ErrorClassification.HARD_REJECT,
+             message=f"Session ID mismatch: chain_state={chain_state.session_id} vs claim={claim.session_id}",
+             details={"chain_session": chain_state.session_id, "claim_session": claim.session_id}
+         ))
+
+    # 1. Sequence Continuity
+    expected_seq = 0
     if chain_state is not None:
         # Check if session is closed
         if chain_state.is_closed:

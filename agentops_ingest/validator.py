@@ -42,6 +42,14 @@ REQUIRED_ENVELOPE_FIELDS = [
     "payload",
 ]
 
+OPTIONAL_ENVELOPE_FIELDS = [
+    "payload_hash",
+    "prev_event_hash",
+    "timestamp_monotonic",
+    "source_sdk_ver",
+    "schema_ver",
+]
+
 # Fields that clients MUST NOT provide (authority leak)
 FORBIDDEN_CLIENT_FIELDS = [
     "event_hash",
@@ -82,7 +90,7 @@ class ValidatedClaim:
     payload_jcs: bytes
     payload_hash: str
     # Monotonic timestamp if provided by client (optional hint)
-    timestamp_monotonic: Optional[int] = None
+    timestamp_monotonic: Optional[float] = None
     # SDK version hint
     source_sdk_ver: Optional[str] = None
     schema_ver: Optional[str] = None
@@ -165,32 +173,26 @@ def _check_authority_leak(raw_event: Dict[str, Any]) -> None:
 
 
 def _validate_schema(raw_event: Dict[str, Any]) -> None:
-    """
-    Validate that an incoming event envelope contains all required top-level fields and that those fields have the expected types and allowed values.
-    
-    Checks performed:
-    - All fields in REQUIRED_ENVELOPE_FIELDS are present.
-    - `event_id` and `session_id` are strings.
-    - `sequence_number` is an integer (booleans are rejected) and is >= 0.
-    - `timestamp_wall` is a string.
-    - `event_type` is a string and one of VALID_EVENT_TYPES.
-    - `payload` is a JSON object (dict).
-    
-    Raises:
-        IngestException: with `schema_invalid` payload when any required field is missing or a field has an invalid type or value (details include the offending field and error information).
-    """
+    """Validate required fields, strict schema (no extra fields), and types."""
+    # 1. Required Fields
     missing = [f for f in REQUIRED_ENVELOPE_FIELDS if f not in raw_event]
     if missing:
         raise IngestException(schema_invalid({"missing_fields": missing}))
     
-    # Type checks
+    # 2. Strict Schema (No Additional Properties)
+    known_fields = set(REQUIRED_ENVELOPE_FIELDS) | set(OPTIONAL_ENVELOPE_FIELDS)
+    unexpected = set(raw_event.keys()) - known_fields
+    if unexpected:
+        raise IngestException(schema_invalid({"unexpected_fields": list(unexpected)}))
+    
+    # 3. Type Checks (Required)
     if not isinstance(raw_event["event_id"], str):
         raise IngestException(schema_invalid({"field": "event_id", "error": "must be string"}))
     
     if not isinstance(raw_event["session_id"], str):
         raise IngestException(schema_invalid({"field": "session_id", "error": "must be string"}))
     
-    # Reject booleans (isinstance(True, int) is True in Python)
+    # Reject booleans for sequence_number
     if not isinstance(raw_event["sequence_number"], int) or isinstance(raw_event["sequence_number"], bool):
         raise IngestException(schema_invalid({"field": "sequence_number", "error": "must be integer, not boolean"}))
     
@@ -206,13 +208,30 @@ def _validate_schema(raw_event: Dict[str, Any]) -> None:
     if raw_event["event_type"] not in VALID_EVENT_TYPES:
         raise IngestException(schema_invalid({
             "field": "event_type",
-            "error": f"invalid event type",
+            "error": "invalid event type",
             "received": raw_event["event_type"],
             "valid": VALID_EVENT_TYPES
         }))
     
     if not isinstance(raw_event["payload"], dict):
         raise IngestException(schema_invalid({"field": "payload", "error": "must be object"}))
+
+    # 4. Type Checks (Optional)
+    if "payload_hash" in raw_event and not isinstance(raw_event["payload_hash"], str):
+         raise IngestException(schema_invalid({"field": "payload_hash", "error": "must be string"}))
+
+    if "timestamp_monotonic" in raw_event:
+        tm = raw_event["timestamp_monotonic"]
+        if (not isinstance(tm, (int, float))) or isinstance(tm, bool):
+             raise IngestException(schema_invalid({"field": "timestamp_monotonic", "error": "must be number (int/float)"}))
+
+    if "source_sdk_ver" in raw_event and not isinstance(raw_event["source_sdk_ver"], str):
+         raise IngestException(schema_invalid({"field": "source_sdk_ver", "error": "must be string"}))
+
+    if "schema_ver" in raw_event:
+        sv = raw_event["schema_ver"]
+        if (not isinstance(sv, (str, int))) or isinstance(sv, bool):
+             raise IngestException(schema_invalid({"field": "schema_ver", "error": "must be string or int"}))
 
 
 def _validate_timestamp(ts_str: str) -> datetime:
