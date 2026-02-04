@@ -217,12 +217,9 @@ def verify_session(
             ))
             verification_mode = "DEGRADED"
         
-        # 8. Check for redaction (Structural + Policy)
-        redaction_findings = _check_redaction_integrity(payload, event_seq, event_id)
-        findings.extend(redaction_findings)
-        
-        has_redaction = any(f.finding_type == FindingType.REDACTION_DETECTED or f.finding_type == FindingType.REDACTION_INTEGRITY_VIOLATION for f in redaction_findings)
-        
+        # 8. Check for redaction markers
+        # 8. Check for redaction markers
+        has_redaction = _check_redaction_integrity(payload, findings, event_seq, event_id)
         if has_redaction:
             if not allow_redacted:
                 findings.append(Finding(
@@ -233,6 +230,13 @@ def verify_session(
                     event_id=event_id,
                 ))
             else:
+                findings.append(Finding(
+                    finding_type=FindingType.REDACTION_DETECTED,
+                    severity=FindingSeverity.INFO,
+                    message=f"Redacted content at seq {event_seq}",
+                    sequence_number=event_seq,
+                    event_id=event_id,
+                ))
                 verification_mode = "REDACTED"
         
         # Update chain tracking
@@ -272,102 +276,46 @@ def verify_session(
     )
 
 
-def _check_redaction_integrity(payload: Any, seq: int, event_id: str) -> List[Finding]:
+def _check_redaction_integrity(obj: Any, findings: List[Finding], event_seq: int, event_id: str, path: str = "") -> bool:
     """
-    Inspect a payload recursively for redaction markers and record integrity findings.
-    
-    Traverses dictionaries and lists within `payload`; for any string value equal to "[REDACTED]" or "***" it records:
-    - a REDACTION_DETECTED finding (INFO) identifying the redacted field, and
-    - a REDACTION_INTEGRITY_VIOLATION (FATAL) if the expected corresponding "<field>_hash" is missing or appears malformed.
-    
-    Parameters:
-        payload (Any): Nested event payload to inspect.
-        seq (int): Sequence number of the containing event (used in findings).
-        event_id (str): Event identifier (used in findings).
-    
-    Returns:
-        List[Finding]: A list of findings discovered while checking redaction presence and integrity.
+    Recursively check redaction integrity.
+    Returns True if valid redaction markers are found.
+    Emit REDACTION_INTEGRITY_VIOLATION if sibling hash is missing.
     """
-    findings = []
+    found = False
     
-    def walk(obj: Any, parent: Optional[Dict] = None):
-        """
-        Recursively walk a nested dict/list structure to detect redacted fields and record redaction-related findings.
-        
-        This function inspects dictionaries and lists within `obj`. When it finds a string equal to "[REDACTED]" or "***", it checks for a corresponding "<field>_hash" sibling key and:
-        - records a FATAL `REDACTION_INTEGRITY_VIOLATION` if the hash is missing or appears malformed,
-        - always records an INFO `REDACTION_DETECTED` for the redacted field.
-        
-        Parameters:
-            obj (Any): The current object to inspect (dict, list, or primitive).
-            parent (Optional[Dict]): The parent dictionary of `obj`, used to detect hashes located at the parent level.
-        
-        Side effects:
-            Appends Finding objects to the surrounding `findings` list (closed over from the outer scope). Uses `seq` and `event_id` from the enclosing scope when populating findings.
-        
-        Returns:
-            None
-        """
-        if isinstance(obj, dict):
-            for k, v in obj.items():
-                # Check for [REDACTED] value
-                if isinstance(v, str) and (v == "[REDACTED]" or v == "***"):
-                    # Structural Integrity Check
-                    # Expect corresponding hash field, e.g., "email" -> "email_hash"
-                    hash_key = f"{k}_hash"
-                    has_hash = False
-                    
-                    if parent and hash_key in parent: 
-                        # This works if the hash is in the parent object (unlikely for nested dicts usually, strictness varies)
-                        # Wait, standard pattern: 
-                        # {"user": {"email": "[REDACTED]", "email_hash": "..."}} (Sibling)
-                        # OR {"user": {"email": "[REDACTED]"}, "user_hash": "..."} (Parent)
-                        # User Spec: "corresponding *_hash field MUST be present"
-                        pass
-                    
-                    # Check sibling (in the same dict 'obj')
-                    if hash_key in obj:
-                        has_hash = True
-                        # Verify it's a valid hash string (basic check)
-                        if not isinstance(obj[hash_key], str) or len(obj[hash_key]) < 64:
-                             findings.append(Finding(
-                                finding_type=FindingType.REDACTION_INTEGRITY_VIOLATION,
-                                severity=FindingSeverity.FATAL,
-                                message=f"Redaction hash malformed for field '{k}' at seq {seq}",
-                                sequence_number=seq,
-                                event_id=event_id,
-                                details={"field": k, "hash_key": hash_key}
-                            ))
-                    else:
-                        # Missing hash
-                         findings.append(Finding(
-                            finding_type=FindingType.REDACTION_INTEGRITY_VIOLATION,
-                            severity=FindingSeverity.FATAL,
-                            message=f"Redaction integrity failure: Missing hash for field '{k}' at seq {seq}",
-                            sequence_number=seq,
-                            event_id=event_id,
-                            details={"field": k, "missing_key": hash_key}
-                        ))
-                    
-                    # Always log detection
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            # Recursive check of value
+            if _check_redaction_integrity(v, findings, event_seq, event_id, f"{path}.{k}" if path else k):
+                found = True
+            
+            # Check for redaction in value strings
+            if isinstance(v, str) and ("[REDACTED]" in v or "***" in v):
+                found = True
+                # Validation: Check sibling hash exists in CURRENT dict
+                hash_key = f"{k}_hash"
+                if hash_key not in obj:
+                    full_field = f"{path}.{k}" if path else k
                     findings.append(Finding(
-                        finding_type=FindingType.REDACTION_DETECTED,
-                        severity=FindingSeverity.INFO,
-                        message=f"Redacted content found in field '{k}'",
-                        sequence_number=seq,
+                        finding_type=FindingType.REDACTION_INTEGRITY_VIOLATION,
+                        severity=FindingSeverity.FATAL,
+                        message=f"Redacted field '{full_field}' missing integrity hash",
+                        sequence_number=event_seq,
                         event_id=event_id,
-                        details={"field": k}
+                        details={"missing_field": hash_key}
                     ))
-                
-                else:
-                    walk(v, obj)
                     
-        elif isinstance(obj, list):
-            for item in obj:
-                walk(item, parent) # Parent remains same for list items? Or None? List items don't have keys.
-    
-    walk(payload)
-    return findings
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            if _check_redaction_integrity(item, findings, event_seq, event_id, f"{path}[{i}]"):
+                found = True
+
+    elif isinstance(obj, str):
+        if "[REDACTED]" in obj or "***" in obj:
+            return True
+            
+    return found
 
 
 def verify_file(filepath: str, **kwargs) -> VerificationReport:

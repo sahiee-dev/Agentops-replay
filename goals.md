@@ -1,81 +1,75 @@
-# Goals: Post-Launch Deep Hardening
+# Goals: Compliance & Ingestion Foundation
 
-**Date:** February 03, 2026
-**Theme:** "Undeniable Forward Progress" (Auditability & Determinism)
+**Date:** January 29, 2026
+**Theme:** "From Evidence to Authority"
 
-> **The Bar for Today:**
-> Today is **not** about polishing. It counts as a win **only if** we enforce a new invariant, explicate an implicit guarantee, or make the system objectively harder to break.
-
----
-
-## 🎯 Primary Goal: Lock Down Verifier Integrity (Adversarial)
-
-**Objective:** Lock down the Verifier against subtle adversarial attacks targeting sequence gaps and redaction ambiguity.
-
-**Selected Threat:**
-
-- **Scenario:** An attacker submits a chain with subtle sequence gaps or malformed redaction markers to hide malicious activity.
-- **Risk:** The verifier might misclassify these as benign data issues rather than active tampering.
-
-**Definition of Done:**
-
-1.  **Threat Described:** Clearly documented in `EVIDENCE_CLASSIFICATION_SPEC.md`. (DONE)
-2.  **Invariant Stated:** "Any sequence gap MUST result in a specific failure mode." (DONE)
-3.  **Code Enforces It:** `verifier.py` updated to strictly classify these edge cases. (DONE)
-4.  **Test Proves It:** New adversarial test vectors (`agentops_verify/test_adversarial.py`) pass. (DONE)
+Today's objective is to complete the Compliance layer (Phase 5) and lay the authoritative foundation for the Ingestion Service (Phase 6). This transitions the system from a passive recorder (SDK) to an active arbiter of truth.
 
 ---
 
-## 🚀 Secondary Goals
+## 🎯 Goal 1: Complete Phase 5 (Compliance Artifacts)
 
-### 1. Verifier Hardening (Evidence > Code)
+**Objective:** Deliver audit-grade export capabilities that legal/compliance teams can use immediately.
 
-- **Task:** Add **2 new adversarial test vectors**.
-  - Target: Ordering / Gaps / Sealing Semantics.
-  - Target: Redaction + Hash Integrity.
-- **Outcome:** Verifier failure modes become predictable and boring.
+### 1.1 Finalize Canonical JSON Export
 
-### 2. Spec Tightening (Zero Ambiguity)
+- **File:** `backend/app/compliance/json_export.py`
+- **Requirements:**
+  - [ ] RFC 8785 JCS Compliance (re-verify)
+  - [ ] Strict ISO 8601 formatting (Z-suffix)
+  - [ ] Full chain-of-custody metadata
+  - [ ] Evidence class assertion
 
-- **Task:** Identify one ambiguous paragraph in `EVENT_LOG_SPEC.md` or `PRODUCTION_INGESTION_CONTRACT.md`.
-- **Action:** Surgical rewrite to remove interpretation room.
+### 1.2 Implement PDF Evidence Export
 
-### 3. Adoption Without Weakening Guarantees
+- **New File:** `backend/app/compliance/pdf_export.py`
+- **Requirements:**
+  - Executive Summary (Status, Verification Result)
+  - Timeline View (Readable event chain)
+  - Technical Verification Annex (Hashes, Seals)
+  - Legal Disclaimer Injection
 
-- **Task:** Improve `reference_demo` or add "Cold Start" note.
-- **Outcome:** Integration in <10 minutes without added flexibility.
+### 1.3 GDPR & Privacy Controls
+
+- **New File:** `backend/app/compliance/gdpr.py`
+- **Requirements:**
+  - PII Detection logic (heuristic)
+  - `[REDACTED]` pattern validation
+  - Hash preservation check
 
 ---
 
-## 🚫 Out of Scope
+## 🚀 Goal 2: Kickstart Phase 6 (Ingestion Service)
 
-- New integrations
-- UI / Dashboards
-- Performance optimizations
-- "Nice to have" refactors
+**Objective:** Build the server-side authority that seals the evidence.
+
+### 2.1 Ingestion Service Scaffolding
+
+- **Directory:** `backend/app/services/ingestion/`
+- **Components:**
+  - Service entry point related to FastAPI/Queue worker
+  - Dependency injection for Storage/Auth
+
+### 2.2 Server-Side Hash Recomputation
+
+- **File:** `backend/app/services/ingestion/hasher.py`
+- **Critical Requirement:**
+  - NEVER trust SDK hashes
+  - Re-calculate `prev_hash` -> `curr_hash` chain
+  - Validate sequence monotonicity
+
+### 2.3 Chain Sealing Logic
+
+- **File:** `backend/app/services/ingestion/sealer.py`
+- **Logic:**
+  - Finalize batch
+  - Compute Session Digest
+  - Emit `CHAIN_SEAL` event
 
 ---
 
-## ✅ Previous Goals: V1 Launch Readiness (LOCKED)
+## 📊 Success Criteria for Today
 
-**Date:** February 01, 2026
-**Status:** COMPLETE (See below)
-
-### 🔒 Goal 1: Spec-Lock Failure Semantics [x]
-
-- [x] Ordering defined.
-- [x] Hashing rules explicit.
-- [x] Verifier handling specified.
-
-### 📉 Goal 2: Demote PDF Artifact [x]
-
-- [x] Spec states PDF is non-authoritative.
-- [x] logic is deterministic.
-
-### 🔁 Goal 3: Prove Replay Determinism [x]
-
-- [x] Test created and passing.
-
-### 🌍 Goal 4: External "Cold Start" Verification [x]
-
-- [x] `COLD_START_VERIFICATION.md` created.
+1. `json_export.py` produces verifiable outputs against the `verifier` CLI.
+2. `pdf_export.py` generates a readable PDF with correct legal disclaimers.
+3. Ingestion service can take a raw list of events and reject a tampered chain.
