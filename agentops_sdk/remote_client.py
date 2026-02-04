@@ -5,7 +5,7 @@ Extends existing SDK with SERVER authority mode via HTTP transport.
 """
 
 import os
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -27,8 +27,8 @@ class RemoteAgentOpsClient(AgentOpsClient):
 
     def __init__(
         self,
-        server_url: str | None = None,
-        api_key: str | None = None,
+        server_url: Optional[str] = None,
+        api_key: Optional[str] = None,
         max_retries: int = 5,
         retry_min_wait: float = 1.0,
         retry_max_wait: float = 10.0,
@@ -75,10 +75,10 @@ class RemoteAgentOpsClient(AgentOpsClient):
             self.http_client.headers["Authorization"] = f"Bearer {self.api_key}"
 
         # Remote session ID (from server)
-        self.remote_session_id: str | None = None
+        self.remote_session_id: Optional[str] = None
 
         # Pending events to send
-        self.pending_events: list[dict[str, Any]] = []
+        self.pending_events: List[Dict[str, Any]] = []
 
         # Track consecutive failures for kill-switch
         self.consecutive_failures = 0
@@ -88,7 +88,7 @@ class RemoteAgentOpsClient(AgentOpsClient):
         self.server_offline = False
         self.total_dropped_events = 0
 
-    def start_session(self, agent_id: str, tags: list[str] = None):
+    def start_session(self, agent_id: str, tags: Optional[List[str]] = None):
         """
         Start a remote session on the server and fall back to local buffering if the server is unreachable.
         
@@ -121,7 +121,7 @@ class RemoteAgentOpsClient(AgentOpsClient):
         # Always call parent to maintain local chain
         super().start_session(agent_id, tags)
 
-    def record(self, event_type: EventType, payload: dict[str, Any]):
+    def record(self, event_type: EventType, payload: Dict[str, Any]):
         """
         Record an event locally and queue it for remote batching and transmission.
         

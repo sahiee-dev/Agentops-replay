@@ -16,7 +16,7 @@ import json
 import logging
 import time
 from datetime import datetime
-from typing import Any
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from .version import (
@@ -186,7 +186,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         local_authority: bool = False,
         buffer_size: int = 10000,
         redact_pii: bool = False,
-        tags: list[str] | None = None
+        tags: Optional[List[str]] = None
     ):
         """
         Create a LangChain callback handler that records LangChain events to the AgentOps replay system.
@@ -227,10 +227,10 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
 
         # Session state
         self._session_active = False
-        self._session_start_time: float | None = None
+        self._session_start_time: Optional[float] = None
 
         # Track run IDs for correlation
-        self._run_id_map: dict[str, dict[str, Any]] = {}
+        self._run_id_map: Dict[str, Dict[str, Any]] = {}
 
         # Framework metadata
         self._framework_metadata = {
@@ -244,7 +244,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
     # Session Management
     # =========================================================================
     
-    def start_session(self, additional_tags: list[str] | None = None):
+    def start_session(self, additional_tags: Optional[List[str]] = None):
         """
         Start a new AgentOps recording session and register session tags.
         
@@ -309,13 +309,13 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
 
     def on_llm_start(
         self,
-        serialized: dict[str, Any],
-        prompts: list[str],
+        serialized: Dict[str, Any],
+        prompts: List[str],
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
-        tags: list[str] | None = None,
-        metadata: dict[str, Any] | None = None,
+        parent_run_id: Optional[UUID] = None,
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -358,7 +358,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         response: LLMResult,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
+        parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -406,7 +406,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         error: BaseException,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
+        parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -440,14 +440,14 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
 
     def on_tool_start(
         self,
-        serialized: dict[str, Any],
+        serialized: Dict[str, Any],
         input_str: str,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
-        tags: list[str] | None = None,
-        metadata: dict[str, Any] | None = None,
-        inputs: dict[str, Any] | None = None,
+        parent_run_id: Optional[UUID] = None,
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        inputs: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -501,7 +501,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         output: str,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
+        parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -544,7 +544,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         error: BaseException,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
+        parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -584,7 +584,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         action: AgentAction,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
+        parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -618,7 +618,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         finish: AgentFinish,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
+        parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -652,13 +652,13 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
 
     def on_chain_start(
         self,
-        serialized: dict[str, Any],
-        inputs: dict[str, Any],
+        serialized: Dict[str, Any],
+        inputs: Dict[str, Any],
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
-        tags: list[str] | None = None,
-        metadata: dict[str, Any] | None = None,
+        parent_run_id: Optional[UUID] = None,
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -684,10 +684,10 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
 
     def on_chain_end(
         self,
-        outputs: dict[str, Any],
+        outputs: Dict[str, Any],
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
+        parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -702,7 +702,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         error: BaseException,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
+        parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -734,12 +734,12 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
     # Helper Methods
     # =========================================================================
     
-    def _extract_provider(self, serialized: dict[str, Any]) -> str:
+    def _extract_provider(self, serialized: Dict[str, Any]) -> str:
         """
         Infer a provider identifier from a serialized LLM configuration.
         
         Parameters:
-            serialized (dict[str, Any]): Serialized LLM config expected to contain an "id" key with a list of identifier fragments.
+            serialized (Dict[str, Any]): Serialized LLM config expected to contain an "id" key with a list of identifier fragments.
         
         Returns:
             str: A provider name such as "openai", "anthropic", "google", "azure", or "aws_bedrock"; if none match, returns the first element of the `id` list or "unknown" when no `id` is present.
