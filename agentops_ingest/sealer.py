@@ -10,8 +10,11 @@ Responsibilities:
 - Assign chain_authority
 """
 import hashlib
+import logging
 from dataclasses import dataclass
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from .validator import ValidatedClaim
 from .errors import (
@@ -110,8 +113,8 @@ def seal_event(
             if strict_mode:
                 # In strict mode, gaps are fatal
                 raise IngestException(log_gap(expected_seq, claim.sequence_number))
-            # In non-strict mode, we'd log a warning but continue
-            # For now, we always enforce strict
+            # In non-strict mode, log warning but continue
+            logger.warning(log_gap(expected_seq, claim.sequence_number).message)
         
         prev_event_hash = chain_state.last_event_hash
     else:

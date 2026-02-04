@@ -36,6 +36,14 @@ def send_batch_with_retry(
             return response.json()
             
         except (httpx.NetworkError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
+            # Check for non-transient 4xx errors
+            if isinstance(e, httpx.HTTPStatusError):
+                status = e.response.status_code
+                # Allow retry for 408 (Request Timeout), 429 (Too Many Requests), or 5xx
+                if 400 <= status < 500 and status not in [408, 429]:
+                    last_error = e
+                    break
+            
             last_error = e
             attempt += 1
             

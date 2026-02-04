@@ -213,7 +213,9 @@ def verify_session(
             verification_mode = "DEGRADED"
         
         # 8. Check for redaction markers
-        if _contains_redaction(payload):
+        # 8. Check for redaction markers
+        has_redaction = _check_redaction_integrity(payload, findings, event_seq, event_id)
+        if has_redaction:
             if not allow_redacted:
                 findings.append(Finding(
                     finding_type=FindingType.POLICY_VIOLATION,
@@ -269,18 +271,46 @@ def verify_session(
     )
 
 
-def _contains_redaction(payload: Dict[str, Any]) -> bool:
-    """Check if payload contains redaction markers."""
-    def check_value(v: Any) -> bool:
-        if isinstance(v, str):
-            return "[REDACTED]" in v or "***" in v
-        elif isinstance(v, dict):
-            return any(check_value(val) for val in v.values())
-        elif isinstance(v, list):
-            return any(check_value(item) for item in v)
-        return False
+def _check_redaction_integrity(obj: Any, findings: List[Finding], event_seq: int, event_id: str, path: str = "") -> bool:
+    """
+    Recursively check redaction integrity.
+    Returns True if valid redaction markers are found.
+    Emit REDACTION_INTEGRITY_VIOLATION if sibling hash is missing.
+    """
+    found = False
     
-    return check_value(payload)
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            # Recursive check of value
+            if _check_redaction_integrity(v, findings, event_seq, event_id, f"{path}.{k}" if path else k):
+                found = True
+            
+            # Check for redaction in value strings
+            if isinstance(v, str) and ("[REDACTED]" in v or "***" in v):
+                found = True
+                # Validation: Check sibling hash exists in CURRENT dict
+                hash_key = f"{k}_hash"
+                if hash_key not in obj:
+                    full_field = f"{path}.{k}" if path else k
+                    findings.append(Finding(
+                        finding_type=FindingType.REDACTION_INTEGRITY_VIOLATION,
+                        severity=FindingSeverity.FATAL,
+                        message=f"Redacted field '{full_field}' missing integrity hash",
+                        sequence_number=event_seq,
+                        event_id=event_id,
+                        details={"missing_field": hash_key}
+                    ))
+                    
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            if _check_redaction_integrity(item, findings, event_seq, event_id, f"{path}[{i}]"):
+                found = True
+
+    elif isinstance(obj, str):
+        if "[REDACTED]" in obj or "***" in obj:
+            return True
+            
+    return found
 
 
 def verify_file(filepath: str, **kwargs) -> VerificationReport:
