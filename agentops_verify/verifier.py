@@ -44,17 +44,20 @@ def verify_session(
     allow_redacted: bool = True,
 ) -> VerificationReport:
     """
-    Verify a session of sealed events and produce a deterministic verification report.
+    Verify the integrity and continuity of a session represented by a list of sealed events.
     
-    Validates sequence continuity, session consistency, chain authority, prev-event linkage, payload and event hashes, and detects log drops and redaction markers; accumulates findings and summarizes the outcome.
+    Performs sequence, session, authority, payload and event hash validations; detects chain breaks,
+    payload tampering, authority issues, log drops, and redaction integrity or policy violations,
+    and produces a VerificationReport summarizing status, findings, and endpoint hashes.
     
     Parameters:
-        events (List[Dict[str, Any]]): Ordered list of sealed event objects comprising a session.
-        trusted_authorities (Optional[Set[str]]): Allowed chain_authority prefixes; defaults to module TRUSTED_AUTHORITIES.
-        allow_redacted (bool): If True, redacted content is treated as acceptable for the report (recorded in verification_mode); this flag does not alter the verification checks.
+        events (List[Dict[str, Any]]): Ordered list of sealed event objects to verify.
+        trusted_authorities (Optional[Set[str]]): Allowed chain_authority prefixes; defaults to module TRUSTED_AUTHORITIES when None.
+        allow_redacted (bool): If True, redactions are permitted (sets verification_mode to "REDACTED"); if False, any redaction produces a policy violation.
     
     Returns:
-        VerificationReport: Report containing session_id, status (one of PASS, FAIL, DEGRADED), event_count, first_event_hash, final_event_hash, chain_authority, verification_mode, and a list of Findings describing any issues.
+        VerificationReport: Report containing session_id, derived status (PASS/DEGRADED/FAIL), event_count,
+        first and final event hashes (when computable), chain_authority, verification_mode, and the collected findings.
     """
     if trusted_authorities is None:
         trusted_authorities = TRUSTED_AUTHORITIES
@@ -215,7 +218,9 @@ def verify_session(
             verification_mode = "DEGRADED"
         
         # 8. Check for redaction markers
-        if _contains_redaction(payload):
+        # 8. Check for redaction markers
+        has_redaction = _check_redaction_integrity(payload, findings, event_seq, event_id)
+        if has_redaction:
             if not allow_redacted:
                 findings.append(Finding(
                     finding_type=FindingType.POLICY_VIOLATION,
@@ -271,51 +276,58 @@ def verify_session(
     )
 
 
-def _contains_redaction(payload: Dict[str, Any]) -> bool:
+def _check_redaction_integrity(obj: Any, findings: List[Finding], event_seq: int, event_id: str, path: str = "") -> bool:
     """
-    Detects whether a payload contains redaction markers.
-    
-    Recursively inspects strings, dictionaries, and lists within the payload for the markers "[REDACTED]" or "***".
-    
-    Parameters:
-        payload (Dict[str, Any]): The payload to inspect; may contain nested dicts and lists.
-    
-    Returns:
-        bool: `True` if any redaction marker is found, `False` otherwise.
+    Recursively check redaction integrity.
+    Returns True if valid redaction markers are found.
+    Emit REDACTION_INTEGRITY_VIOLATION if sibling hash is missing.
     """
-    def check_value(v: Any) -> bool:
-        """
-        Detects whether a value (possibly nested) contains redaction markers.
-        
-        Recursively inspects strings, dicts, and lists to find the markers "[REDACTED]" or "***". Non-iterable, non-string values are treated as not containing redactions.
-        
-        Parameters:
-            v (Any): The value to inspect; may be a string, dict, list, or other type.
-        
-        Returns:
-            bool: `True` if a redaction marker is found anywhere in `v`, `False` otherwise.
-        """
-        if isinstance(v, str):
-            return "[REDACTED]" in v or "***" in v
-        elif isinstance(v, dict):
-            return any(check_value(val) for val in v.values())
-        elif isinstance(v, list):
-            return any(check_value(item) for item in v)
-        return False
+    found = False
     
-    return check_value(payload)
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            # Recursive check of value
+            if _check_redaction_integrity(v, findings, event_seq, event_id, f"{path}.{k}" if path else k):
+                found = True
+            
+            # Check for redaction in value strings
+            if isinstance(v, str) and ("[REDACTED]" in v or "***" in v):
+                found = True
+                # Validation: Check sibling hash exists in CURRENT dict
+                hash_key = f"{k}_hash"
+                if hash_key not in obj:
+                    full_field = f"{path}.{k}" if path else k
+                    findings.append(Finding(
+                        finding_type=FindingType.REDACTION_INTEGRITY_VIOLATION,
+                        severity=FindingSeverity.FATAL,
+                        message=f"Redacted field '{full_field}' missing integrity hash",
+                        sequence_number=event_seq,
+                        event_id=event_id,
+                        details={"missing_field": hash_key}
+                    ))
+                    
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            if _check_redaction_integrity(item, findings, event_seq, event_id, f"{path}[{i}]"):
+                found = True
+
+    elif isinstance(obj, str):
+        if "[REDACTED]" in obj or "***" in obj:
+            return True
+            
+    return found
 
 
 def verify_file(filepath: str, **kwargs) -> VerificationReport:
     """
-    Verify a session stored in a JSON file.
+    Verify a session represented by events stored in a JSON file.
     
     Parameters:
-        filepath (str): Path to a JSON file containing a list of event objects representing a session.
-        **kwargs: Additional verification options forwarded to the session verifier (for example, trusted_authorities and allow_redacted).
+        filepath (str): Path to a JSON file containing a list of sealed event objects as parsed by json.load.
+        **kwargs: Forwarded to verify_session (e.g., trusted_authorities, allow_redacted).
     
     Returns:
-        VerificationReport: Summary of the verification including session_id, status, event_count, first_event_hash, final_event_hash, chain_authority, verification_mode, and findings.
+        VerificationReport: Verification report summarizing status, findings, hashes, and metadata for the session.
     """
     with open(filepath, 'r') as f:
         events = json.load(f)

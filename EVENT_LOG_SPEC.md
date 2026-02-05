@@ -197,8 +197,16 @@ The PDF Export is a **Secondary Representation**.
 
 ## 4. Ordering & Causality
 
-- `sequence_number` starts at 0, increments by 1.
-- Gaps detectable via `prev_event_hash` mismatch.
+### Sequence Integrity Invariant
+
+For a given session, event `sequence_number` values MUST form a strictly contiguous, zero-based integer sequence: 0, 1, 2, …, N.
+
+The verifier MUST reject the session with a `SEQUENCE_VIOLATION` (Fatal) if any of the following are observed:
+
+- A missing sequence number (gap)
+- A duplicated sequence number
+- A non-integer sequence value
+- A sequence that does not start at 0
 
 ## 4. Cryptographic Guarantees
 

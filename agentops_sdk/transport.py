@@ -18,7 +18,24 @@ def send_batch_with_retry(
     max_wait: float,
 ) -> dict:
     """
-    Send a batch of events with exponential backoff retry.
+    Send a batch of events to the ingest endpoint, retrying with exponential backoff and jitter on transient failures.
+    
+    Parameters:
+        client (httpx.Client): HTTP client used to call the ingest API.
+        session_id (str): Session identifier used in the ingest endpoint path.
+        events (list): List of event objects to send in the request body.
+        max_retries (int): Maximum number of attempts; must be greater than 0.
+        min_wait (float): Base wait time in seconds for exponential backoff.
+        max_wait (float): Maximum wait time in seconds for backoff.
+    
+    Returns:
+        dict: Parsed JSON response body from a successful request.
+    
+    Raises:
+        ValueError: If `max_retries` is less than or equal to 0.
+        RetryExhausted: If all retry attempts fail; includes the last observed error.
+    Notes:
+        Retries are performed for network errors, timeouts, HTTP 5xx, and HTTP 408/429. HTTP 4xx responses other than 408 and 429 are treated as non-retryable and will stop retries immediately.
     """
     attempt = 0
     last_error = None
@@ -36,6 +53,14 @@ def send_batch_with_retry(
             return response.json()
             
         except (httpx.NetworkError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
+            # Check for non-transient 4xx errors
+            if isinstance(e, httpx.HTTPStatusError):
+                status = e.response.status_code
+                # Allow retry for 408 (Request Timeout), 429 (Too Many Requests), or 5xx
+                if 400 <= status < 500 and status not in [408, 429]:
+                    last_error = e
+                    break
+            
             last_error = e
             attempt += 1
             

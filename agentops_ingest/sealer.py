@@ -10,8 +10,11 @@ Responsibilities:
 - Assign chain_authority
 """
 import hashlib
+import logging
 from dataclasses import dataclass
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from .validator import ValidatedClaim
 from .errors import (
@@ -67,20 +70,26 @@ def seal_event(
     strict_mode: bool = True
 ) -> SealedEvent:
     """
-    Seal a validated claim into an authoritative, hash-linked SealedEvent.
+    Seal a validated claim into the authoritative hash chain and produce a SealedEvent.
     
-    Validates session state and sequence continuity, computes the canonical SHA-256 event hash over the sealed envelope, and returns a SealedEvent populated with chain authority and any optional metadata.
+    Performs session alignment and sequence continuity checks (closed session, sequence rewind,
+    invalid first sequence, and sequence gaps). On sequence gaps, behavior depends on
+    strict_mode: gaps raise an IngestException when True, or are allowed with a logged
+    warning when False. Computes the event's canonicalized hash and returns a SealedEvent
+    populated with prev_event_hash, event_hash, and chain_authority.
     
-    Args:
-        claim: ValidatedClaim containing the event fields to be sealed.
-        chain_state: Current ChainState for the session, or None for the first event.
-        strict_mode: If True, reject sequence gaps; if False, gaps would be allowed (note: current implementation enforces strictness).
+    Parameters:
+        claim: ValidatedClaim containing the validated event data.
+        chain_state: ChainState for the session, or None if this is the first event.
+        strict_mode: If True, reject sequence gaps; if False, allow gaps and emit a warning.
     
     Returns:
-        SealedEvent ready for storage, with prev_event_hash set to the previous event's hash or None for the first event.
+        SealedEvent populated for storage, including computed `prev_event_hash`, `event_hash`,
+        and `chain_authority`.
     
     Raises:
-        IngestException: if the session is closed, a sequence rewind is detected, a sequence gap is detected (when strict_mode is True), or the first event does not have sequence number 0.
+        IngestException: on session ID mismatch, closed session, sequence rewind,
+        invalid first sequence, or (when strict_mode is True) sequence gaps.
     """
     # 0. Check Session Alignment
     if chain_state is not None and chain_state.session_id != claim.session_id:
@@ -112,8 +121,8 @@ def seal_event(
             if strict_mode:
                 # In strict mode, gaps are fatal
                 raise IngestException(log_gap(expected_seq, claim.sequence_number))
-            # In non-strict mode, we'd log a warning but continue
-            # For now, we always enforce strict
+            # In non-strict mode, log warning but continue
+            logger.warning(log_gap(expected_seq, claim.sequence_number).message)
         
         prev_event_hash = chain_state.last_event_hash
     else:

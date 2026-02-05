@@ -9,6 +9,21 @@ from unittest.mock import patch, MagicMock
 # Add repo root to path to import agentops_sdk
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# --- COLD START: INTEGRATE IN <10 MINUTES ---
+# You do NOT need to read the full specs to start using AgentOps.
+# 4 Lines of Code:
+# 1. client = AgentOpsClient()
+# 2. client.start_session(agent_id="...", tags=[...])
+# 3. client.record(EventType.AGENT_DECISION | TOOL_CALL | ..., payload={...})
+# 4. client.end_session(status="success")
+#
+# GUARANTEES:
+# - All events are cryptographically chained (tamper-proof).
+# - Sequence gaps are detected immediately.
+# - Redaction is enforced (fail strict if [REDACTED] hash missing).
+# - Zero-config local buffering.
+# --------------------------------------------
+
 from agentops_sdk.client import AgentOpsClient
 from agentops_sdk.events import EventType
 import agentops_sdk.envelope  # Import to patch datetime here

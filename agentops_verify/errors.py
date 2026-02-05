@@ -30,6 +30,7 @@ class FindingType(str, Enum):
     PAYLOAD_TAMPER = "PAYLOAD_TAMPER"
     AUTHORITY_INVALID = "AUTHORITY_INVALID"
     SEQUENCE_VIOLATION = "SEQUENCE_VIOLATION"
+    REDACTION_INTEGRITY_VIOLATION = "REDACTION_INTEGRITY_VIOLATION"
     POLICY_VIOLATION = "POLICY_VIOLATION"
     
     # Degrading (cause DEGRADED)
@@ -45,6 +46,13 @@ class FindingSeverity(str, Enum):
     WARNING = "WARNING"  # Causes DEGRADED
     INFO = "INFO"  # No status impact
 
+
+# Strict Exit Code Contract
+EXIT_CODES = {
+    VerificationStatus.PASS: 0,
+    VerificationStatus.DEGRADED: 1,
+    VerificationStatus.FAIL: 2,
+}
 
 @dataclass
 class Finding:
@@ -179,14 +187,11 @@ class VerificationReport:
     @property
     def exit_code(self) -> int:
         """
-        Map the report's verification status to a machine-friendly exit code.
+        Provide the machine-verifiable exit code for the report's verification status.
+        
+        Maps the report's VerificationStatus to its integer exit code using the module's EXIT_CODES mapping.
         
         Returns:
-            int: Exit code where 0 = PASS, 1 = DEGRADED, 2 = any other status.
+            int: Exit code corresponding to the report's status; defaults to 2 (FAIL) if the status is not present in EXIT_CODES.
         """
-        if self.status == VerificationStatus.PASS:
-            return 0
-        elif self.status == VerificationStatus.DEGRADED:
-            return 1
-        else:
-            return 2
+        return EXIT_CODES.get(self.status, 2)  # Default to FAIL (2) if undefined status

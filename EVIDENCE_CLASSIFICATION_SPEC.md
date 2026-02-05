@@ -55,7 +55,6 @@ Classification is:
 - Chain Authority: Trusted
 - One or more of:
   - LOG_DROP events present
-  - Sequence gaps detected and logged
   - Partial session (SESSION_END missing)
 
 **Use Cases**:
@@ -87,6 +86,7 @@ When presenting Class B evidence, the following MUST be disclosed:
 - Hash mismatch detected
 - Unknown/untrusted authority
 - Payload tampering detected
+- Sequence Gap / Duplication detected
 
 **Use Cases**:
 

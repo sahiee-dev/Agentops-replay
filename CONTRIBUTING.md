@@ -32,9 +32,13 @@ python3 verifier/agentops_verify.py verifier/test_vectors/valid_session.jsonl
 >
 > - Ruff fails (`ruff check .`)
 > - MyPy strict fails (`mypy .`)
-> - Coverage < 90% (`pytest --cov-fail-under=90`)
+> - **Verifier coverage < 90%** (`pytest --cov=agentops_verify --cov-fail-under=90 agentops_verify/`)
 > - Verifier output changes without spec update
 > - `# type: ignore` added without inline justification
+
+**Coverage Scope**: Quality gates enforce 90% coverage on `agentops_verify` only. This is the critical evidence infrastructure where untested branches = unproven integrity paths. Backend and SDK coverage is tracked but not gated to allow rapid iteration on non-authoritative code.
+
+**Rationale**: The verifier is the arbiter of truth. Error paths, malformed input handling, and authority validation must be proven through tests. Coverage gaps here are integrity risks, not aesthetics.
 
 **Python Version**: 3.11 is canonical. See `.python-version`. CI is the source of truth.
 
