@@ -44,15 +44,20 @@ def verify_session(
     allow_redacted: bool = True,
 ) -> VerificationReport:
     """
-    Verify a session's integrity.
+    Verify the integrity and continuity of a session represented by a list of sealed events.
     
-    Args:
-        events: List of sealed events (from session_golden.json)
-        trusted_authorities: Set of allowed chain_authority values
-        allow_redacted: Whether REDACTED mode is acceptable
+    Performs sequence, session, authority, payload and event hash validations; detects chain breaks,
+    payload tampering, authority issues, log drops, and redaction integrity or policy violations,
+    and produces a VerificationReport summarizing status, findings, and endpoint hashes.
+    
+    Parameters:
+        events (List[Dict[str, Any]]): Ordered list of sealed event objects to verify.
+        trusted_authorities (Optional[Set[str]]): Allowed chain_authority prefixes; defaults to module TRUSTED_AUTHORITIES when None.
+        allow_redacted (bool): If True, redactions are permitted (sets verification_mode to "REDACTED"); if False, any redaction produces a policy violation.
     
     Returns:
-        VerificationReport with PASS/FAIL/DEGRADED status
+        VerificationReport: Report containing session_id, derived status (PASS/DEGRADED/FAIL), event_count,
+        first and final event hashes (when computable), chain_authority, verification_mode, and the collected findings.
     """
     if trusted_authorities is None:
         trusted_authorities = TRUSTED_AUTHORITIES
@@ -315,9 +320,14 @@ def _check_redaction_integrity(obj: Any, findings: List[Finding], event_seq: int
 
 def verify_file(filepath: str, **kwargs) -> VerificationReport:
     """
-    Verify a session from a JSON file.
+    Verify a session represented by events stored in a JSON file.
     
-    Convenience wrapper for verify_session.
+    Parameters:
+        filepath (str): Path to a JSON file containing a list of sealed event objects as parsed by json.load.
+        **kwargs: Forwarded to verify_session (e.g., trusted_authorities, allow_redacted).
+    
+    Returns:
+        VerificationReport: Verification report summarizing status, findings, hashes, and metadata for the session.
     """
     with open(filepath, 'r') as f:
         events = json.load(f)
