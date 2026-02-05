@@ -67,18 +67,20 @@ def seal_event(
     strict_mode: bool = True
 ) -> SealedEvent:
     """
-    Seal a validated claim with authoritative hash chain.
+    Seal a validated claim into an authoritative, hash-linked SealedEvent.
+    
+    Validates session state and sequence continuity, computes the canonical SHA-256 event hash over the sealed envelope, and returns a SealedEvent populated with chain authority and any optional metadata.
     
     Args:
-        claim: Validated claim from validator
-        chain_state: Current chain state for this session (None if first event)
-        strict_mode: If True, reject sequence gaps; if False, allow with warning
+        claim: ValidatedClaim containing the event fields to be sealed.
+        chain_state: Current ChainState for the session, or None for the first event.
+        strict_mode: If True, reject sequence gaps; if False, gaps would be allowed (note: current implementation enforces strictness).
     
     Returns:
-        SealedEvent ready for storage
+        SealedEvent ready for storage, with prev_event_hash set to the previous event's hash or None for the first event.
     
     Raises:
-        IngestException on sequence violations
+        IngestException: if the session is closed, a sequence rewind is detected, a sequence gap is detected (when strict_mode is True), or the first event does not have sequence number 0.
     """
     # 0. Check Session Alignment
     if chain_state is not None and chain_state.session_id != claim.session_id:

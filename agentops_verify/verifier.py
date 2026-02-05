@@ -44,15 +44,17 @@ def verify_session(
     allow_redacted: bool = True,
 ) -> VerificationReport:
     """
-    Verify a session's integrity.
+    Verify a session of sealed events and produce a deterministic verification report.
     
-    Args:
-        events: List of sealed events (from session_golden.json)
-        trusted_authorities: Set of allowed chain_authority values
-        allow_redacted: Whether REDACTED mode is acceptable
+    Validates sequence continuity, session consistency, chain authority, prev-event linkage, payload and event hashes, and detects log drops and redaction markers; accumulates findings and summarizes the outcome.
+    
+    Parameters:
+        events (List[Dict[str, Any]]): Ordered list of sealed event objects comprising a session.
+        trusted_authorities (Optional[Set[str]]): Allowed chain_authority prefixes; defaults to module TRUSTED_AUTHORITIES.
+        allow_redacted (bool): If True, redacted content is treated as acceptable for the report (recorded in verification_mode); this flag does not alter the verification checks.
     
     Returns:
-        VerificationReport with PASS/FAIL/DEGRADED status
+        VerificationReport: Report containing session_id, status (one of PASS, FAIL, DEGRADED), event_count, first_event_hash, final_event_hash, chain_authority, verification_mode, and a list of Findings describing any issues.
     """
     if trusted_authorities is None:
         trusted_authorities = TRUSTED_AUTHORITIES
@@ -270,8 +272,29 @@ def verify_session(
 
 
 def _contains_redaction(payload: Dict[str, Any]) -> bool:
-    """Check if payload contains redaction markers."""
+    """
+    Detects whether a payload contains redaction markers.
+    
+    Recursively inspects strings, dictionaries, and lists within the payload for the markers "[REDACTED]" or "***".
+    
+    Parameters:
+        payload (Dict[str, Any]): The payload to inspect; may contain nested dicts and lists.
+    
+    Returns:
+        bool: `True` if any redaction marker is found, `False` otherwise.
+    """
     def check_value(v: Any) -> bool:
+        """
+        Detects whether a value (possibly nested) contains redaction markers.
+        
+        Recursively inspects strings, dicts, and lists to find the markers "[REDACTED]" or "***". Non-iterable, non-string values are treated as not containing redactions.
+        
+        Parameters:
+            v (Any): The value to inspect; may be a string, dict, list, or other type.
+        
+        Returns:
+            bool: `True` if a redaction marker is found anywhere in `v`, `False` otherwise.
+        """
         if isinstance(v, str):
             return "[REDACTED]" in v or "***" in v
         elif isinstance(v, dict):
@@ -285,9 +308,14 @@ def _contains_redaction(payload: Dict[str, Any]) -> bool:
 
 def verify_file(filepath: str, **kwargs) -> VerificationReport:
     """
-    Verify a session from a JSON file.
+    Verify a session stored in a JSON file.
     
-    Convenience wrapper for verify_session.
+    Parameters:
+        filepath (str): Path to a JSON file containing a list of event objects representing a session.
+        **kwargs: Additional verification options forwarded to the session verifier (for example, trusted_authorities and allow_redacted).
+    
+    Returns:
+        VerificationReport: Summary of the verification including session_id, status, event_count, first_event_hash, final_event_hash, chain_authority, verification_mode, and findings.
     """
     with open(filepath, 'r') as f:
         events = json.load(f)
