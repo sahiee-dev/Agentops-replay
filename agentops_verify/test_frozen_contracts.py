@@ -12,7 +12,7 @@ RULES:
 import pytest
 import json
 from pathlib import Path
-from .verifier import verify_session, VerificationStatus
+from .verifier import verify_session, VerificationStatus, TRUSTED_AUTHORITIES
 
 # CONSTANTS - THESE ARE IMMUTABLE
 # Derived from `verifier/test_vectors/valid_session.jsonl`
@@ -26,8 +26,11 @@ def test_frozen_contract_valid_session():
     Validates that the verifier's behavior on the constitutional test vector
     has not changed.
     """
-    # Locate the frozen vector
-    vector_path = Path("verifier/test_vectors/valid_session.jsonl")
+    # Locate the frozen vector (repo-anchored, independent of CWD)
+    # Path: <repo_root>/verifier/test_vectors/valid_session.jsonl
+    # __file__ is in <repo_root>/agentops_verify/
+    repo_root = Path(__file__).resolve().parent.parent
+    vector_path = repo_root / "verifier" / "test_vectors" / "valid_session.jsonl"
     if not vector_path.exists():
         pytest.fail(f"Constitutional artifact missing: {vector_path}")
 
@@ -39,10 +42,16 @@ def test_frozen_contract_valid_session():
             if line:
                 events.append(json.loads(line))
 
-    # Run verification (using default trusted authorities, which must include 'server')
-    # Since verifier.py doesn't trust 'server' by default (strict mode), we inject it here
-    # to validate the constitutional vector which uses 'server'.
-    report = verify_session(events, trusted_authorities={"server"})
+    # Validate default TRUSTED_AUTHORITIES hasn't drifted
+    # This assertion guards against silent policy changes in verifier.py
+    expected_default_authorities = {"agentops-ingest-v1", "agentops-ingest-v2"}
+    assert TRUSTED_AUTHORITIES == expected_default_authorities, \
+        f"Default TRUSTED_AUTHORITIES drifted! Expected {expected_default_authorities}, got {TRUSTED_AUTHORITIES}"
+
+    # Run verification with extended authorities (default + 'server' for legacy vector)
+    # The vector uses 'server' authority which is not in the strict default set.
+    extended_authorities = TRUSTED_AUTHORITIES | {"server"}
+    report = verify_session(events, trusted_authorities=extended_authorities)
 
     # Assert START - failure here means FREEZE VIOLATION
     
