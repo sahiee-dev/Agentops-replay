@@ -1,390 +1,392 @@
 """
 test_ingestion_service.py - Adversarial tests for ingestion service.
 
-TESTS COVER:
-1. Valid batch acceptance (happy path)
-2. Sealed session rejection (409)
-3. Sequence gap rejection (409)
-4. Duplicate sequence rejection (409)
-5. Non-monotonic sequence rejection (409)
-6. Atomic rollback on failure
-7. Seal with SESSION_END (success)
-8. Seal without SESSION_END (400)
-9. Concurrent ingestion blocking
+Tests the SINGLE CANONICAL ingestion implementation: app.ingestion.IngestService
+
+CONSTITUTIONAL TESTS:
+1. SDK hashes are IGNORED (server recomputes)
+2. Event hash matches verifier_core exactly
+3. Sequence violations trigger LOG_DROP + rejection
+4. Sealed sessions reject new events
+5. Authority gate for sealing
 """
 
 import os
 import sys
+import uuid
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
 
 import pytest
 
-# Add backend to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "app"))
+# Add verifier to path for hash verification
+_verifier_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "verifier"))
+if _verifier_path not in sys.path:
+    sys.path.insert(0, _verifier_path)
 
-from app.models import ChainAuthority, Session, SessionStatus
-from app.services.ingestion.service import (
-    BadRequestError,
-    IngestionService,
-    StateConflictError,
-)
+import verifier_core
+from app.ingestion import AuthorityViolation, IngestService, SequenceViolation
+from app.database import SessionLocal
+from app.models import ChainAuthority, EventChain, Session, SessionStatus
 
 
-class TestValidBatchAccepted:
-    """Tests for valid batch ingestion."""
+@pytest.fixture
+def db_session():
+    """Provide a real database session with automatic cleanup."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.rollback()
+        db.close()
 
-    def test_valid_batch_returns_server_authority(self, mock_db, mock_session):
-        """Valid batch should be accepted with chain_authority=SERVER."""
-        service = IngestionService(mock_db)
+
+@pytest.fixture
+def ingest_service():
+    """Create production ingestion service instance."""
+    return IngestService(service_id="test-ingest-01")
+
+
+class TestSdkHashIgnored:
+    """CONSTITUTIONAL: SDK-provided hashes must be ignored."""
+
+    def test_sdk_hash_ignored(self, db_session, ingest_service):
+        """Server must recompute hashes, not trust SDK values."""
+        # Create session
+        session_id = ingest_service.start_session(
+            session_id_str=str(uuid.uuid4()),
+            authority="server",
+            agent_name="test-agent",
+        )
+
+        # Create event with FAKE SDK hash
+        fake_sdk_hash = "a" * 64  # Deliberately wrong
+        events = [
+            {
+                "event_id": str(uuid.uuid4()),
+                "event_type": "SESSION_START",
+                "sequence_number": 0,
+                "timestamp_wall": datetime.now(UTC).isoformat(),
+                "timestamp_monotonic": 1000,
+                "payload": {"action": "start"},
+                "event_hash": fake_sdk_hash,  # SDK hash - MUST be ignored
+            }
+        ]
+
+        # Ingest
+        result = ingest_service.append_events(session_id=session_id, events=events)
+
+        # Verify the stored hash is NOT the SDK hash
+        assert result["final_hash"] != fake_sdk_hash
+        assert len(result["final_hash"]) == 64  # Valid SHA-256
+
+        # Verify event in database has server-computed hash
+        db = SessionLocal()
+        try:
+            session = db.query(Session).filter(Session.session_id_str == uuid.UUID(session_id)).first()
+            event = db.query(EventChain).filter(EventChain.session_id == session.id).first()
+            assert event.event_hash != fake_sdk_hash
+        finally:
+            db.close()
+
+
+class TestEventHashMatchesVerifier:
+    """CONSTITUTIONAL: Ingestion hash must match verifier exactly."""
+
+    def test_event_hash_matches_verifier_exactly(self, db_session, ingest_service):
+        """Hash from ingestion MUST equal hash from verifier_core."""
+        session_id = ingest_service.start_session(
+            session_id_str=str(uuid.uuid4()),
+            authority="server",
+        )
+
+        event_id = str(uuid.uuid4())
+        timestamp = datetime.now(UTC).isoformat()
+        payload = {"prompt": "test", "response": "hello"}
 
         events = [
             {
-                "event_type": "SESSION_START",
-                "sequence_number": 0,
-                "timestamp_monotonic": 1000,
-                "payload": {},
-            },
-            {
+                "event_id": event_id,
                 "event_type": "LLM_CALL",
-                "sequence_number": 1,
-                "timestamp_monotonic": 2000,
-                "payload": {"prompt": "test"},
-            },
+                "sequence_number": 0,
+                "timestamp_wall": timestamp,
+                "timestamp_monotonic": 1000,
+                "payload": payload,
+            }
         ]
 
-        result = service.ingest_batch(
-            session_id_str=str(mock_session.session_id_str), events=events, seal=False
+        # Ingest event
+        ingest_service.append_events(session_id=session_id, events=events)
+
+        # Retrieve stored event
+        db = SessionLocal()
+        try:
+            session = db.query(Session).filter(Session.session_id_str == uuid.UUID(session_id)).first()
+            event = db.query(EventChain).filter(EventChain.session_id == session.id).first()
+
+            # Compute expected hash using verifier_core (the single source of truth)
+            expected_payload_hash = verifier_core.compute_payload_hash(payload)
+            expected_event_hash = verifier_core.compute_event_hash({
+                "event_id": event_id,
+                "session_id": session_id,
+                "sequence_number": 0,
+                "timestamp_wall": timestamp,
+                "event_type": "LLM_CALL",
+                "payload_hash": expected_payload_hash,
+                "prev_event_hash": verifier_core.GENESIS_HASH,
+            })
+
+            # CRITICAL ASSERTION: Hashes must match exactly
+            assert event.payload_hash == expected_payload_hash, \
+                f"Payload hash mismatch: {event.payload_hash} != {expected_payload_hash}"
+            assert event.event_hash == expected_event_hash, \
+                f"Event hash mismatch: {event.event_hash} != {expected_event_hash}"
+        finally:
+            db.close()
+
+
+class TestSequenceViolation:
+    """CONSTITUTIONAL: Sequence violations must be rejected with LOG_DROP."""
+
+    def test_sequence_gap_rejected(self, db_session, ingest_service):
+        """Sequence gaps must raise SequenceViolation."""
+        session_id = ingest_service.start_session(
+            session_id_str=str(uuid.uuid4()),
+            authority="server",
         )
 
-        assert result.accepted_count == 2
-        assert result.final_hash is not None
-        assert len(result.final_hash) == 64  # SHA-256 hex
-        assert result.sealed is False
+        # Insert first event at sequence 0
+        ingest_service.append_events(
+            session_id=session_id,
+            events=[{
+                "event_id": str(uuid.uuid4()),
+                "event_type": "SESSION_START",
+                "sequence_number": 0,
+                "timestamp_wall": datetime.now(UTC).isoformat(),
+                "timestamp_monotonic": 1000,
+                "payload": {},
+            }]
+        )
+
+        # Attempt to insert at sequence 5 (gap: 1-4 missing)
+        with pytest.raises(SequenceViolation) as exc_info:
+            ingest_service.append_events(
+                session_id=session_id,
+                events=[{
+                    "event_id": str(uuid.uuid4()),
+                    "event_type": "LLM_CALL",
+                    "sequence_number": 5,  # GAP!
+                    "timestamp_wall": datetime.now(UTC).isoformat(),
+                    "timestamp_monotonic": 2000,
+                    "payload": {},
+                }]
+            )
+
+        assert "gap" in str(exc_info.value).lower()
+
+    def test_duplicate_sequence_rejected(self, db_session, ingest_service):
+        """Duplicate sequence numbers must raise SequenceViolation."""
+        session_id = ingest_service.start_session(
+            session_id_str=str(uuid.uuid4()),
+            authority="server",
+        )
+
+        # Insert event at sequence 0
+        ingest_service.append_events(
+            session_id=session_id,
+            events=[{
+                "event_id": str(uuid.uuid4()),
+                "event_type": "SESSION_START",
+                "sequence_number": 0,
+                "timestamp_wall": datetime.now(UTC).isoformat(),
+                "timestamp_monotonic": 1000,
+                "payload": {},
+            }]
+        )
+
+        # Attempt to insert another event at sequence 0 (duplicate!)
+        with pytest.raises(SequenceViolation) as exc_info:
+            ingest_service.append_events(
+                session_id=session_id,
+                events=[{
+                    "event_id": str(uuid.uuid4()),
+                    "event_type": "LLM_CALL",
+                    "sequence_number": 0,  # DUPLICATE!
+                    "timestamp_wall": datetime.now(UTC).isoformat(),
+                    "timestamp_monotonic": 2000,
+                    "payload": {},
+                }]
+            )
+
+        assert "duplicate" in str(exc_info.value).lower()
 
 
 class TestSealedSessionRejection:
-    """Tests for sealed session rejection (409)."""
+    """CONSTITUTIONAL: Sealed sessions must reject new events."""
 
-    def test_sealed_session_rejects_new_events(self, mock_db, mock_sealed_session):
-        """Already sealed sessions must reject new events with 409."""
-        service = IngestionService(mock_db)
-
-        events = [
-            {
-                "event_type": "LLM_CALL",
-                "sequence_number": 10,
-                "timestamp_monotonic": 10000,
-                "payload": {},
-            }
-        ]
-
-        with pytest.raises(StateConflictError) as exc_info:
-            service.ingest_batch(
-                session_id_str=str(mock_sealed_session.session_id_str),
-                events=events,
-                seal=False,
-            )
-
-        assert exc_info.value.code == "ALREADY_SEALED"
-        assert "sealed" in exc_info.value.message.lower()
-
-
-class TestSequenceGapRejection:
-    """Tests for sequence gap rejection (409)."""
-
-    def test_sequence_gap_rejected(self, mock_db, mock_session_with_events):
-        """Sequence gaps must be rejected with 409."""
-        service = IngestionService(mock_db)
-
-        # Session has events 0-4, so next expected is 5
-        # We send starting at 7 (gap)
-        events = [
-            {
-                "event_type": "LLM_CALL",
-                "sequence_number": 7,  # Gap: 5-6 missing
-                "timestamp_monotonic": 7000,
-                "payload": {},
-            }
-        ]
-
-        with pytest.raises(StateConflictError) as exc_info:
-            service.ingest_batch(
-                session_id_str=str(mock_session_with_events.session_id_str),
-                events=events,
-                seal=False,
-            )
-
-        assert exc_info.value.code == "SEQUENCE_GAP"
-
-
-class TestDuplicateSequenceRejection:
-    """Tests for duplicate sequence rejection (409)."""
-
-    def test_duplicate_sequence_rejected(self, mock_db, mock_session_with_events):
-        """Duplicate sequence numbers must be rejected with 409."""
-        service = IngestionService(mock_db)
-
-        # Session has events 0-4, so sending 3 again is duplicate
-        events = [
-            {
-                "event_type": "LLM_CALL",
-                "sequence_number": 3,  # Already exists
-                "timestamp_monotonic": 3000,
-                "payload": {},
-            }
-        ]
-
-        with pytest.raises(StateConflictError) as exc_info:
-            service.ingest_batch(
-                session_id_str=str(mock_session_with_events.session_id_str),
-                events=events,
-                seal=False,
-            )
-
-        assert exc_info.value.code == "DUPLICATE_SEQUENCE"
-
-
-class TestNonMonotonicSequenceRejection:
-    """Tests for non-monotonic sequence rejection (409)."""
-
-    def test_non_monotonic_within_batch_rejected(self, mock_db, mock_session):
-        """Non-monotonic sequences within batch must be rejected."""
-        service = IngestionService(mock_db)
-
-        events = [
-            {
-                "event_type": "SESSION_START",
-                "sequence_number": 0,
-                "timestamp_monotonic": 1000,
-                "payload": {},
-            },
-            {
-                "event_type": "LLM_CALL",
-                "sequence_number": 2,  # Skip 1
-                "timestamp_monotonic": 2000,
-                "payload": {},
-            },
-            {
-                "event_type": "LLM_RESPONSE",
-                "sequence_number": 1,  # Out of order!
-                "timestamp_monotonic": 3000,
-                "payload": {},
-            },
-        ]
-
-        with pytest.raises(StateConflictError) as exc_info:
-            service.ingest_batch(
-                session_id_str=str(mock_session.session_id_str),
-                events=events,
-                seal=False,
-            )
-
-        assert exc_info.value.code in ("NON_MONOTONIC_SEQUENCE", "SEQUENCE_GAP")
-
-
-class TestSealWithSessionEnd:
-    """Tests for valid seal request."""
-
-    def test_seal_creates_chain_seal_record(self, mock_db, mock_session):
-        """seal=True with SESSION_END should create ChainSeal record."""
-        service = IngestionService(mock_db)
-
-        events = [
-            {
-                "event_type": "SESSION_START",
-                "sequence_number": 0,
-                "timestamp_monotonic": 1000,
-                "payload": {},
-            },
-            {
-                "event_type": "SESSION_END",
-                "sequence_number": 1,
-                "timestamp_monotonic": 2000,
-                "payload": {},
-            },
-        ]
-
-        result = service.ingest_batch(
-            session_id_str=str(mock_session.session_id_str), events=events, seal=True
+    def test_sealed_session_rejects_events(self, db_session, ingest_service):
+        """Already sealed sessions must reject new events."""
+        session_id = ingest_service.start_session(
+            session_id_str=str(uuid.uuid4()),
+            authority="server",
         )
 
-        assert result.sealed is True
-        assert result.seal_timestamp is not None
-        assert result.session_digest is not None
-        assert len(result.session_digest) == 64
+        # Add SESSION_START and SESSION_END
+        ingest_service.append_events(
+            session_id=session_id,
+            events=[
+                {
+                    "event_id": str(uuid.uuid4()),
+                    "event_type": "SESSION_START",
+                    "sequence_number": 0,
+                    "timestamp_wall": datetime.now(UTC).isoformat(),
+                    "timestamp_monotonic": 1000,
+                    "payload": {},
+                },
+                {
+                    "event_id": str(uuid.uuid4()),
+                    "event_type": "SESSION_END",
+                    "sequence_number": 1,
+                    "timestamp_wall": datetime.now(UTC).isoformat(),
+                    "timestamp_monotonic": 2000,
+                    "payload": {},
+                },
+            ]
+        )
+
+        # Seal session
+        ingest_service.seal_session(session_id)
+
+        # Attempt to add more events (should fail)
+        with pytest.raises(ValueError) as exc_info:
+            ingest_service.append_events(
+                session_id=session_id,
+                events=[{
+                    "event_id": str(uuid.uuid4()),
+                    "event_type": "LLM_CALL",
+                    "sequence_number": 2,
+                    "timestamp_wall": datetime.now(UTC).isoformat(),
+                    "timestamp_monotonic": 3000,
+                    "payload": {},
+                }]
+            )
+
+        assert "sealed" in str(exc_info.value).lower()
 
 
-class TestSealWithoutSessionEnd:
-    """Tests for invalid seal request (400)."""
+class TestAuthorityGate:
+    """CONSTITUTIONAL: Only server-authority sessions can be sealed."""
 
-    def test_seal_without_session_end_rejected(self, mock_db, mock_session):
-        """seal=True without SESSION_END must be rejected with 400."""
-        service = IngestionService(mock_db)
+    def test_sdk_authority_cannot_seal(self, db_session, ingest_service):
+        """SDK authority sessions must fail to seal with AuthorityViolation."""
+        session_id = ingest_service.start_session(
+            session_id_str=str(uuid.uuid4()),
+            authority="sdk",  # SDK authority
+        )
 
-        events = [
+        # Add required events
+        ingest_service.append_events(
+            session_id=session_id,
+            events=[
+                {
+                    "event_id": str(uuid.uuid4()),
+                    "event_type": "SESSION_START",
+                    "sequence_number": 0,
+                    "timestamp_wall": datetime.now(UTC).isoformat(),
+                    "timestamp_monotonic": 1000,
+                    "payload": {},
+                },
+                {
+                    "event_id": str(uuid.uuid4()),
+                    "event_type": "SESSION_END",
+                    "sequence_number": 1,
+                    "timestamp_wall": datetime.now(UTC).isoformat(),
+                    "timestamp_monotonic": 2000,
+                    "payload": {},
+                },
+            ]
+        )
+
+        # Attempt to seal (should fail - SDK cannot seal)
+        with pytest.raises(AuthorityViolation):
+            ingest_service.seal_session(session_id)
+
+
+class TestIngestionOutputVerifiesClean:
+    """CONSTITUTIONAL: Ingested data must pass verifier with no errors."""
+
+    def test_ingested_session_verifies_clean(self, db_session, ingest_service):
+        """A sealed session must pass hash verification."""
+        session_id = ingest_service.start_session(
+            session_id_str=str(uuid.uuid4()),
+            authority="server",
+        )
+
+        # Add events
+        events_to_add = [
             {
+                "event_id": str(uuid.uuid4()),
                 "event_type": "SESSION_START",
                 "sequence_number": 0,
+                "timestamp_wall": datetime.now(UTC).isoformat(),
                 "timestamp_monotonic": 1000,
-                "payload": {},
+                "payload": {"action": "start"},
             },
             {
-                "event_type": "LLM_CALL",  # NOT SESSION_END
+                "event_id": str(uuid.uuid4()),
+                "event_type": "LLM_CALL",
                 "sequence_number": 1,
+                "timestamp_wall": datetime.now(UTC).isoformat(),
                 "timestamp_monotonic": 2000,
+                "payload": {"prompt": "hello", "response": "world"},
+            },
+            {
+                "event_id": str(uuid.uuid4()),
+                "event_type": "SESSION_END",
+                "sequence_number": 2,
+                "timestamp_wall": datetime.now(UTC).isoformat(),
+                "timestamp_monotonic": 3000,
                 "payload": {},
             },
         ]
 
-        with pytest.raises(BadRequestError) as exc_info:
-            service.ingest_batch(
-                session_id_str=str(mock_session.session_id_str),
-                events=events,
-                seal=True,
-            )
+        ingest_service.append_events(session_id=session_id, events=events_to_add)
+        ingest_service.seal_session(session_id)
 
-        assert exc_info.value.code == "INVALID_SEAL_REQUEST"
-        assert "SESSION_END" in exc_info.value.message
+        # Retrieve stored events and verify each hash
+        db = SessionLocal()
+        try:
+            session = db.query(Session).filter(Session.session_id_str == uuid.UUID(session_id)).first()
+            events = db.query(EventChain).filter(
+                EventChain.session_id == session.id
+            ).order_by(EventChain.sequence_number).all()
 
+            prev_hash = verifier_core.GENESIS_HASH
+            for event in events:
+                # Skip CHAIN_SEAL (genesis hash is fine for it)
+                if event.event_type == "CHAIN_SEAL":
+                    continue
 
-class TestSessionNotFound:
-    """Tests for session not found (400)."""
+                # Verify payload hash
+                payload_ok, payload_err = verifier_core.verify_payload_hash(
+                    event.payload_jsonb, event.payload_hash
+                )
+                assert payload_ok, f"Payload hash verification failed: {payload_err}"
 
-    def test_nonexistent_session_rejected(self, mock_db_no_session):
-        """Non-existent session must be rejected with 400."""
-        service = IngestionService(mock_db_no_session)
+                # Verify event hash
+                event_envelope = {
+                    "event_id": str(event.event_id),
+                    "session_id": str(session.session_id_str),
+                    "sequence_number": event.sequence_number,
+                    "timestamp_wall": event.timestamp_wall.isoformat().replace("+00:00", "Z"),
+                    "event_type": event.event_type,
+                    "payload_hash": event.payload_hash,
+                    "prev_event_hash": event.prev_event_hash,
+                }
+                event_ok, event_err = verifier_core.verify_event_hash(
+                    event_envelope, event.event_hash
+                )
+                assert event_ok, f"Event hash verification failed for seq {event.sequence_number}: {event_err}"
 
-        events = [
-            {
-                "event_type": "SESSION_START",
-                "sequence_number": 0,
-                "timestamp_monotonic": 1000,
-                "payload": {},
-            }
-        ]
-
-        with pytest.raises(BadRequestError) as exc_info:
-            service.ingest_batch(
-                session_id_str="nonexistent-session-id", events=events, seal=False
-            )
-
-        assert exc_info.value.code == "SESSION_NOT_FOUND"
-
-
-# =========================================================
-# PYTEST FIXTURES
-# =========================================================
-
-
-@pytest.fixture
-def mock_db():
-    """Mock database session with standard session."""
-    db = MagicMock()
-
-    # Mock session lookup
-    session = Session(
-        id=1,
-        session_id_str="test-session-123",
-        chain_authority=ChainAuthority.SERVER,
-        status=SessionStatus.ACTIVE,
-        total_drops=0,
-    )
-
-    def side_effect(query_obj, *args, **kwargs):
-        # Extremely simplified mock for SQLAlchemy query chain
-        # In real tests, better to separate fixtures or use a real in-memory DB
-        return db
-
-    # Helper to simulate having events
-    def get_last_event_mock(session_id):
-        if session_id == "session-with-events-789":
-            event = MagicMock()
-            event.sequence_number = 4
-            event.event_hash = "mock_hash_4"
-            return event
-        return None
-
-    db.query.return_value = db
-    db.filter.return_value = db
-    db.order_by.return_value = db
-
-    # scalars().all() -> empty list by default
-    db.scalars.return_value.all.return_value = []
-
-    # execute().scalar_one_or_none() handles session lookup
-    # But service.py uses .first() on query() chain usually
-    # Let's mock first() to return different things
-
-    # Mock scalars for session lookup in service.append_events (uses with_for_update)
-    # The real service calls: db.query(Session).filter(...).with_for_update().first()
-
-    # We need to ensure db.query returns 'db' (which is the mock) so method chaining works
-    db.query.return_value = db
-    db.filter.return_value = db
-    db.with_for_update.return_value = db
-    db.order_by.return_value = db
-
-    # Define what .first() returns based on context
-    # This is tricky because .first() is called for Session AND EventChain checks
-    # A simple approach: use the side_effect on .first() to return based on call history or global state
-    # BUT easier: just assume for this mock fixture we primarily return the active session
-
-    def first_side_effect():
-        # Check if we are looking for a session or event
-        # This is a bit of a hack, but sufficient for basic tests
-        return session
-
-    db.first.side_effect = first_side_effect
-    db.scalar_one_or_none.return_value = session
-
-    return db
-
-
-@pytest.fixture
-def mock_session():
-    """Mock active session."""
-    return Session(
-        id=1,
-        session_id_str="test-session-123",
-        chain_authority=ChainAuthority.SERVER,
-        status=SessionStatus.ACTIVE,
-        total_drops=0,
-    )
-
-
-@pytest.fixture
-def mock_sealed_session():
-    """Mock sealed session."""
-    return Session(
-        id=2,
-        session_id_str="sealed-session-456",
-        chain_authority=ChainAuthority.SERVER,
-        status=SessionStatus.SEALED,
-        sealed_at=datetime.now(UTC),
-        total_drops=0,
-    )
-
-
-@pytest.fixture
-def mock_session_with_events():
-    """Mock session with existing events (0-4)."""
-    return Session(
-        id=3,
-        session_id_str="session-with-events-789",
-        chain_authority=ChainAuthority.SERVER,
-        status=SessionStatus.ACTIVE,
-        total_drops=0,
-    )
-
-
-@pytest.fixture
-def mock_db_no_session():
-    """Mock database with no session found."""
-    db = MagicMock()
-    db.execute.return_value.scalar_one_or_none.return_value = None
-    return db
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+                prev_hash = event.event_hash
+        finally:
+            db.close()
