@@ -1,75 +1,70 @@
-# Goals: Compliance & Ingestion Foundation
+# Goals: Operational Readiness & Resilience
 
-**Date:** January 29, 2026
-**Theme:** "From Evidence to Authority"
+**Date:** February 7, 2026
+**Theme:** "If It Breaks, We Can Prove It"
 
-Today's objective is to complete the Compliance layer (Phase 5) and lay the authoritative foundation for the Ingestion Service (Phase 6). This transitions the system from a passive recorder (SDK) to an active arbiter of truth.
-
----
-
-## 🎯 Goal 1: Complete Phase 5 (Compliance Artifacts)
-
-**Objective:** Deliver audit-grade export capabilities that legal/compliance teams can use immediately.
-
-### 1.1 Finalize Canonical JSON Export
-
-- **File:** `backend/app/compliance/json_export.py`
-- **Requirements:**
-  - [ ] RFC 8785 JCS Compliance (re-verify)
-  - [ ] Strict ISO 8601 formatting (Z-suffix)
-  - [ ] Full chain-of-custody metadata
-  - [ ] Evidence class assertion
-
-### 1.2 Implement PDF Evidence Export
-
-- **New File:** `backend/app/compliance/pdf_export.py`
-- **Requirements:**
-  - Executive Summary (Status, Verification Result)
-  - Timeline View (Readable event chain)
-  - Technical Verification Annex (Hashes, Seals)
-  - Legal Disclaimer Injection
-
-### 1.3 GDPR & Privacy Controls
-
-- **New File:** `backend/app/compliance/gdpr.py`
-- **Requirements:**
-  - PII Detection logic (heuristic)
-  - `[REDACTED]` pattern validation
-  - Hash preservation check
+Today's objective is to complete Phase 8: Operational Readiness & Resilience. We transition from "It works in theory" to "It survives failure in practice".
 
 ---
 
-## 🚀 Goal 2: Kickstart Phase 6 (Ingestion Service)
+## 🎯 Goal 1: Operational Proof (Reference Deployment)
 
-**Objective:** Build the server-side authority that seals the evidence.
+**Objective:** A single command brings up the entire evidence infrastructure in a production-like topology.
 
-### 2.1 Ingestion Service Scaffolding
+### 1.1 Docker Compose Environment
 
-- **Directory:** `backend/app/services/ingestion/`
-- **Components:**
-  - Service entry point related to FastAPI/Queue worker
-  - Dependency injection for Storage/Auth
+- **File:** `docker-compose.yml`
+- **Services:**
+  - `postgres:16-alpine` (Immutable Event Store)
+  - `ingestion-service` (FastAPI + SQLAlchemy)
+  - `verifier` (CLI container for on-demand checks)
+- **Success Criteria:** `docker-compose up` results in a healthy, ingestion-ready system < 30s.
 
-### 2.2 Server-Side Hash Recomputation
+### 1.2 Deployment Documentation
 
-- **File:** `backend/app/services/ingestion/hasher.py`
-- **Critical Requirement:**
-  - NEVER trust SDK hashes
-  - Re-calculate `prev_hash` -> `curr_hash` chain
-  - Validate sequence monotonicity
+- **File:** `DEPLOYMENT.md`
+- **Content:** Exact environment variables, port mappings, and health check endpoints.
 
-### 2.3 Chain Sealing Logic
+---
 
-- **File:** `backend/app/services/ingestion/sealer.py`
-- **Logic:**
-  - Finalize batch
-  - Compute Session Digest
-  - Emit `CHAIN_SEAL` event
+## 🚀 Goal 2: Resilience Verification (Network Partitions)
+
+**Objective:** Prove that when the network dies, evidence integrity survives (or fails loudly/safely).
+
+### 2.1 Partition Simulation Test
+
+- **Test:** `tests/resilience/test_network_partition.py`
+- **Scenario:**
+  1. SDK sends events (success).
+  2. Network cut (simulated).
+  3. SDK fills buffer -> Emits `LOG_DROP`.
+  4. Network restored.
+  5. Ingestion accepts remaining events.
+  6. **Verifier confirms:** Chain is VALID but marks data loss (if any).
+
+### 2.2 Ingestion Recovery
+
+- **Requirement:** Ingestion service specific handling of `LOG_DROP` sequencing.
+- **Success Criteria:** System classifies session as `PARTIAL_AUTHORITATIVE_EVIDENCE` if drops occurred, never `AUTHORITATIVE`.
+
+---
+
+## 🛡️ Goal 3: Incident Response Playbooks
+
+**Objective:** When the pager rings, the operator knows exactly how to prove what happened.
+
+### 3.1 Playbook Creation
+
+- **File:** `INCIDENT_RESPONSE.md`
+- **Scenarios to Document:**
+  - **"The Gap"**: Handling Sequence Gaps (Investigate vs Reject).
+  - **"The Lie"**: Handling Hash Mismatches (Tampering detected).
+  - **"The Leak"**: Handling PII spill (Redaction verification).
 
 ---
 
 ## 📊 Success Criteria for Today
 
-1. `json_export.py` produces verifiable outputs against the `verifier` CLI.
-2. `pdf_export.py` generates a readable PDF with correct legal disclaimers.
-3. Ingestion service can take a raw list of events and reject a tampered chain.
+1. `docker-compose up` works and ingestion endpoint accepts events.
+2. `test_network_partition.py` passes and correctly identifies `LOG_DROP` behavior.
+3. `INCIDENT_RESPONSE.md` exists and covers the 3 critical failure modes.

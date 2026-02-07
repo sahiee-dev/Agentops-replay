@@ -18,7 +18,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DBSession
 
 # Add verifier to Python path for shared hash functions
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../verifier"))
+# Support both local dev (relative) and Docker (/app/verifier)
+_verifier_paths = [
+    os.path.join(os.path.dirname(__file__), "../../../verifier"),  # Local dev
+    "/app/verifier",  # Docker
+]
+for _path in _verifier_paths:
+    if os.path.isdir(_path) and _path not in sys.path:
+        sys.path.insert(0, _path)
+        break
+
 import verifier_core
 from app.database import SessionLocal
 from app.models import ChainAuthority, ChainSeal, EventChain, Session, SessionStatus
