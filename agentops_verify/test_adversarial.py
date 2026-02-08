@@ -32,7 +32,11 @@ def test_adversarial_gap():
     assert len(seq_findings) > 0, f"Expected SEQUENCE_VIOLATION check, got {[f.finding_type for f in report.findings]}"
 
 def test_adversarial_duplicate():
-    """Start=0, but 2, 2 duplicate. Must fail with SEQUENCE_VIOLATION."""
+    """
+    Verify that a session containing a duplicated sequence number fails verification due to a sequence violation.
+    
+    Uses VECTOR_DUP with allow_redacted=False and asserts the verification report status is VerificationStatus.FAIL and that at least one finding has FindingType.SEQUENCE_VIOLATION.
+    """
     events = VECTOR_DUP
     report = verify_session(events, allow_redacted=False)
     
@@ -41,7 +45,11 @@ def test_adversarial_duplicate():
     assert len(seq_findings) > 0, f"Expected SEQUENCE_VIOLATION check, got {[f.finding_type for f in report.findings]}"
 
 def test_adversarial_redaction_integrity():
-    """[REDACTED] content but no hash. Must fail with REDACTION_INTEGRITY_VIOLATION."""
+    """
+    Verify that a session containing redacted event content without corresponding integrity hashes fails verification with a REDACTION_INTEGRITY_VIOLATION.
+    
+    Calls verify_session with allow_redacted=True and asserts the report status is VerificationStatus.FAIL and that at least one finding has FindingType.REDACTION_INTEGRITY_VIOLATION.
+    """
     events = VECTOR_REDACT
     report = verify_session(events, allow_redacted=True)
     

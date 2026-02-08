@@ -5,7 +5,7 @@ agentops_sdk/client.py - Main SDK Entry Point
 import hashlib
 import os
 import sys
-from typing import Any
+from typing import Any, List, Optional
 
 from .buffer import EventBuffer
 from .envelope import create_proposal
@@ -20,15 +20,15 @@ import jcs
 
 
 class AgentOpsClient:
-    def __init__(self, local_authority: bool = False, buffer_size: int = 1000):
+    def __init__(self, local_authority: bool = False, buffer_size: int = 1000, authority_name: Optional[str] = None):
         self.local_authority = local_authority
+        self.authority_name = authority_name
         self.buffer = EventBuffer(capacity=buffer_size)
-        self.session_id: str | None = None
+        self.session_id: Optional[str] = None
         self.sequence_counter: int = 0
-        self.prev_hash: str | None = None
-        self._cumulative_drops: int = 0
+        self.prev_hash: Optional[str] = None
 
-    def start_session(self, agent_id: str, tags: list[str] | None = None):
+    def start_session(self, agent_id: str, tags: Optional[List[str]] = None):
         if self.session_id:
             raise RuntimeError("Session already active")
 
@@ -89,6 +89,7 @@ class AgentOpsClient:
             payload=payload,
             prev_hash=self.prev_hash,
             local_authority=self.local_authority,
+            authority_name=self.authority_name,
         )
 
         # Update State

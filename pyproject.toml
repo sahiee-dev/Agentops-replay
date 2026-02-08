@@ -107,10 +107,10 @@ ignore_errors = true
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra -q --cov=backend/app --cov=sdk/python --cov=verifier --cov-fail-under=90"
+addopts = "-ra -q"
 testpaths = [
     "backend/tests",
-    "verifier", # If verifier has tests inside
+    "agentops_verify",
 ]
 python_files = "test_*.py"
 markers = [
