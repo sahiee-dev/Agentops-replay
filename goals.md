@@ -44,7 +44,7 @@ Today's objective is to complete Phase 8: Operational Readiness & Resilience. We
 
 ### 2.2 Ingestion Recovery
 
-- **Requirement:** Ingestion service specific handling of `LOG_DROP` sequencing.
+- **Requirement:** Ingestion service-specific handling of `LOG_DROP` sequencing.
 - **Success Criteria:** System classifies session as `PARTIAL_AUTHORITATIVE_EVIDENCE` if drops occurred, never `AUTHORITATIVE`.
 
 ---

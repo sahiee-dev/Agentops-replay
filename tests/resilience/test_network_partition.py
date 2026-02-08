@@ -46,35 +46,73 @@ class TestBufferOverflowEmitsLogDrop:
         LOG_DROP must be emitted BEFORE the triggering event.
         This ensures sequence integrity.
         """
-        client = AgentOpsClient(local_authority=True, buffer_size=3)
+        # Increase buffer size to ensure the triggering event can be stored after LOG_DROP clears space
+        # LOG_DROP takes 1 slot, freeing up space for "after-overflow"
+        client = AgentOpsClient(local_authority=True, buffer_size=10)
         client.start_session(agent_id="test-agent")
 
-        # Fill buffer: SESSION_START = 1, so 2 more to fill
+        # Fill buffer: SESSION_START = 1, so 2 more to fill (assuming capacity was small, but now it's 10)
+        # We need to manually force the state we want or use a smaller buffer and force flush?
+        # Actually, the user instruction was: "increase AgentOpsClient(buffer_size=3) to a larger capacity"
+        # AND "locate the calls... and change the buffer_size"
+        
+        # Let's stick to the logic: we want to overflow, THEN have space.
+        # If we use buffer_size=3:
+        # 1. SESSION_START (1/3)
+        # 2. fill-1 (2/3)
+        # 3. fill-2 (3/3) - FULL
+        # 4. overflow-trigger -> Dropped. Dest: dropped_count=1
+        # 5. after-overflow -> Triggers LOG_DROP (force=True).
+        #    Buffer: [START, fill-1, fill-2, LOG_DROP]. 
+        #    Wait, if buffer size is 3, LOG_DROP (force=True) adds 4th element? 
+        #    Or does it require flushing?
+        # The user said: "increase... to a larger capacity (so the follow-up event isn't dropped)"
+        # So I will use buffer_size=5.
+        
+        client = AgentOpsClient(local_authority=True, buffer_size=5)
+        client.start_session(agent_id="test-agent")
+
+        # Fill buffer manually to "full" effective state for the test logic?
+        # No, the previous test relied on small buffer.
+        # Re-reading user instruction: "update the test to ensure the triggering event is present by either increasing AgentOpsClient(buffer_size=3) to a larger capacity (so the follow-up event isn't dropped) or by invoking client.record(..., force=True)"
+        
+        # If I change buffer_size to 10, I need to fill it to overflow? 
+        # No, the logic in the test was "Fill buffer... Buffer is now full".
+        # If I change init to 10, lines 53-54 won't fill it.
+        # I should probably use `force=True` on the record call as suggested.
+        
+        # Reset to small buffer to easy overflow logic
+        client = AgentOpsClient(local_authority=True, buffer_size=3)
+        client.start_session(agent_id="test-agent")
+        
         client.record(EventType.MODEL_REQUEST, {"model": "test", "prompt": "fill-1"})
         client.record(EventType.MODEL_REQUEST, {"model": "test", "prompt": "fill-2"})
-
-        # Buffer is now full (3 events)
+        
         assert len(client.buffer.queue) == 3
-
-        # Next event causes overflow (gets dropped, dropped_count = 1)
+        
+        # Overflow
         client.record(EventType.MODEL_REQUEST, {"model": "test", "prompt": "overflow-trigger"})
-
-        # Trigger LOG_DROP emission by recording another event
-        # This will emit LOG_DROP (force=True) then try to emit the new event (dropped)
-        client.record(EventType.MODEL_REQUEST, {"model": "test", "prompt": "after-overflow"})
-
-        # Now check for LOG_DROP in buffer
+        
+        # Trigger emission + Record new event (Force it so it's not dropped)
+        client.record(EventType.MODEL_REQUEST, {"model": "test", "prompt": "after-overflow"}, force=True)
+        
+        # Now check
         event_types = [e.event_type for e in client.buffer.queue]
-        assert EventType.LOG_DROP.value in event_types, "LOG_DROP must be emitted after overflow"
-
-        # Verify LOG_DROP comes before the next event in sequence
-        log_drop_idx = None
+        assert EventType.LOG_DROP.value in event_types
+        
+        # Verify order: LOG_DROP then MODEL_REQUEST ("after-overflow")
+        log_drop_idx = -1
+        after_overflow_idx = -1
+        
         for i, e in enumerate(client.buffer.queue):
             if e.event_type == EventType.LOG_DROP.value:
                 log_drop_idx = i
-                break
-        
-        assert log_drop_idx is not None, "LOG_DROP must be in buffer"
+            elif e.event_type == EventType.MODEL_REQUEST.value and e.payload.get("prompt") == "after-overflow":
+                after_overflow_idx = i
+                
+        assert log_drop_idx != -1
+        assert after_overflow_idx != -1
+        assert log_drop_idx < after_overflow_idx, f"LOG_DROP ({log_drop_idx}) must precede event ({after_overflow_idx})"
 
 
 class TestLogDropPayloadIntegrity:
@@ -106,6 +144,14 @@ class TestLogDropPayloadIntegrity:
         # Verify it has a payload hash (evidence exists)
         log_drop = log_drops[0]
         assert log_drop.payload_hash is not None, "LOG_DROP must have payload_hash"
+        
+        # Verify payload content
+        # Event.payload is available directly on the object (based on previous usages e.g. e.payload.get)
+        payload = log_drop.payload
+        assert "dropped_count" in payload
+        assert "cumulative_drops" in payload
+        assert "drop_reason" in payload
+        assert payload["dropped_count"] == 1
 
 
 class TestBufferResetAfterLogDropEmission:
@@ -131,13 +177,11 @@ class TestBufferResetAfterLogDropEmission:
         assert client.buffer.dropped_count == 1
 
         # Trigger LOG_DROP emission by recording again
-        # LOG_DROP is emitted with force=True, then new event is recorded
-        # The new event will be dropped (buffer full), incrementing dropped_count
-        client.record(EventType.MODEL_REQUEST, {"model": "test", "prompt": "trigger-log-drop"})
+        client.record(EventType.MODEL_REQUEST, {"model": "test", "prompt": "trigger-log-drop"}, force=True)
 
         # After LOG_DROP emission, dropped_count was reset to 0
-        # But the new event was still dropped, so dropped_count should be 1 again
-        assert client.buffer.dropped_count == 1
+        # But the new event was forced in, so no new drop
+        assert client.buffer.dropped_count == 0
 
         # Verify LOG_DROP is in buffer
         event_types = [e.event_type for e in client.buffer.queue]
@@ -153,17 +197,26 @@ class TestSequenceIntegrityWithLogDrop:
         """
         LOG_DROP takes a sequence number, subsequent events continue from there.
         """
-        client = AgentOpsClient(local_authority=True, buffer_size=10)
+        # Small buffer to force overflow and LOG_DROP emission
+        client = AgentOpsClient(local_authority=True, buffer_size=2)
         client.start_session(agent_id="test-agent")
 
-        # Record some events
-        client.record(EventType.MODEL_REQUEST, {"model": "test", "prompt": "event-1"})
-        client.record(EventType.MODEL_REQUEST, {"model": "test", "prompt": "event-2"})
+        # Record some events to fill and overflow
+        # 1. SESSION_START (0)
+        # 2. fill (1) - BUFFER FULL
+        client.record(EventType.MODEL_REQUEST, {"model": "test", "prompt": "fill"})
+        
+        # 3. overflow (dropped)
+        client.record(EventType.MODEL_REQUEST, {"model": "test", "prompt": "overflow"})
+        
+        # 4. trigger (LOG_DROP gets seq 2, this gets seq 3)
+        client.record(EventType.MODEL_REQUEST, {"model": "test", "prompt": "trigger"}, force=True)
 
         # Check sequence numbers are monotonic
         sequences = [e.sequence_number for e in client.buffer.queue]
         assert sequences == sorted(sequences), "Sequences must be monotonic"
         assert sequences == list(range(len(sequences))), "Sequences must be 0-indexed and contiguous"
+
 
 
 class TestSimulatedNetworkPartition:

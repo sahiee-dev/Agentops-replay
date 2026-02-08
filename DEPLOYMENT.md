@@ -97,10 +97,9 @@ docker-compose run --rm verifier --require-seal /data/session_export.jsonl
 
 ## Health Checks
 
-| Endpoint         | Method | Expected Response       |
-| ---------------- | ------ | ----------------------- |
-| `/health`        | GET    | `{"status": "ok"}`      |
-| `/api/v1/ingest` | POST   | Depends on request body |
+| Endpoint  | Method | Expected Response  |
+| --------- | ------ | ------------------ |
+| `/health` | GET    | `{"status": "ok"}` |
 
 ---
 
