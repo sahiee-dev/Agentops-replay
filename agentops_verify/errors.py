@@ -65,6 +65,18 @@ class Finding:
     details: Optional[Dict[str, Any]] = None
     
     def to_dict(self) -> Dict[str, Any]:
+        """
+        Convert the Finding into a dictionary representation.
+        
+        Returns:
+            dict: Dictionary with keys:
+                - "type": string value of the finding type enum.
+                - "severity": string value of the finding severity enum.
+                - "message": the finding message.
+                - "sequence_number": the sequence number or None.
+                - "event_id": the event identifier or None.
+                - "details": a dict of additional details (empty dict if no details were provided).
+        """
         return {
             "type": self.finding_type.value,
             "severity": self.severity.value,
@@ -89,7 +101,18 @@ class VerificationReport:
     
     @property
     def evidence_class(self) -> EvidenceClass:
-        """Derive evidence class per EVIDENCE_CLASSIFICATION_SPEC.md"""
+        """
+        Classify the verification report into an evidence class.
+        
+        Determines the report's EvidenceClass according to the following rules:
+        - `EvidenceClass.CLASS_C` when status is `VerificationStatus.FAIL`.
+        - `EvidenceClass.CLASS_B` when status is `VerificationStatus.DEGRADED`.
+        - `EvidenceClass.CLASS_B` when status is `VerificationStatus.PASS` but one or more `FindingType.LOG_DROP_DETECTED` findings are present.
+        - `EvidenceClass.CLASS_A` when status is `VerificationStatus.PASS` and no log-drop findings are present.
+        
+        Returns:
+            EvidenceClass: The derived evidence class (`CLASS_A`, `CLASS_B`, or `CLASS_C`) for this report.
+        """
         if self.status == VerificationStatus.FAIL:
             return EvidenceClass.CLASS_C
         
@@ -108,7 +131,16 @@ class VerificationReport:
     
     @property
     def evidence_class_rationale(self) -> str:
-        """Human-readable rationale for classification."""
+        """
+        Provide a human-readable rationale explaining why the report was assigned its evidence class.
+        
+        For CLASS_A returns "Full chain, no gaps, no drops, trusted authority".
+        For CLASS_B returns "Verified but X LOG_DROP event(s) detected" when LOG_DROP_DETECTED findings exist, otherwise "Verified but degraded (incomplete evidence)".
+        For CLASS_C (or other non-passing classes) returns "Integrity failure: N fatal finding(s)", where N is the count of findings with fatal severity.
+        
+        Returns:
+            rationale (str): The rationale message corresponding to the report's evidence class.
+        """
         if self.evidence_class == EvidenceClass.CLASS_A:
             return "Full chain, no gaps, no drops, trusted authority"
         elif self.evidence_class == EvidenceClass.CLASS_B:
@@ -121,6 +153,23 @@ class VerificationReport:
             return f"Integrity failure: {len(fatal)} fatal finding(s)"
     
     def to_dict(self) -> Dict[str, Any]:
+        """
+        Serialize the VerificationReport into a plain dictionary suitable for JSON or programmatic consumption.
+        
+        Returns:
+            report_dict (Dict[str, Any]): Dictionary with keys:
+                - "session_id": str session identifier.
+                - "status": str enum value of the verification status.
+                - "evidence_class": str enum value of the derived evidence class.
+                - "evidence_class_rationale": str human-readable rationale for the evidence class.
+                - "event_count": int number of events processed.
+                - "first_event_hash": Optional[str] hash of the first event, or None.
+                - "final_event_hash": Optional[str] hash of the final event, or None.
+                - "chain_authority": Optional[str] authoritative chain identifier, or None.
+                - "verification_mode": str verification mode (e.g., "FULL" or "REDACTED").
+                - "findings": List[Dict[str, Any]] list of findings serialized via each Finding.to_dict().
+                - "exit_code": int machine-friendly exit code (0 = PASS, 1 = DEGRADED, 2 = other).
+        """
         return {
             "session_id": self.session_id,
             "status": self.status.value,

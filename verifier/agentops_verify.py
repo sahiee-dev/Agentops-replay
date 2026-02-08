@@ -337,6 +337,11 @@ def _validate_envelope(event: dict[str, Any], index: int):
 
 
 def main():
+    """
+    Run the replay verifier as a command-line entry point.
+    
+    Reads the supplied file as either a Compliance Export (JSON with an "events" list), a JSON array of events, or JSONL (one JSON object per line), verifies the event sequence using verify_session, and prints a human-readable or JSON-formatted report. On load errors or when the final report status is "FAIL", the process exits with code 1. When an export's claimed evidence class differs from the verifier's result, a METADATA_MISMATCH warning is appended to the report but does not change the exit status by itself.
+    """
     parser = argparse.ArgumentParser(description="AgentOps Replay Verifier (Spec v0.6)")
     parser.add_argument("file", help="Path to .jsonl log file")
     parser.add_argument(
