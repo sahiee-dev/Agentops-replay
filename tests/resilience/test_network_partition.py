@@ -46,42 +46,7 @@ class TestBufferOverflowEmitsLogDrop:
         LOG_DROP must be emitted BEFORE the triggering event.
         This ensures sequence integrity.
         """
-        # Increase buffer size to ensure the triggering event can be stored after LOG_DROP clears space
-        # LOG_DROP takes 1 slot, freeing up space for "after-overflow"
-        client = AgentOpsClient(local_authority=True, buffer_size=10)
-        client.start_session(agent_id="test-agent")
-
-        # Fill buffer: SESSION_START = 1, so 2 more to fill (assuming capacity was small, but now it's 10)
-        # We need to manually force the state we want or use a smaller buffer and force flush?
-        # Actually, the user instruction was: "increase AgentOpsClient(buffer_size=3) to a larger capacity"
-        # AND "locate the calls... and change the buffer_size"
-        
-        # Let's stick to the logic: we want to overflow, THEN have space.
-        # If we use buffer_size=3:
-        # 1. SESSION_START (1/3)
-        # 2. fill-1 (2/3)
-        # 3. fill-2 (3/3) - FULL
-        # 4. overflow-trigger -> Dropped. Dest: dropped_count=1
-        # 5. after-overflow -> Triggers LOG_DROP (force=True).
-        #    Buffer: [START, fill-1, fill-2, LOG_DROP]. 
-        #    Wait, if buffer size is 3, LOG_DROP (force=True) adds 4th element? 
-        #    Or does it require flushing?
-        # The user said: "increase... to a larger capacity (so the follow-up event isn't dropped)"
-        # So I will use buffer_size=5.
-        
-        client = AgentOpsClient(local_authority=True, buffer_size=5)
-        client.start_session(agent_id="test-agent")
-
-        # Fill buffer manually to "full" effective state for the test logic?
-        # No, the previous test relied on small buffer.
-        # Re-reading user instruction: "update the test to ensure the triggering event is present by either increasing AgentOpsClient(buffer_size=3) to a larger capacity (so the follow-up event isn't dropped) or by invoking client.record(..., force=True)"
-        
-        # If I change buffer_size to 10, I need to fill it to overflow? 
-        # No, the logic in the test was "Fill buffer... Buffer is now full".
-        # If I change init to 10, lines 53-54 won't fill it.
-        # I should probably use `force=True` on the record call as suggested.
-        
-        # Reset to small buffer to easy overflow logic
+        # Small buffer to easy overflow logic
         client = AgentOpsClient(local_authority=True, buffer_size=3)
         client.start_session(agent_id="test-agent")
         
@@ -107,8 +72,16 @@ class TestBufferOverflowEmitsLogDrop:
         for i, e in enumerate(client.buffer.queue):
             if e.event_type == EventType.LOG_DROP.value:
                 log_drop_idx = i
-            elif e.event_type == EventType.MODEL_REQUEST.value and e.payload.get("prompt") == "after-overflow":
-                after_overflow_idx = i
+            elif e.event_type == EventType.MODEL_REQUEST.value:
+                 # Payload is canonical JSON bytes, must deserialize to inspect
+                 if isinstance(e.payload, bytes):
+                     import json
+                     payload_dict = json.loads(e.payload)
+                     if payload_dict.get("prompt") == "after-overflow":
+                         after_overflow_idx = i
+                 elif isinstance(e.payload, dict) and e.payload.get("prompt") == "after-overflow":
+                     # Fallback if somehow dict (shouldn't happen in strict mode but good for safety)
+                     after_overflow_idx = i
                 
         assert log_drop_idx != -1
         assert after_overflow_idx != -1
@@ -146,8 +119,13 @@ class TestLogDropPayloadIntegrity:
         assert log_drop.payload_hash is not None, "LOG_DROP must have payload_hash"
         
         # Verify payload content
-        # Event.payload is available directly on the object (based on previous usages e.g. e.payload.get)
-        payload = log_drop.payload
+        # Event.payload is available directly on the object
+        import json
+        if isinstance(log_drop.payload, bytes):
+            payload = json.loads(log_drop.payload)
+        else:
+            payload = log_drop.payload
+            
         assert "dropped_count" in payload
         assert "cumulative_drops" in payload
         assert "drop_reason" in payload

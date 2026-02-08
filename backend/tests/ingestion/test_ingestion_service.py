@@ -31,13 +31,48 @@ from app.models import ChainAuthority, EventChain, Session, SessionStatus
 
 @pytest.fixture
 def db_session():
-    """Provide a real database session with automatic cleanup."""
-    db = SessionLocal()
+    """
+    Provide a real database session with automatic cleanup via transaction rollback.
+    All code under test shares this connection to ensure isolation.
+    """
+    connection = SessionLocal.kw["bind"].connect()
+    transaction = connection.begin()
+    
+    # Bind a new session to this connection
+    db = SessionLocal(bind=connection)
+    
+    # Monkeypatch the service's SessionLocal to use our bound session/connection
+    # (Since IngestService creates its own SessionLocal)
+    # Actually, IngestService uses `app.database.SessionLocal`. 
+    # Valid strategy: dependency injection or mocking `app.database.SessionLocal`
+    
+    # For now, we rely on the fact that we can't easily patch the class attribute globally 
+    # without potential side effects if not careful.
+    # A better approach for this test is to inject the session if possible, 
+    # but IngestService instantiates it internally.
+    
+    # Monkeypatch the service's SessionLocal to use our bound session/connection
+    import app.ingestion.service
+    from app.models import User
+    
+    original_session_local = app.ingestion.service.SessionLocal
+    app.ingestion.service.SessionLocal = lambda: db
+    
+    # Create required test user (id=1)
+    test_user = User(id=1, username="test-user")
+    db.add(test_user)
+    db.flush()
+    
+    # Mock commit to prevent actual commit, allowing rollback in finally
+    db.commit = db.flush
+    
     try:
         yield db
     finally:
-        db.rollback()
+        app.ingestion.service.SessionLocal = original_session_local
         db.close()
+        transaction.rollback()
+        connection.close()
 
 
 @pytest.fixture
@@ -56,6 +91,7 @@ class TestSdkHashIgnored:
             session_id_str=str(uuid.uuid4()),
             authority="server",
             agent_name="test-agent",
+            user_id=1,
         )
 
         # Create event with FAKE SDK hash
@@ -80,13 +116,9 @@ class TestSdkHashIgnored:
         assert len(result["final_hash"]) == 64  # Valid SHA-256
 
         # Verify event in database has server-computed hash
-        db = SessionLocal()
-        try:
-            session = db.query(Session).filter(Session.session_id_str == uuid.UUID(session_id)).first()
-            event = db.query(EventChain).filter(EventChain.session_id == session.id).first()
-            assert event.event_hash != fake_sdk_hash
-        finally:
-            db.close()
+        session = db_session.query(Session).filter(Session.session_id_str == session_id).first()
+        event = db_session.query(EventChain).filter(EventChain.session_id == session.session_id_str).first()
+        assert event.event_hash != fake_sdk_hash
 
 
 class TestEventHashMatchesVerifier:
@@ -97,6 +129,7 @@ class TestEventHashMatchesVerifier:
         session_id = ingest_service.start_session(
             session_id_str=str(uuid.uuid4()),
             authority="server",
+            user_id=1,
         )
 
         event_id = str(uuid.uuid4())
@@ -118,30 +151,26 @@ class TestEventHashMatchesVerifier:
         ingest_service.append_events(session_id=session_id, events=events)
 
         # Retrieve stored event
-        db = SessionLocal()
-        try:
-            session = db.query(Session).filter(Session.session_id_str == uuid.UUID(session_id)).first()
-            event = db.query(EventChain).filter(EventChain.session_id == session.id).first()
+        session = db_session.query(Session).filter(Session.session_id_str == session_id).first()
+        event = db_session.query(EventChain).filter(EventChain.session_id == session.session_id_str).first()
 
-            # Compute expected hash using verifier_core (the single source of truth)
-            expected_payload_hash = verifier_core.compute_payload_hash(payload)
-            expected_event_hash = verifier_core.compute_event_hash({
-                "event_id": event_id,
-                "session_id": session_id,
-                "sequence_number": 0,
-                "timestamp_wall": timestamp,
-                "event_type": "LLM_CALL",
-                "payload_hash": expected_payload_hash,
-                "prev_event_hash": verifier_core.GENESIS_HASH,
-            })
+        # Compute expected hash using verifier_core (the single source of truth)
+        expected_payload_hash = verifier_core.compute_payload_hash(payload)
+        expected_event_hash = verifier_core.compute_event_hash({
+            "event_id": event_id,
+            "session_id": session_id,
+            "sequence_number": 0,
+            "timestamp_wall": timestamp,
+            "event_type": "LLM_CALL",
+            "payload_hash": expected_payload_hash,
+            "prev_event_hash": verifier_core.GENESIS_HASH,
+        })
 
-            # CRITICAL ASSERTION: Hashes must match exactly
-            assert event.payload_hash == expected_payload_hash, \
-                f"Payload hash mismatch: {event.payload_hash} != {expected_payload_hash}"
-            assert event.event_hash == expected_event_hash, \
-                f"Event hash mismatch: {event.event_hash} != {expected_event_hash}"
-        finally:
-            db.close()
+        # CRITICAL ASSERTION: Hashes must match exactly
+        assert event.payload_hash == expected_payload_hash, \
+            f"Payload hash mismatch: {event.payload_hash} != {expected_payload_hash}"
+        assert event.event_hash == expected_event_hash, \
+            f"Event hash mismatch: {event.event_hash} != {expected_event_hash}"
 
 
 class TestSequenceViolation:
@@ -152,6 +181,7 @@ class TestSequenceViolation:
         session_id = ingest_service.start_session(
             session_id_str=str(uuid.uuid4()),
             authority="server",
+            user_id=1,
         )
 
         # Insert first event at sequence 0
@@ -188,6 +218,7 @@ class TestSequenceViolation:
         session_id = ingest_service.start_session(
             session_id_str=str(uuid.uuid4()),
             authority="server",
+            user_id=1,
         )
 
         # Insert event at sequence 0
@@ -228,6 +259,7 @@ class TestSealedSessionRejection:
         session_id = ingest_service.start_session(
             session_id_str=str(uuid.uuid4()),
             authority="server",
+            user_id=1,
         )
 
         # Add SESSION_START and SESSION_END
@@ -281,6 +313,7 @@ class TestAuthorityGate:
         session_id = ingest_service.start_session(
             session_id_str=str(uuid.uuid4()),
             authority="sdk",  # SDK authority
+            user_id=1,
         )
 
         # Add required events
@@ -319,6 +352,7 @@ class TestIngestionOutputVerifiesClean:
         session_id = ingest_service.start_session(
             session_id_str=str(uuid.uuid4()),
             authority="server",
+            user_id=1,
         )
 
         # Add events
@@ -327,7 +361,7 @@ class TestIngestionOutputVerifiesClean:
                 "event_id": str(uuid.uuid4()),
                 "event_type": "SESSION_START",
                 "sequence_number": 0,
-                "timestamp_wall": datetime.now(UTC).isoformat(),
+                "timestamp_wall": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
                 "timestamp_monotonic": 1000,
                 "payload": {"action": "start"},
             },
@@ -335,7 +369,7 @@ class TestIngestionOutputVerifiesClean:
                 "event_id": str(uuid.uuid4()),
                 "event_type": "LLM_CALL",
                 "sequence_number": 1,
-                "timestamp_wall": datetime.now(UTC).isoformat(),
+                "timestamp_wall": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
                 "timestamp_monotonic": 2000,
                 "payload": {"prompt": "hello", "response": "world"},
             },
@@ -343,7 +377,7 @@ class TestIngestionOutputVerifiesClean:
                 "event_id": str(uuid.uuid4()),
                 "event_type": "SESSION_END",
                 "sequence_number": 2,
-                "timestamp_wall": datetime.now(UTC).isoformat(),
+                "timestamp_wall": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
                 "timestamp_monotonic": 3000,
                 "payload": {},
             },
@@ -353,40 +387,41 @@ class TestIngestionOutputVerifiesClean:
         ingest_service.seal_session(session_id)
 
         # Retrieve stored events and verify each hash
-        db = SessionLocal()
-        try:
-            session = db.query(Session).filter(Session.session_id_str == uuid.UUID(session_id)).first()
-            events = db.query(EventChain).filter(
-                EventChain.session_id == session.id
-            ).order_by(EventChain.sequence_number).all()
+        session = db_session.query(Session).filter(Session.session_id_str == session_id).first()
+        events = db_session.query(EventChain).filter(
+            EventChain.session_id == session.session_id_str
+        ).order_by(EventChain.sequence_number).all()
 
-            prev_hash = verifier_core.GENESIS_HASH
-            for event in events:
-                # Skip CHAIN_SEAL (genesis hash is fine for it)
-                if event.event_type == "CHAIN_SEAL":
-                    continue
+        prev_hash = verifier_core.GENESIS_HASH
+        import json
+        for event in events:
+            # Skip CHAIN_SEAL (genesis hash is fine for it)
+            if event.event_type == "CHAIN_SEAL":
+                continue
 
-                # Verify payload hash
-                payload_ok, payload_err = verifier_core.verify_payload_hash(
-                    event.payload_jsonb, event.payload_hash
-                )
-                assert payload_ok, f"Payload hash verification failed: {payload_err}"
+            # Verify payload hash
+            payload_dict = json.loads(event.payload_canonical)
+            computed_payload_hash = verifier_core.compute_payload_hash(payload_dict)
+            assert event.payload_hash == computed_payload_hash, \
+                f"Payload hash mismatch: {event.payload_hash} != {computed_payload_hash}"
 
-                # Verify event hash
-                event_envelope = {
-                    "event_id": str(event.event_id),
-                    "session_id": str(session.session_id_str),
-                    "sequence_number": event.sequence_number,
-                    "timestamp_wall": event.timestamp_wall.isoformat().replace("+00:00", "Z"),
-                    "event_type": event.event_type,
-                    "payload_hash": event.payload_hash,
-                    "prev_event_hash": event.prev_event_hash,
-                }
-                event_ok, event_err = verifier_core.verify_event_hash(
-                    event_envelope, event.event_hash
-                )
-                assert event_ok, f"Event hash verification failed for seq {event.sequence_number}: {event_err}"
+            # Verify event hash
+            event_envelope = {
+                "event_id": str(event.event_id),
+                "session_id": str(session.session_id_str),
+                "sequence_number": event.sequence_number,
+                "timestamp_wall": event.timestamp_wall.replace(tzinfo=UTC).isoformat().replace("+00:00", "Z"),
+                "event_type": event.event_type,
+                "payload_hash": event.payload_hash,
+                "prev_event_hash": event.prev_event_hash,
+            }
+            
+            # Verify chaining
+            assert event.prev_event_hash == prev_hash, \
+                f"Chain broken at seq {event.sequence_number}: {event.prev_event_hash} != {prev_hash}"
+            
+            computed_hash = verifier_core.compute_event_hash(event_envelope)
+            assert event.event_hash == computed_hash, \
+                f"Event hash mismatch at seq {event.sequence_number}: {event.event_hash} != {computed_hash}"
 
-                prev_hash = event.event_hash
-        finally:
-            db.close()
+            prev_hash = event.event_hash

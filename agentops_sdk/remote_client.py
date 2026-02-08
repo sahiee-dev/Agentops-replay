@@ -139,7 +139,7 @@ class RemoteAgentOpsClient(AgentOpsClient):
             return
 
         # Convert last buffered event to server format
-        last_proposal = self.buffer.events[-1] if self.buffer.events else None
+        last_proposal = self.buffer.queue[-1] if self.buffer.queue else None
         if last_proposal:
             server_event = {
                 "event_id": last_proposal.event_id,

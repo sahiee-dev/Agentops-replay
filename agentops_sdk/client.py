@@ -46,7 +46,7 @@ class AgentOpsClient:
         }
         self.record(EventType.SESSION_START, payload)
 
-    def record(self, event_type: EventType, payload: dict[str, Any]):
+    def record(self, event_type: EventType, payload: dict[str, Any], force: bool = False):
         if not self.session_id:
             raise RuntimeError("No active session")
 
@@ -72,7 +72,7 @@ class AgentOpsClient:
                 raise
 
         # 3. Emit Proposal
-        self._emit_proposal(event_type, payload)
+        self._emit_proposal(event_type, payload, force=force)
 
     def _emit_proposal(
         self, event_type: EventType, payload: dict[str, Any], force: bool = False

@@ -15,7 +15,7 @@
 
 ### A.1 Transaction Boundary Analysis
 
-**Code:** [service.py](file:///Users/lulu/Desktop/agentops-replay-pro/backend/app/ingestion/service.py#L145-L263)
+**Code:** [service.py](file:///backend/app/ingestion/service.py#L145-L263)
 
 | Invariant                                                                      | Status             | Evidence                                                                                           |
 | ------------------------------------------------------------------------------ | ------------------ | -------------------------------------------------------------------------------------------------- |
@@ -27,7 +27,7 @@
 
 ### A.2 Critical Finding: LOG_DROP Pre-Commit
 
-**File:** [service.py L554](file:///Users/lulu/Desktop/agentops-replay-pro/backend/app/ingestion/service.py#L553-L554)
+**File:** [service.py L554](file:///backend/app/ingestion/service.py#L553-L554)
 
 ```python
 db.add(log_drop_event)
@@ -61,7 +61,7 @@ The docstring at L476-483 explicitly states this is intentional:
 
 ### B.1 SDK Hash Rejection
 
-**Code:** [service.py L193-197](file:///Users/lulu/Desktop/agentops-replay-pro/backend/app/ingestion/service.py#L193-197)
+**Code:** [service.py L193-197](file:///backend/app/ingestion/service.py#L193-197)
 
 ```python
 # CONSTITUTIONAL: Server-side hash recomputation
@@ -128,7 +128,7 @@ payload_hash = verifier_core.compute_payload_hash(payload)
 
 ### C.2 Finding: LOG_DROP Consumes Sequence Numbers
 
-**Code:** [service.py L503-504](file:///Users/lulu/Desktop/agentops-replay-pro/backend/app/ingestion/service.py#L503-504)
+**Code:** [service.py L503-504](file:///backend/app/ingestion/service.py#L503-504)
 
 ```python
 last_seq = self._get_last_sequence(db, session)
@@ -238,7 +238,7 @@ Two completely different ingestion service implementations exist and are **both 
 
 ---
 
-## G. Summary
+## F. Summary
 
 | Audit Area                       | Status       | Notes                                             |
 | -------------------------------- | ------------ | ------------------------------------------------- |
@@ -250,25 +250,25 @@ Two completely different ingestion service implementations exist and are **both 
 
 ---
 
-## H. Required Actions Before v1.0
+## G. Required Actions Before v1.0
 
-### H.1 🔴 Critical (Blocking)
+### G.1 🔴 Critical (Blocking)
 
 1. **Remove `/ingest/batch` endpoint**: Delete `app.services.ingestion` module and route. The hash computation is incompatible with verifier.
 2. **Consolidate on `app.ingestion`**: This implementation correctly uses `verifier_core.compute_event_hash()`
 3. **Fix test imports**: Update tests to import from `app.ingestion`
 4. **Add adversarial tests**: Implement hash authority verification tests
 
-### H.2 Documentation (Non-Blocking)
+### G.2 Documentation (Non-Blocking)
 
 1. Document LOG_DROP pre-commit behavior in `FAILURE_MODES.md`
 2. Add hash authority flow diagram to `CHAIN_AUTHORITY_INVARIANTS.md`
 
 ---
 
-## J. Fix Implementation (Completed 2026-02-07)
+## H. Fix Implementation (Completed 2026-02-07)
 
-### J.1 Deletions
+### H.1 Deletions
 
 | Deleted                              | Reason                        |
 | ------------------------------------ | ----------------------------- |
