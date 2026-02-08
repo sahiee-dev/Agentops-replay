@@ -11,7 +11,8 @@ CRITICAL REQUIREMENTS:
 import os
 import sys
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
@@ -43,6 +44,16 @@ class AuthorityViolation(Exception):
     """Raised when authority checks fail."""
 
     pass
+
+def _parse_wall_timestamp(ts: str) -> datetime:
+    """
+    Normalizes a wall timestamp from the SDK.
+    Rejects ambiguous timestamps (no timezone) and returns naive UTC.
+    """
+    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        raise ValueError(f"Ambiguous timestamp (no timezone): {ts}")
+    return dt.astimezone(UTC).replace(tzinfo=None)
 
 
 class IngestService:
@@ -215,9 +226,7 @@ class IngestService:
                     event_id=uuid.UUID(event_envelope["event_id"]),
                     session_id=session.session_id_str,
                     sequence_number=event_envelope["sequence_number"],
-                    timestamp_wall=datetime.fromisoformat(
-                        event_envelope["timestamp_wall"].replace("Z", "+00:00")
-                    ).astimezone(UTC).replace(tzinfo=None),
+                    timestamp_wall=_parse_wall_timestamp(event_envelope["timestamp_wall"]),
                     timestamp_monotonic=event_data.get("timestamp_monotonic", 0),
                     event_type=event_envelope["event_type"],
                     source_sdk_ver=event_data.get("source_sdk_ver"),

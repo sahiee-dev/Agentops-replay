@@ -46,7 +46,8 @@ class TestBufferOverflowEmitsLogDrop:
         LOG_DROP must be emitted BEFORE the triggering event.
         This ensures sequence integrity.
         """
-        # Small buffer to easy overflow logic
+        # Instantiate AgentOpsClient with a small buffer and use force=True for the post-overflow event
+        # so it bypasses the drop logic and appears in the buffer after the LOG_DROP.
         client = AgentOpsClient(local_authority=True, buffer_size=3)
         client.start_session(agent_id="test-agent")
         
@@ -69,18 +70,15 @@ class TestBufferOverflowEmitsLogDrop:
         log_drop_idx = -1
         after_overflow_idx = -1
         
+        import json
         for i, e in enumerate(client.buffer.queue):
             if e.event_type == EventType.LOG_DROP.value:
                 log_drop_idx = i
             elif e.event_type == EventType.MODEL_REQUEST.value:
-                 # Payload is canonical JSON bytes, must deserialize to inspect
-                 if isinstance(e.payload, bytes):
-                     import json
-                     payload_dict = json.loads(e.payload)
-                     if payload_dict.get("prompt") == "after-overflow":
-                         after_overflow_idx = i
-                 elif isinstance(e.payload, dict) and e.payload.get("prompt") == "after-overflow":
-                     # Fallback if somehow dict (shouldn't happen in strict mode but good for safety)
+                 # Payload is canonical JSON bytes, must deserialize checking keys
+                 # In local authority mode, payload might be stored as dict or bytes depending on impl
+                 payload = json.loads(e.payload) if isinstance(e.payload, bytes) else e.payload
+                 if payload.get("prompt") == "after-overflow":
                      after_overflow_idx = i
                 
         assert log_drop_idx != -1

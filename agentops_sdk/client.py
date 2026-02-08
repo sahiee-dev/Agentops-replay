@@ -54,21 +54,18 @@ class AgentOpsClient:
         validate_payload(event_type, payload)
 
         # 2. Check for Drop Injection
-        dropped = self.buffer.dropped_count  # Read but don't reset yet
+        # If buffer has dropped events, emit LOG_DROP first (bypassing capacity via force=True)
+        dropped = self.buffer.dropped_count
         if dropped > 0:
-            # LOG_DROP required fields per events.py: dropped_count, cumulative_drops, drop_reason
             drop_payload = {
                 "dropped_count": dropped,
-                "cumulative_drops": dropped,  # For now, same as dropped_count (no cumulative tracking yet)
+                "cumulative_drops": dropped,
                 "drop_reason": "buffer_overflow",
             }
             try:
-                # force=True: LOG_DROP MUST bypass buffer capacity (Constitution Art 2.3)
                 self._emit_proposal(EventType.LOG_DROP, drop_payload, force=True)
-                # Only reset after successful emission
                 self.buffer.dropped_count = 0
             except Exception:
-                # If emission fails, preserve drop count for next attempt
                 raise
 
         # 3. Emit Proposal

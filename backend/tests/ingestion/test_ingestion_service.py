@@ -25,7 +25,7 @@ if _verifier_path not in sys.path:
 
 import verifier_core
 from app.ingestion import AuthorityViolation, IngestService, SequenceViolation
-from app.database import SessionLocal
+from app.database import SessionLocal, engine
 from app.models import ChainAuthority, EventChain, Session, SessionStatus
 
 
@@ -35,7 +35,7 @@ def db_session():
     Provide a real database session with automatic cleanup via transaction rollback.
     All code under test shares this connection to ensure isolation.
     """
-    connection = SessionLocal.kw["bind"].connect()
+    connection = engine.connect()
     transaction = connection.begin()
     
     # Bind a new session to this connection
@@ -388,9 +388,12 @@ class TestIngestionOutputVerifiesClean:
 
         # Retrieve stored events and verify each hash
         session = db_session.query(Session).filter(Session.session_id_str == session_id).first()
+        assert session is not None, f"Session {session_id} not found in database"
+        
         events = db_session.query(EventChain).filter(
             EventChain.session_id == session.session_id_str
         ).order_by(EventChain.sequence_number).all()
+        assert events, f"No events found for session {session_id_str if 'session_id_str' in locals() else session_id}"
 
         prev_hash = verifier_core.GENESIS_HASH
         import json

@@ -15,7 +15,7 @@
 
 ### A.1 Transaction Boundary Analysis
 
-**Code:** [service.py](file:///backend/app/ingestion/service.py#L145-L263)
+**Code:** [service.py](backend/app/ingestion/service.py#L145-L263)
 
 | Invariant                                                                      | Status             | Evidence                                                                                           |
 | ------------------------------------------------------------------------------ | ------------------ | -------------------------------------------------------------------------------------------------- |
@@ -27,7 +27,7 @@
 
 ### A.2 Critical Finding: LOG_DROP Pre-Commit
 
-**File:** [service.py L554](file:///backend/app/ingestion/service.py#L553-L554)
+**File:** [service.py L554](backend/app/ingestion/service.py#L553-L554)
 
 ```python
 db.add(log_drop_event)
@@ -61,7 +61,7 @@ The docstring at L476-483 explicitly states this is intentional:
 
 ### B.1 SDK Hash Rejection
 
-**Code:** [service.py L193-197](file:///backend/app/ingestion/service.py#L193-197)
+**Code:** [service.py L193-197](backend/app/ingestion/service.py#L193-197)
 
 ```python
 # CONSTITUTIONAL: Server-side hash recomputation
@@ -128,7 +128,7 @@ payload_hash = verifier_core.compute_payload_hash(payload)
 
 ### C.2 Finding: LOG_DROP Consumes Sequence Numbers
 
-**Code:** [service.py L503-504](file:///backend/app/ingestion/service.py#L503-504)
+**Code:** [service.py L503-504](backend/app/ingestion/service.py#L503-504)
 
 ```python
 last_seq = self._get_last_sequence(db, session)
@@ -281,7 +281,7 @@ Two completely different ingestion service implementations exist and are **both 
 
 ### J.2 Test Rewrite
 
-[test_ingestion_service.py](file:///Users/lulu/Desktop/agentops-replay-pro/backend/tests/ingestion/test_ingestion_service.py) completely rewritten:
+[test_ingestion_service.py](backend/tests/ingestion/test_ingestion_service.py) completely rewritten:
 
 - Now imports from `app.ingestion.IngestService` (production module)
 - Added 6 adversarial test classes:

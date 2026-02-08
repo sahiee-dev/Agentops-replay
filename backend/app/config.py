@@ -55,13 +55,26 @@ class Settings(BaseSettings):
         extra = "allow"  # Allow extra environment variables
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 try:
     settings = Settings()
-except PermissionError:
-    # Handle case where .env exists but is not readable (e.g. macOS protection)
-    # We create a subclass that ignores the .env file
+except PermissionError as e:
+    # Critical error if we can't read .env and we're not explicitly in dev mode
+    logger.critical(f"UNABLE TO READ .ENV FILE: {e}. This is a critical security risk in production.")
+    
+    # Check if we are in development mode via environment variables directly
+    is_dev = os.getenv("ENVIRONMENT") == "development" or os.getenv("DEBUG", "false").lower() == "true"
+    
+    if not is_dev:
+        print("CRITICAL SECURITY ERROR: PermissionError reading .env in a non-development environment.")
+        print("Set ENVIRONMENT=development or fix .env permissions to proceed with fallback.")
+        raise
+    
+    # Fallback only for development
     class SettingsNoEnv(Settings):
-        # Override with a safe-for-dev key to bypass the validation error
         SECRET_KEY: str = "dev-secret-key-ignore-in-prod"
         class Config:
             env_file = None

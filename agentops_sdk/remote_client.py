@@ -121,18 +121,19 @@ class RemoteAgentOpsClient(AgentOpsClient):
         # Always call parent to maintain local chain
         super().start_session(agent_id, tags)
 
-    def record(self, event_type: EventType, payload: dict[str, Any]):
+    def record(self, event_type: EventType, payload: dict[str, Any], force: bool = False):
         """
         Record an event locally and queue it for remote batching and transmission.
         
         This delegates to the base implementation to preserve the local buffer, converts the most recently buffered event into the server-compatible event shape, and appends it to the local batch queue. If the client is marked offline the event is only recorded locally. When the queued batch reaches the configured batch size this method triggers a flush to the remote server.
         
         Parameters:
-            event_type (EventType): Category of the event being recorded; used for the local buffer entry and included in the queued server event.
-            payload (dict[str, Any]): Event payload to record and include in the queued server event.
+            event_type (EventType): Category of the event being recorded.
+            payload (dict[str, Any]): Event payload.
+            force (bool): If True, bypass buffer capacity checks in the base client.
         """
         # Always call parent to maintain local buffer
-        super().record(event_type, payload)
+        super().record(event_type, payload, force=force)
 
         # Skip remote send if server is offline
         if self.server_offline:
