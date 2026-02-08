@@ -16,8 +16,16 @@ class EventBuffer:
     def set_session(self, session_id: str):
         self.session_id = session_id
 
-    def append(self, event: ProposedEvent):
-        if len(self.queue) >= self.capacity:
+    def append(self, event: ProposedEvent, force: bool = False):
+        """
+        Append an event to the buffer.
+        
+        Args:
+            event: The event to append.
+            force: If True, bypass capacity check. Used for LOG_DROP events
+                   which MUST be recorded per Constitution Art 2.3.
+        """
+        if not force and len(self.queue) >= self.capacity:
             # Buffer Full Strategy: Drop Incoming and increment counter.
             # Client responsibility to check dropped_count and emit LOG_DROP.
             self.dropped_count += 1

@@ -56,9 +56,15 @@ class AgentOpsClient:
         # 2. Check for Drop Injection
         dropped = self.buffer.dropped_count  # Read but don't reset yet
         if dropped > 0:
-            drop_payload = {"dropped_events": dropped, "reason": "buffer_overflow"}
+            # LOG_DROP required fields per events.py: dropped_count, cumulative_drops, drop_reason
+            drop_payload = {
+                "dropped_count": dropped,
+                "cumulative_drops": dropped,  # For now, same as dropped_count (no cumulative tracking yet)
+                "drop_reason": "buffer_overflow",
+            }
             try:
-                self._emit_proposal(EventType.LOG_DROP, drop_payload)
+                # force=True: LOG_DROP MUST bypass buffer capacity (Constitution Art 2.3)
+                self._emit_proposal(EventType.LOG_DROP, drop_payload, force=True)
                 # Only reset after successful emission
                 self.buffer.dropped_count = 0
             except Exception:
@@ -68,7 +74,17 @@ class AgentOpsClient:
         # 3. Emit Proposal
         self._emit_proposal(event_type, payload)
 
-    def _emit_proposal(self, event_type: EventType, payload: dict[str, Any]):
+    def _emit_proposal(
+        self, event_type: EventType, payload: dict[str, Any], force: bool = False
+    ):
+        """
+        Create and buffer an event proposal.
+        
+        Args:
+            event_type: Type of event.
+            payload: Event payload.
+            force: If True, bypass buffer capacity (for LOG_DROP).
+        """
         # Create Proposal
         proposal = create_proposal(
             session_id=self.session_id,
@@ -99,7 +115,7 @@ class AgentOpsClient:
             canonical_env = jcs.canonicalize(signed_obj)
             self.prev_hash = hashlib.sha256(canonical_env).hexdigest()
 
-        self.buffer.append(proposal)
+        self.buffer.append(proposal, force=force)
 
     def end_session(self, status: str, duration_ms: int):
         self.record(
