@@ -11,14 +11,24 @@ CRITICAL REQUIREMENTS:
 import os
 import sys
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DBSession
 
 # Add verifier to Python path for shared hash functions
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../verifier"))
+# Support both local dev (relative) and Docker (/app/verifier)
+_verifier_paths = [
+    os.path.join(os.path.dirname(__file__), "../../../verifier"),  # Local dev
+    "/app/verifier",  # Docker
+]
+for _path in _verifier_paths:
+    if os.path.isdir(_path) and _path not in sys.path:
+        sys.path.insert(0, _path)
+        break
+
 import verifier_core
 from app.database import SessionLocal
 from app.models import ChainAuthority, ChainSeal, EventChain, Session, SessionStatus
@@ -34,6 +44,16 @@ class AuthorityViolation(Exception):
     """Raised when authority checks fail."""
 
     pass
+
+def _parse_wall_timestamp(ts: str) -> datetime:
+    """
+    Normalizes a wall timestamp from the SDK.
+    Rejects ambiguous timestamps (no timezone) and returns naive UTC.
+    """
+    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        raise ValueError(f"Ambiguous timestamp (no timezone): {ts}")
+    return dt.astimezone(UTC).replace(tzinfo=None)
 
 
 class IngestService:
@@ -161,7 +181,7 @@ class IngestService:
             # FOR UPDATE ensures last_seq cannot change between validation and insert
             session = (
                 db.query(Session)
-                .filter(Session.session_id_str == uuid.UUID(session_id))
+                .filter(Session.session_id_str == session_id)
                 .with_for_update()
                 .first()
             )
@@ -204,11 +224,9 @@ class IngestService:
                 # Store in database
                 event_chain = EventChain(
                     event_id=uuid.UUID(event_envelope["event_id"]),
-                    session_id=session.id,
+                    session_id=session.session_id_str,
                     sequence_number=event_envelope["sequence_number"],
-                    timestamp_wall=datetime.fromisoformat(
-                        event_envelope["timestamp_wall"].replace("Z", "+00:00")
-                    ),
+                    timestamp_wall=_parse_wall_timestamp(event_envelope["timestamp_wall"]),
                     timestamp_monotonic=event_data.get("timestamp_monotonic", 0),
                     event_type=event_envelope["event_type"],
                     source_sdk_ver=event_data.get("source_sdk_ver"),
@@ -217,9 +235,9 @@ class IngestService:
                         "utf-8"
                     ),
                     payload_hash=payload_hash,
-                    payload_jsonb=payload,
                     prev_event_hash=prev_hash,
                     event_hash=event_hash,
+                    chain_authority=session.chain_authority,
                 )
 
                 db.add(event_chain)
@@ -280,7 +298,7 @@ class IngestService:
             # Get session
             session = (
                 db.query(Session)
-                .filter(Session.session_id_str == uuid.UUID(session_id))
+                .filter(Session.session_id_str == session_id)
                 .first()
             )
 
@@ -312,7 +330,7 @@ class IngestService:
             has_session_end = (
                 db.query(EventChain)
                 .filter(
-                    EventChain.session_id == session.id,
+                    EventChain.session_id == session.session_id_str,
                     EventChain.event_type == "SESSION_END",
                 )
                 .first()
@@ -328,7 +346,7 @@ class IngestService:
             # Get final event
             final_event = (
                 db.query(EventChain)
-                .filter(EventChain.session_id == session.id)
+                .filter(EventChain.session_id == session.session_id_str)
                 .order_by(EventChain.sequence_number.desc())
                 .first()
             )
@@ -338,7 +356,7 @@ class IngestService:
 
             # Count events
             event_count = (
-                db.query(EventChain).filter(EventChain.session_id == session.id).count()
+                db.query(EventChain).filter(EventChain.session_id == session.session_id_str).count()
             )
 
             # Create seal
@@ -379,7 +397,7 @@ class IngestService:
         """Get hash of last event in session, or None if no events."""
         last_event = (
             db.query(EventChain)
-            .filter(EventChain.session_id == session.id)
+            .filter(EventChain.session_id == session.session_id_str)
             .order_by(EventChain.sequence_number.desc())
             .first()
         )
@@ -391,7 +409,7 @@ class IngestService:
         """Get last sequence number in session, or -1 if no events."""
         last_event = (
             db.query(EventChain)
-            .filter(EventChain.session_id == session.id)
+            .filter(EventChain.session_id == session.session_id_str)
             .order_by(EventChain.sequence_number.desc())
             .first()
         )
@@ -507,7 +525,7 @@ class IngestService:
         prev_hash = self._get_last_event_hash(db, session)
 
         # Compute single timestamp for consistency
-        now_ts = datetime.now(UTC)
+        now_ts = datetime.now(UTC).replace(microsecond=0)
         timestamp_iso = now_ts.isoformat().replace("+00:00", "Z")
 
         event_envelope = {
@@ -525,9 +543,9 @@ class IngestService:
         # Store LOG_DROP event
         log_drop_event = EventChain(
             event_id=uuid.UUID(str(event_envelope["event_id"])),
-            session_id=session.id,
+            session_id=session.session_id_str,
             sequence_number=next_seq,
-            timestamp_wall=now_ts,
+            timestamp_wall=now_ts.replace(tzinfo=None),
             timestamp_monotonic=0,  # Not critical for LOG_DROP
             event_type="LOG_DROP",
             source_sdk_ver="ingestion-service",
@@ -536,9 +554,9 @@ class IngestService:
                 "utf-8"
             ),
             payload_hash=payload_hash,
-            payload_jsonb=log_drop_payload,
             prev_event_hash=prev_hash,
             event_hash=event_hash,
+            chain_authority=session.chain_authority,
         )
 
         db.add(log_drop_event)

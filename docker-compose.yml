@@ -1,0 +1,82 @@
+# ============================================================
+# AgentOps Replay - Docker Compose
+# ============================================================
+# Reference deployment for local development and testing.
+# Production deployments should use Kubernetes or equivalent.
+#
+# INVARIANTS:
+# - postgres: Append-only event store (immutable once written)
+# - api: Ingestion service (authoritative sealer)
+# - verifier: CLI tool for chain validation (read-only)
+# ============================================================
+
+services:
+  # --------------------------------------------------------
+  # PostgreSQL - Immutable Event Store
+  # --------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: agentops-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agentops
+      POSTGRES_PASSWORD: agentops_secret
+      POSTGRES_DB: agentops_replay
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentops -d agentops_replay"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --------------------------------------------------------
+  # API / Ingestion Service - Authoritative Sealer
+  # --------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: agentops-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://agentops:agentops_secret@postgres:5432/agentops_replay
+      SECRET_KEY: development-secret-key-change-in-production
+      ENVIRONMENT: development
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # --------------------------------------------------------
+  # Verifier - Read-Only Chain Validation
+  # --------------------------------------------------------
+  verifier:
+    image: python:3.11-slim-bookworm
+    container_name: agentops-verifier
+    depends_on:
+      - api
+    volumes:
+      - ./agentops_verify:/app/agentops_verify:ro
+      - ./verifier:/app/verifier:ro
+      - verifier_data:/data
+    working_dir: /app
+    entrypoint: ["python", "-m", "agentops_verify.cli"]
+    # Runs on-demand: docker-compose run verifier <args>
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+    driver: local
+  verifier_data:
+    driver: local

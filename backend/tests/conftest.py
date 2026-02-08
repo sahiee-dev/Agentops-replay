@@ -20,6 +20,12 @@ from app.database import Base, engine
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_database():
     """Create test database tables before tests."""
+    # Drop legacy/blocking tables explicitly first
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS session_snapshots CASCADE"))
+        conn.commit()
+
     # Drop all tables
     Base.metadata.drop_all(bind=engine)
 
