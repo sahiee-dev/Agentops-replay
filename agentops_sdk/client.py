@@ -26,6 +26,7 @@ class AgentOpsClient:
         self.session_id: str | None = None
         self.sequence_counter: int = 0
         self.prev_hash: str | None = None
+        self._cumulative_drops: int = 0
 
     def start_session(self, agent_id: str, tags: list[str] | None = None):
         if self.session_id:
@@ -57,16 +58,14 @@ class AgentOpsClient:
         # If buffer has dropped events, emit LOG_DROP first (bypassing capacity via force=True)
         dropped = self.buffer.dropped_count
         if dropped > 0:
+            self._cumulative_drops += dropped
             drop_payload = {
                 "dropped_count": dropped,
-                "cumulative_drops": dropped,
+                "cumulative_drops": self._cumulative_drops,
                 "drop_reason": "buffer_overflow",
             }
-            try:
-                self._emit_proposal(EventType.LOG_DROP, drop_payload, force=True)
-                self.buffer.dropped_count = 0
-            except Exception:
-                raise
+            self._emit_proposal(EventType.LOG_DROP, drop_payload, force=True)
+            self.buffer.dropped_count = 0
 
         # 3. Emit Proposal
         self._emit_proposal(event_type, payload, force=force)

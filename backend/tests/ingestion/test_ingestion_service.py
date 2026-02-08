@@ -393,7 +393,7 @@ class TestIngestionOutputVerifiesClean:
         events = db_session.query(EventChain).filter(
             EventChain.session_id == session.session_id_str
         ).order_by(EventChain.sequence_number).all()
-        assert events, f"No events found for session {session_id_str if 'session_id_str' in locals() else session_id}"
+        assert events, f"No events found for session {session_id}"
 
         prev_hash = verifier_core.GENESIS_HASH
         import json

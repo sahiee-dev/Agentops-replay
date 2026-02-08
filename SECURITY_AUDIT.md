@@ -279,7 +279,7 @@ Two completely different ingestion service implementations exist and are **both 
 | `app/api/v1/endpoints/ingestion.py`  | `/ingest/batch` endpoint      |
 | `/ingest/batch` route in `api.py`    | Removed from router           |
 
-### J.2 Test Rewrite
+### H.2 Test Rewrite
 
 [test_ingestion_service.py](backend/tests/ingestion/test_ingestion_service.py) completely rewritten:
 
@@ -292,7 +292,7 @@ Two completely different ingestion service implementations exist and are **both 
   5. `TestAuthorityGate` - SDK authority cannot seal
   6. `TestIngestionOutputVerifiesClean` - Full verification round-trip
 
-### J.3 Verification Tests
+### H.3 Verification Tests
 
 - [x] **Run tests** — All 6 security audit tests passed
 - [x] **Hash parity verified** — Golden vector test passed

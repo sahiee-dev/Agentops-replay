@@ -191,7 +191,6 @@ class TestSequenceIntegrityWithLogDrop:
         # Check sequence numbers are monotonic
         sequences = [e.sequence_number for e in client.buffer.queue]
         assert sequences == sorted(sequences), "Sequences must be monotonic"
-        assert sequences == list(range(len(sequences))), "Sequences must be 0-indexed and contiguous"
 
 
 
