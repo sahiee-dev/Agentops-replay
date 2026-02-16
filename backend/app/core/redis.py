@@ -45,7 +45,21 @@ def get_redis_client() -> redis.Redis:
     )
     # Verify connection on first use
     client.ping()
-    logger.info("Redis client connected to %s", settings.REDIS_URL)
+    # Redact credentials for logging
+    from urllib.parse import urlparse, urlunparse
+
+    parsed = urlparse(settings.REDIS_URL)
+    if parsed.password:
+        # Replace password with '***'
+        netloc = f"{parsed.username or ''}:***@{parsed.hostname}"
+        if parsed.port:
+            netloc += f":{parsed.port}"
+        parsed = parsed._replace(netloc=netloc)
+        safe_url = urlunparse(parsed)
+    else:
+        safe_url = settings.REDIS_URL
+
+    logger.info("Redis client connected to %s", safe_url)
     return client
 
 

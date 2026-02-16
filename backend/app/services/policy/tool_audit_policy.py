@@ -74,6 +74,22 @@ class ToolAuditPolicy(Policy):
 
             tool_name = _extract_tool_name(event)
             if tool_name is None:
+                violations.append(
+                    ViolationRecord(
+                        id=str(uuid.uuid4()),
+                        session_id=event.session_id,
+                        event_id=event.event_id,
+                        event_sequence_number=event.sequence_number,
+                        policy_name="TOOL_CALL_UNPARSEABLE",
+                        policy_version=policy_version,
+                        policy_hash=policy_hash,
+                        severity="ERROR",
+                        description="Unparseable TOOL_CALL payload. Missing or invalid tool_name.",
+                        metadata={
+                            "raw_payload": event.payload_canonical[:200]  # Truncate for safety
+                        },
+                    )
+                )
                 continue
 
             if tool_name not in self._allowed_tools:

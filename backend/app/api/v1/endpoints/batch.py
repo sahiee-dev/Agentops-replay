@@ -36,7 +36,7 @@ class BatchAcceptedResponse:
     status_code=status.HTTP_202_ACCEPTED,
     summary="Async batch ingestion via Redis WAL",
 )
-async def ingest_batch(request: IngestBatchRequest):
+def ingest_batch(request: IngestBatchRequest):
     """
     Accept a batch of events for async processing.
 

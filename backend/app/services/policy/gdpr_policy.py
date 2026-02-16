@@ -17,6 +17,7 @@ Violation descriptions must state this explicitly.
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from typing import Any
 
@@ -24,6 +25,7 @@ from app.compliance.gdpr import Severity as GdprSeverity
 from app.compliance.gdpr import check_pii_exposure, validate_redactions
 from app.services.policy.engine import CanonicalEvent, Policy, ViolationRecord
 
+logger = logging.getLogger(__name__)
 
 class GDPRPolicy(Policy):
     """
@@ -66,6 +68,11 @@ class GDPRPolicy(Policy):
         for finding in redaction_findings:
             canonical_event = _find_event_by_index(events, finding.event_index)
             if canonical_event is None:
+                logger.warning(
+                    "GDPR Policy: Finding %s references missing event index %d",
+                    finding.message,
+                    finding.event_index,
+                )
                 continue
 
             violations.append(
@@ -91,6 +98,11 @@ class GDPRPolicy(Policy):
         for finding in pii_findings:
             canonical_event = _find_event_by_index(events, finding.event_index)
             if canonical_event is None:
+                logger.warning(
+                    "GDPR Policy: Finding %s references missing event index %d",
+                    finding.message,
+                    finding.event_index,
+                )
                 continue
 
             violations.append(

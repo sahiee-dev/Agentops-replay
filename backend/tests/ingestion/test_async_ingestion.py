@@ -179,6 +179,61 @@ class TestAsyncIngestion(unittest.TestCase):
                 # Verify XACK was called
                 self.mock_redis.xack.assert_called_once()
 
+    def test_worker_evaluates_policies(self):
+        """Worker evaluates policies on committed events."""
+        from app.worker.main import IngestionWorker
+
+        # Patch PolicyEngine to avoid loading real config
+        with patch("app.worker.main.IngestionWorker._init_policy_engine") as MockInitPolicy, \
+             patch("app.worker.main.IngestService") as MockIngestService, \
+             patch("app.worker.main.get_redis_client", return_value=self.mock_redis):
+
+            # Setup PolicyEngine mock
+            mock_engine = MagicMock()
+            MockInitPolicy.return_value = mock_engine
+            
+            # Setup IngestService mock
+            mock_service_instance = MagicMock()
+            MockIngestService.return_value = mock_service_instance
+            
+            # Key change: Return committed_events to trigger evaluation
+            mock_service_instance.append_events.return_value = {
+                "status": "success",
+                "accepted_count": 1,
+                "committed_events": [
+                    {
+                        "event_id": "evt-1",
+                        "session_id": "sess-1",
+                        "sequence_number": 0,
+                        "event_type": "TEST",
+                        "payload_canonical": "{}",
+                        "payload_hash": "h1",
+                        "event_hash": "h2",
+                        "chain_authority": "SERVER",
+                    }
+                ],
+            }
+
+            worker = IngestionWorker()
+            worker.redis = self.mock_redis
+
+            # Process a message
+            fields = {
+                "batch_id": "b1",
+                "session_id": "sess-1",
+                "events": json.dumps([{"event_type": "TEST", "sequence_number": 0, "timestamp_monotonic": 1}]),
+            }
+            worker._process_message("msg-1", fields)
+
+            # Assert evaluate was called
+            mock_engine.evaluate.assert_called_once()
+            
+            # Verify passed events are correct
+            call_args = mock_engine.evaluate.call_args
+            canonical_events = call_args[0][0]
+            self.assertEqual(len(canonical_events), 1)
+            self.assertEqual(canonical_events[0].event_id, "evt-1")
+
     def test_invalid_json_goes_to_dlq(self):
         """Invalid JSON in events field → immediate DLQ."""
         from app.worker.main import IngestionWorker

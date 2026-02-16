@@ -158,6 +158,9 @@ class IngestionWorker:
                     count=BATCH_COUNT,
                     block=BLOCK_MS,
                 )
+                
+                # Signal liveness to Docker
+                self._heartbeat()
 
                 if not messages:
                     continue
@@ -403,16 +406,26 @@ class IngestionWorker:
         else:
             # Update retry count on the message
             # Note: Redis Streams don't support in-place field updates.
-            # We acknowledge the old message and re-add with incremented retry count.
-            self.redis.xack(STREAM_NAME, CONSUMER_GROUP, message_id)
+            # We must COPY to a new message (re-queue) before ACKing the old one.
+            # Order is critical: XADD first, then XACK. If XADD fails, we MUST NOT XACK.
             fields["_retry_count"] = str(retry_count)
-            self.redis.xadd(STREAM_NAME, fields)
-            logger.warning(
-                "Batch %s: retry %d/%d re-queued.",
-                batch_id,
-                retry_count,
-                MAX_RETRIES,
-            )
+            try:
+                self.redis.xadd(STREAM_NAME, fields)
+                self.redis.xack(STREAM_NAME, CONSUMER_GROUP, message_id)
+                logger.warning(
+                    "Batch %s: retry %d/%d re-queued.",
+                    batch_id,
+                    retry_count,
+                    MAX_RETRIES,
+                )
+            except Exception:
+                logger.error(
+                    "Batch %s: failed to re-queue retry %d/%d. Message remains pending.",
+                    batch_id,
+                    retry_count,
+                    MAX_RETRIES,
+                    exc_info=True,
+                )
 
     def _move_to_dlq(
         self, message_id: str, fields: dict[str, Any], reason: str
@@ -434,6 +447,16 @@ class IngestionWorker:
             "Received signal %d. Finishing current batch and shutting down...", signum
         )
         self.running = False
+
+    def _heartbeat(self) -> None:
+        """Touch heartbeat file for Docker healthcheck."""
+        try:
+            # /tmp is typically in-memory in Docker, so this is fast
+            with open("/tmp/worker-heartbeat", "w") as f:
+                f.write(str(time.time()))
+        except Exception:
+            # Don't crash worker if FS is weird, but log it
+            logger.warning("Failed to touch heartbeat file", exc_info=True)
 
 
 def main() -> None:
