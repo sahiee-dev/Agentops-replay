@@ -1,0 +1,14 @@
+version: "1.0.0"
+
+policies:
+  gdpr:
+    enabled: true
+
+  tool_audit:
+    enabled: true
+    allowed_tools:
+      - "web_search"
+      - "calculator"
+      - "file_reader"
+      - "code_executor"
+      - "database_query"
