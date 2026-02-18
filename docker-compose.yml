@@ -1,0 +1,151 @@
+# ============================================================
+# AgentOps Replay - Docker Compose
+# ============================================================
+# Reference deployment for local development and testing.
+# Production deployments should use Kubernetes or equivalent.
+#
+# INVARIANTS:
+# - postgres: Append-only event store (immutable once written)
+# - redis: Write-Ahead Log for async ingestion (AOF-persisted)
+# - api: Ingestion service (authoritative sealer)
+# - worker: Background consumer (Redis → IngestService → DB)
+# - verifier: CLI tool for chain validation (read-only)
+# ============================================================
+
+services:
+  # --------------------------------------------------------
+  # PostgreSQL - Immutable Event Store
+  # --------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: agentops-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agentops
+      POSTGRES_PASSWORD: agentops_secret
+      POSTGRES_DB: agentops_replay
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentops -d agentops_replay"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --------------------------------------------------------
+  # Redis - Write-Ahead Log (WAL) for Async Ingestion
+  # --------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: agentops-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --appendfsync everysec
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --------------------------------------------------------
+  # API / Ingestion Service - Authoritative Sealer
+  # --------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: agentops-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://agentops:agentops_secret@postgres:5432/agentops_replay
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: agentops
+      POSTGRES_PASSWORD: agentops_secret
+      POSTGRES_DB: agentops_replay
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: development-secret-key-change-in-production
+      ENVIRONMENT: development
+    volumes:
+      - ./backend:/app
+      - ./verifier:/app/verifier
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # --------------------------------------------------------
+  # Worker - Async Ingestion Consumer
+  # --------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: agentops-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://agentops:agentops_secret@postgres:5432/agentops_replay
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: agentops
+      POSTGRES_PASSWORD: agentops_secret
+      POSTGRES_DB: agentops_replay
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: development-secret-key-change-in-production
+      ENVIRONMENT: development
+      WORKER_CONSUMER_NAME: worker-01
+    volumes:
+      - ./backend:/app
+      - ./verifier:/app/verifier
+    command: ["python", "-m", "app.worker.main"]
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/worker-heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # --------------------------------------------------------
+  # Verifier - Read-Only Chain Validation
+  # --------------------------------------------------------
+  verifier:
+    image: python:3.11-slim-bookworm
+    container_name: agentops-verifier
+    depends_on:
+      - api
+    volumes:
+      - ./agentops_verify:/app/agentops_verify:ro
+      - ./verifier:/app/verifier:ro
+      - verifier_data:/data
+    working_dir: /app
+    entrypoint: ["python", "-m", "agentops_verify.cli"]
+    # Runs on-demand: docker-compose run verifier <args>
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  verifier_data:
+    driver: local
