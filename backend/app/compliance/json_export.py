@@ -14,11 +14,16 @@ from typing import Any
 from sqlalchemy.orm import Session as DBSession
 
 # Add verifier to path for JCS import (LOCKED to verifier implementation)
-_verifier_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "verifier")
-)
-if _verifier_path not in sys.path:
-    sys.path.insert(0, _verifier_path)
+# Support both local dev (relative) and Docker (/app/verifier)
+_verifier_paths = [
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "verifier"),  # Local dev
+    "/app/verifier",  # Docker
+]
+for _vp in _verifier_paths:
+    _vp_abs = os.path.abspath(_vp)
+    if os.path.isdir(_vp_abs) and _vp_abs not in sys.path:
+        sys.path.insert(0, _vp_abs)
+        break
 
 from app.models import ChainSeal, EventChain, Session
 from jcs import canonicalize  # AUTHORITATIVE: verifier's RFC 8785 implementation
