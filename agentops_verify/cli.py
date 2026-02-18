@@ -21,6 +21,16 @@ from .errors import VerificationStatus
 
 
 def main():
+    """
+    Parse command-line arguments and dispatch the agentops-verify command-line interface.
+    
+    Defines a required "verify" subcommand that validates a sealed session file and delegates execution to run_verify(args).
+    The "verify" subcommand accepts:
+    - session_file: path to session_golden.json
+    - --output / -o: optional path to write a JSON verification report
+    - --authorities: optional list of trusted authority identifiers (defaults to TRUSTED_AUTHORITIES)
+    - --quiet / -q: suppress verbose output and only emit the exit code
+    """
     parser = argparse.ArgumentParser(
         prog="agentops-verify",
         description="Production Verifier for AgentOps Evidence"
@@ -54,7 +64,23 @@ def main():
 
 
 def run_verify(args):
-    """Execute verification command."""
+    """
+    Run the verify subcommand for a session file and produce a verification report.
+    
+    Parameters:
+        args (argparse.Namespace): Parsed CLI arguments with the following expected attributes:
+            session_file (str): Path to the sealed session JSON file to verify (session_golden.json).
+            output (str | None): Optional path to write the verification report as JSON.
+            authorities (Iterable[str]): Trusted authorities to use for verification.
+            quiet (bool): If true, suppress verbose console output.
+    
+    Behavior:
+        - Verifies the provided session file using the configured trusted authorities.
+        - If `output` is provided, writes the report as JSON to that path.
+        - Unless `quiet` is set, prints a concise verification summary and any findings to stdout.
+        - Exits the process with the verification report's `exit_code`.
+        - Exits with code 2 if the session file is missing or verification fails.
+    """
     session_path = Path(args.session_file)
     
     if not session_path.exists():
