@@ -1,7 +1,9 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
+
+from sqlalchemy.sql import expression
 
 class Session(Base):
     __tablename__ = "sessions"
@@ -20,3 +22,4 @@ class Session(Base):
     # Relationships
     user = relationship("User", back_populates="sessions")
     events = relationship("Event", back_populates="session", cascade="all, delete-orphan")
+    is_replay = Column(Boolean, default=False, nullable=False, server_default=expression.false())
