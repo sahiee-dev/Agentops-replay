@@ -154,7 +154,10 @@ class IngestService:
             db.close()
 
     def append_events(
-        self, session_id: str, events: list[dict[str, Any]]
+        self,
+        session_id: str,
+        events: list[dict[str, Any]],
+        db: DBSession | None = None,
     ) -> dict[str, Any]:
         """
         Append events to session with constitutional validation.
@@ -164,18 +167,32 @@ class IngestService:
         2. Strict sequence validation (hard rejection)
         3. Atomic commit (all or none)
 
+        TRANSACTION BOUNDARY:
+        - When db is None: creates/commits/closes own session (backwards-compatible)
+        - When db is provided: uses caller's session, does NOT commit or close
+          Caller is responsible for transaction control.
+
         Args:
             session_id: Session UUID string
             events: List of event dictionaries from SDK
+            db: Optional external DB session for transaction control.
+                When provided, IngestService does NOT commit or close.
 
         Returns:
-            dict with 'status', 'accepted_count', 'final_hash'
+            dict with:
+              'status': 'success'
+              'accepted_count': int
+              'final_hash': str
+              'committed_events': list[dict] — canonical committed event representations
+                  for downstream consumers (e.g., PolicyEngine)
 
         Raises:
             SequenceViolation: On sequence gaps/duplicates
             ValueError: On validation failures
         """
-        db = SessionLocal()
+        owns_session = db is None
+        if owns_session:
+            db = SessionLocal()
         try:
             # CRITICAL: Acquire row-level lock to prevent race conditions
             # FOR UPDATE ensures last_seq cannot change between validation and insert
@@ -195,10 +212,11 @@ class IngestService:
                 )
 
             # Validate sequence continuity (session is locked, no races possible)
-            self._validate_sequence(db, session, events)
+            self._validate_sequence(db, session, events, owns_session=owns_session)
 
             # Recompute hashes and store events
             stored_events = []
+            committed_events = []  # Canonical representations for PolicyEngine
             prev_hash = self._get_last_event_hash(db, session)
 
             for event_data in events:
@@ -221,6 +239,11 @@ class IngestService:
                 # Compute event hash
                 event_hash = verifier_core.compute_event_hash(event_envelope)
 
+                # Canonical payload
+                payload_canonical = verifier_core.jcs.canonicalize(payload).decode(
+                    "utf-8"
+                )
+
                 # Store in database
                 event_chain = EventChain(
                     event_id=uuid.UUID(event_envelope["event_id"]),
@@ -231,9 +254,7 @@ class IngestService:
                     event_type=event_envelope["event_type"],
                     source_sdk_ver=event_data.get("source_sdk_ver"),
                     schema_ver=event_data.get("schema_ver", "v0.6"),
-                    payload_canonical=verifier_core.jcs.canonicalize(payload).decode(
-                        "utf-8"
-                    ),
+                    payload_canonical=payload_canonical,
                     payload_hash=payload_hash,
                     prev_event_hash=prev_hash,
                     event_hash=event_hash,
@@ -242,6 +263,18 @@ class IngestService:
 
                 db.add(event_chain)
                 stored_events.append(event_chain)
+
+                # Build canonical committed event for downstream consumers
+                committed_events.append({
+                    "event_id": str(event_envelope["event_id"]),
+                    "session_id": session_id,
+                    "sequence_number": event_envelope["sequence_number"],
+                    "event_type": event_envelope["event_type"],
+                    "payload_canonical": payload_canonical,
+                    "payload_hash": payload_hash,
+                    "event_hash": event_hash,
+                    "chain_authority": str(session.chain_authority),
+                })
 
                 # Update for next iteration
                 prev_hash = event_hash
@@ -255,13 +288,15 @@ class IngestService:
                     # SQLAlchemy Column at runtime holds int, type checker sees Column[int]
                     session.total_drops = current_drops + dropped_count
 
-            # Atomic commit
-            db.commit()
+            # Commit only if we own the session
+            if owns_session:
+                db.commit()
 
             return {
                 "status": "success",
                 "accepted_count": len(events),
                 "final_hash": prev_hash,
+                "committed_events": committed_events,
             }
 
         except IntegrityError as e:
@@ -269,7 +304,8 @@ class IngestService:
             raise ValueError(f"Database integrity error: {e}")
 
         finally:
-            db.close()
+            if owns_session:
+                db.close()
 
     def seal_session(self, session_id: str) -> dict[str, Any]:
         """
@@ -418,7 +454,11 @@ class IngestService:
         return int(last_event.sequence_number) if last_event else -1
 
     def _validate_sequence(
-        self, db: DBSession, session: Session, events: list[dict[str, Any]]
+        self,
+        db: DBSession,
+        session: Session,
+        events: list[dict[str, Any]],
+        owns_session: bool = True,
     ) -> None:
         """
         Validate sequence continuity with HARD REJECTION RULES.
@@ -450,6 +490,7 @@ class IngestService:
                     dropped_count=0,
                     first_missing_seq=seq,
                     last_missing_seq=seq,
+                    owns_session=owns_session,
                 )
                 raise SequenceViolation(
                     f"Duplicate sequence: expected {expected}, got {seq}"
@@ -464,6 +505,7 @@ class IngestService:
                     dropped_count=gap_size,
                     first_missing_seq=expected,
                     last_missing_seq=seq - 1,
+                    owns_session=owns_session,
                 )
                 raise SequenceViolation(
                     f"Sequence gap: expected {expected}, got {seq}. Gap size: {gap_size}"
@@ -480,16 +522,18 @@ class IngestService:
         dropped_count: int,
         first_missing_seq: int | None = None,
         last_missing_seq: int | None = None,
+        owns_session: bool = True,
     ) -> None:
         """
         Emit LOG_DROP meta-event and increment session drop counter.
 
         CONSTITUTIONAL REQUIREMENT: Record sequence ranges for forensic traceability.
 
-        AUDIT GUARANTEE: This function commits immediately to ensure LOG_DROP is
-        persisted even when the batch is subsequently rejected via SequenceViolation.
-        This is INTENTIONAL for audit integrity - we must record WHY a batch was
-        rejected, not just silently discard it.
+        TRANSACTION BEHAVIOR:
+        - When owns_session=True: commits immediately to ensure LOG_DROP is
+          persisted even when the batch is subsequently rejected.
+        - When owns_session=False: adds LOG_DROP to caller's session without
+          committing. Caller is responsible for transaction control.
 
         The session row lock (acquired via with_for_update() in append_events)
         prevents race conditions during concurrent writes.
@@ -501,6 +545,7 @@ class IngestService:
             dropped_count: Number of events dropped
             first_missing_seq: First sequence number in gap (if known)
             last_missing_seq: Last sequence number in gap (if known)
+            owns_session: If True, commit immediately. If False, caller commits.
         """
         # Increment session drop counter
         # Cast Column to int and back for type checker
@@ -560,4 +605,7 @@ class IngestService:
         )
 
         db.add(log_drop_event)
-        db.commit()
+        # CRITICAL: Only commit if we own the session.
+        # When owns_session=False, caller controls transaction boundary.
+        if owns_session:
+            db.commit()

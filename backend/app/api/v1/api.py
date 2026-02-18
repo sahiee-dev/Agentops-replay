@@ -1,6 +1,7 @@
 from fastapi import APIRouter  # type: ignore
 
 from app.api.v1.endpoints import (
+    batch,
     compliance,
     events,
     ingestion_sessions,
@@ -24,8 +25,10 @@ router = APIRouter()
 
 # Constitutional ingestion endpoints (single authority: app.ingestion.IngestService)
 router.include_router(ingestion_sessions.router, prefix="/ingest", tags=["ingestion"])
+router.include_router(batch.router, prefix="/ingest", tags=["ingestion-async"])
 router.include_router(verify.router, prefix="/verify", tags=["verification"])
 router.include_router(export_endpoints.router, prefix="/export", tags=["export"])
+
 
 # Legacy endpoints
 router.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
