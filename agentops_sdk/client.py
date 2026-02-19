@@ -5,7 +5,7 @@ agentops_sdk/client.py - Main SDK Entry Point
 import hashlib
 import os
 import sys
-from typing import Any
+from typing import Any, List, Optional
 
 from .buffer import EventBuffer
 from .envelope import create_proposal
@@ -20,14 +20,15 @@ import jcs
 
 
 class AgentOpsClient:
-    def __init__(self, local_authority: bool = False, buffer_size: int = 1000):
+    def __init__(self, local_authority: bool = False, buffer_size: int = 1000, authority_name: Optional[str] = None):
         self.local_authority = local_authority
+        self.authority_name = authority_name
         self.buffer = EventBuffer(capacity=buffer_size)
-        self.session_id: str | None = None
+        self.session_id: Optional[str] = None
         self.sequence_counter: int = 0
-        self.prev_hash: str | None = None
+        self.prev_hash: Optional[str] = None
 
-    def start_session(self, agent_id: str, tags: list[str] | None = None):
+    def start_session(self, agent_id: str, tags: Optional[List[str]] = None):
         if self.session_id:
             raise RuntimeError("Session already active")
 
@@ -46,7 +47,7 @@ class AgentOpsClient:
         }
         self.record(EventType.SESSION_START, payload)
 
-    def record(self, event_type: EventType, payload: dict[str, Any]):
+    def record(self, event_type: EventType, payload: dict[str, Any], force: bool = False):
         if not self.session_id:
             raise RuntimeError("No active session")
 
@@ -54,21 +55,32 @@ class AgentOpsClient:
         validate_payload(event_type, payload)
 
         # 2. Check for Drop Injection
-        dropped = self.buffer.dropped_count  # Read but don't reset yet
+        # If buffer has dropped events, emit LOG_DROP first (bypassing capacity via force=True)
+        dropped = self.buffer.dropped_count
         if dropped > 0:
-            drop_payload = {"dropped_events": dropped, "reason": "buffer_overflow"}
-            try:
-                self._emit_proposal(EventType.LOG_DROP, drop_payload)
-                # Only reset after successful emission
-                self.buffer.dropped_count = 0
-            except Exception:
-                # If emission fails, preserve drop count for next attempt
-                raise
+            self._cumulative_drops += dropped
+            drop_payload = {
+                "dropped_count": dropped,
+                "cumulative_drops": self._cumulative_drops,
+                "drop_reason": "buffer_overflow",
+            }
+            self._emit_proposal(EventType.LOG_DROP, drop_payload, force=True)
+            self.buffer.dropped_count = 0
 
         # 3. Emit Proposal
-        self._emit_proposal(event_type, payload)
+        self._emit_proposal(event_type, payload, force=force)
 
-    def _emit_proposal(self, event_type: EventType, payload: dict[str, Any]):
+    def _emit_proposal(
+        self, event_type: EventType, payload: dict[str, Any], force: bool = False
+    ):
+        """
+        Create and buffer an event proposal.
+        
+        Args:
+            event_type: Type of event.
+            payload: Event payload.
+            force: If True, bypass buffer capacity (for LOG_DROP).
+        """
         # Create Proposal
         proposal = create_proposal(
             session_id=self.session_id,
@@ -77,6 +89,7 @@ class AgentOpsClient:
             payload=payload,
             prev_hash=self.prev_hash,
             local_authority=self.local_authority,
+            authority_name=self.authority_name,
         )
 
         # Update State
@@ -99,7 +112,7 @@ class AgentOpsClient:
             canonical_env = jcs.canonicalize(signed_obj)
             self.prev_hash = hashlib.sha256(canonical_env).hexdigest()
 
-        self.buffer.append(proposal)
+        self.buffer.append(proposal, force=force)
 
     def end_session(self, status: str, duration_ms: int):
         self.record(

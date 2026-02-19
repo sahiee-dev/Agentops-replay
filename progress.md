@@ -241,6 +241,55 @@ Fingerprint: 4272bdc7...
 
 ---
 
+### ✅ Phase 7.5: Verifier Hardening & Testing
+
+**Date:** February 6-7, 2026
+
+**Artifacts Created:**
+
+- `agentops_verify/test_cli.py` — CLI coverage tests
+- `agentops_verify/test_verifier_coverage.py` — Targeted coverage gap tests
+- `agentops_verify/test_verifier_session_id_mismatch.py` — Session ID consistency test
+- `.agent/rules/strictlooping.md` — Strict first-principles debugging rules
+- `verifier/test_vectors_bak/` — Backup test vectors for regression testing
+
+**Key Achievements:**
+
+- [x] **CLI Verification:** Added tests for CLI argument parsing and output formatting.
+- [x] **Coverage Gaps:** Targeted uncovered branches in verifier logic (JCS exceptions, fallback paths).
+- [x] **Session ID Consistency:** Explicit test for session ID mismatch detection.
+- [x] **Strict Looping:** Enforced first-principles debugging protocol.
+
+---
+
+### ✅ Phase 8: Operational Readiness & Resilience (Completed)
+
+**Date:** February 7, 2026
+
+**Artifacts Created:**
+
+- `docker-compose.yml` — Reference deployment (postgres, api, verifier services)
+- `backend/Dockerfile` — Multi-stage production build for FastAPI
+- `DEPLOYMENT.md` — Deployment documentation and production checklist
+- `INCIDENT_RESPONSE.md` — Incident response playbook (4 failure scenarios)
+- `tests/resilience/test_network_partition.py` — SDK buffer overflow and LOG_DROP tests
+
+**Key Achievements:**
+
+- [x] **Reference Deployment:** Docker Compose with postgres, API, and verifier services
+- [x] **Dockerfile:** Multi-stage build with health checks
+- [x] **Incident Playbooks:** Documented Hash Mismatch, Sequence Gap, PII Exposure, Missing Seal
+- [x] **Resilience Tests:** SDK buffer overflow simulation and LOG_DROP verification
+
+**Success Criteria Status:**
+
+1. ✅ `docker-compose.yml` defines complete deployment topology
+2. ✅ `INCIDENT_RESPONSE.md` covers 4 critical failure modes
+3. ✅ `test_network_partition.py` validates SDK buffer behavior
+4. ✅ Deployment verified: API is healthy (`curl localhost:8000/health` -> OK)
+
+---
+
 ## Architecture Overview
 
 ```

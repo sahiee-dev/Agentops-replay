@@ -5,7 +5,8 @@ class EventChain(Base):
     __tablename__ = "event_chains"
 
     event_id = Column(String, primary_key=True) # UUID string
-    session_id = Column(String(36), ForeignKey("sessions.session_id_str"), nullable=False, index=True)
+    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=False, index=True)
+    session_id_str = Column(String(36), nullable=False)
     sequence_number = Column(Integer, nullable=False)
     timestamp_wall = Column(DateTime, nullable=False)
     timestamp_monotonic = Column(Float, nullable=True)

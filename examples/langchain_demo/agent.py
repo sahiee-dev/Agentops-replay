@@ -24,6 +24,7 @@ sys.path.insert(
 import json
 from datetime import datetime
 from decimal import Decimal
+from typing import Optional
 
 # Try LangChain imports
 try:
@@ -208,7 +209,7 @@ def get_tools():
     return [lookup_order, issue_refund, send_email]
 
 
-def create_agent(api_key: str | None = None, callbacks=None):
+def create_agent(api_key: Optional[str] = None, callbacks=None):
     """
     Create and return a configured customer support agent executor.
 

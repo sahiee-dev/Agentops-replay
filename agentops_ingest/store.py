@@ -74,16 +74,25 @@ class EventStore:
     """
     
     def __init__(self, database_url: str):
+        """
+        Initialize the EventStore by creating a SQLAlchemy engine, ensuring the schema exists, and preparing a session factory.
+        
+        Parameters:
+            database_url (str): SQLAlchemy database connection URL used to create the engine and bind the sessionmaker.
+        """
         self.engine = create_engine(database_url)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
     
     def insert(self, event: SealedEvent) -> None:
         """
-        Insert a sealed event.
+        Persist a sealed event as a new immutable row in the events table.
+        
+        Parameters:
+            event (SealedEvent): The sealed event to persist.
         
         Raises:
-            sqlalchemy.exc.IntegrityError on duplicate (session_id, sequence_number)
+            sqlalchemy.exc.IntegrityError: If a row with the same (session_id, sequence_number) already exists.
         """
         db = self.Session()
         try:
@@ -109,9 +118,10 @@ class EventStore:
     
     def get_chain_state(self, session_id: str) -> Optional[ChainState]:
         """
-        Get current chain state for a session.
+        Return the current chain state for a session.
         
-        Returns None if session has no events (new session).
+        Returns:
+            ChainState or None: ChainState containing session_id, last_sequence, last_event_hash, and is_closed; `None` if the session has no events.
         """
         db = self.Session()
         try:
@@ -144,9 +154,15 @@ class EventStore:
     
     def get_session_events(self, session_id: str) -> List[EventRow]:
         """
-        Get all events for a session, ordered by sequence.
+        Return all events for the given session ordered by sequence number ascending.
         
-        For export purposes only.
+        The returned EventRow objects are detached from the ORM session so they can be used safely after the database session is closed.
+        
+        Parameters:
+            session_id (str): Identifier of the session to retrieve events for.
+        
+        Returns:
+            List[EventRow]: Event rows for the session ordered by increasing sequence_number.
         """
         db = self.Session()
         try:

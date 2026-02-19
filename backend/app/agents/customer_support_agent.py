@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import google.generativeai as genai  # type: ignore
 from app.config import settings  # Now you can import settings
 from app.models.event import Event
-from app.models.session import ChainAuthority, Session as SessionModel, SessionStatus
+from app.models import ChainAuthority, Session as SessionModel, SessionStatus
 from app.schemas.session import SessionCreate
 from sqlalchemy.orm import Session  # type: ignore
 

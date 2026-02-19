@@ -368,7 +368,7 @@ class IngestService:
             has_session_end = (
                 db.query(EventChain)
                 .filter(
-                    EventChain.session_id == session.id,
+                    EventChain.session_id == session.session_id_str,
                     EventChain.event_type == "SESSION_END",
                 )
                 .first()
@@ -384,7 +384,7 @@ class IngestService:
             # Get final event
             final_event = (
                 db.query(EventChain)
-                .filter(EventChain.session_id == session.id)
+                .filter(EventChain.session_id == session.session_id_str)
                 .order_by(EventChain.sequence_number.desc())
                 .first()
             )
@@ -394,7 +394,7 @@ class IngestService:
 
             # Count events
             event_count = (
-                db.query(EventChain).filter(EventChain.session_id == session.id).count()
+                db.query(EventChain).filter(EventChain.session_id == session.session_id_str).count()
             )
 
             # Create seal
@@ -435,7 +435,7 @@ class IngestService:
         """Get hash of last event in session, or None if no events."""
         last_event = (
             db.query(EventChain)
-            .filter(EventChain.session_id == session.id)
+            .filter(EventChain.session_id == session.session_id_str)
             .order_by(EventChain.sequence_number.desc())
             .first()
         )
@@ -447,7 +447,7 @@ class IngestService:
         """Get last sequence number in session, or -1 if no events."""
         last_event = (
             db.query(EventChain)
-            .filter(EventChain.session_id == session.id)
+            .filter(EventChain.session_id == session.session_id_str)
             .order_by(EventChain.sequence_number.desc())
             .first()
         )
