@@ -7,7 +7,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, Optional
 
 from .events import SCHEMA_VER, EventType
 
@@ -30,10 +30,10 @@ class ProposedEvent:
     source_sdk_ver: str
     schema_ver: str
     payload_hash: str  # Calculated locally
-    prev_event_hash: str | None  # Hint
-    event_hash: str | None  # None unless finalized
+    prev_event_hash: Optional[str]  # Hint
+    event_hash: Optional[str]  # None unless finalized
     payload: bytes  # Canonicalized JSON bytes
-    chain_authority: str | None = None
+    chain_authority: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         # Return dict matching Spec v0.4
@@ -54,8 +54,9 @@ def create_proposal(
     seq: int,
     event_type: EventType,
     payload: dict[str, Any],
-    prev_hash: str | None,
+    prev_hash: Optional[str],
     local_authority: bool = False,
+    authority_name: Optional[str] = None,
 ) -> ProposedEvent:
     # 1. Canonicalize Payload
     canonical_payload = jcs.canonicalize(payload)
@@ -66,6 +67,14 @@ def create_proposal(
     import time
 
     ts_mono = int(time.monotonic() * 1000)  # Convert to milliseconds
+
+    # Determine authority
+    if local_authority:
+        # If explicit name provided, use it. Otherwise default to a trusted one for local dev/sim.
+        # User requested: "Events are stamped with a valid authority"
+        authority = authority_name if authority_name else "agentops-ingest-v1"
+    else:
+        authority = None
 
     proposal = ProposedEvent(
         event_id=str(uuid.uuid4()),  # UUID7 preferred
@@ -80,7 +89,7 @@ def create_proposal(
         prev_event_hash=prev_hash,
         event_hash=None,
         payload=canonical_payload,
-        chain_authority="sdk" if local_authority else None,
+        chain_authority=authority,
     )
 
     # 3. Finalize if Local Authority
@@ -102,6 +111,6 @@ def create_proposal(
         # JCS
         canonical_env = jcs.canonicalize(signed_obj)
         proposal.event_hash = hashlib.sha256(canonical_env).hexdigest()
-        proposal.chain_authority = "sdk"
+        proposal.chain_authority = authority
 
     return proposal

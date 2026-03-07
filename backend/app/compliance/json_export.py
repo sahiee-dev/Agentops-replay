@@ -14,11 +14,16 @@ from typing import Any
 from sqlalchemy.orm import Session as DBSession
 
 # Add verifier to path for JCS import (LOCKED to verifier implementation)
-_verifier_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "verifier")
-)
-if _verifier_path not in sys.path:
-    sys.path.insert(0, _verifier_path)
+# Support both local dev (relative) and Docker (/app/verifier)
+_verifier_paths = [
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "verifier"),  # Local dev
+    "/app/verifier",  # Docker
+]
+for _vp in _verifier_paths:
+    _vp_abs = os.path.abspath(_vp)
+    if os.path.isdir(_vp_abs) and _vp_abs not in sys.path:
+        sys.path.insert(0, _vp_abs)
+        break
 
 from app.models import ChainSeal, EventChain, Session
 from jcs import canonicalize  # AUTHORITATIVE: verifier's RFC 8785 implementation
@@ -26,13 +31,15 @@ from jcs import canonicalize  # AUTHORITATIVE: verifier's RFC 8785 implementatio
 
 def _format_iso8601(dt: datetime) -> str:
     """
-    Format a datetime to strict UTC ISO 8601 with millisecond precision and a trailing 'Z'.
+    Format a datetime as an ISO 8601 UTC timestamp with millisecond precision and a trailing 'Z' suffix.
+    
+    The input is normalized to UTC (naive datetimes are treated as UTC) before formatting and the result always includes three fractional digits for milliseconds in the form YYYY-MM-DDTHH:MM:SS.mmmZ.
     
     Parameters:
-        dt (datetime): The timestamp to format; must be non-None.
+        dt (datetime): The datetime to format; may be naive or timezone-aware.
     
     Returns:
-        str: The timestamp formatted as "YYYY-MM-DDTHH:MM:SS.sssZ" in UTC.
+        str: ISO 8601 UTC timestamp string in the form YYYY-MM-DDTHH:MM:SS.mmmZ.
     
     Raises:
         ValueError: If `dt` is None.
@@ -52,6 +59,19 @@ def _format_iso8601(dt: datetime) -> str:
 
 def generate_json_export(session_id: str, db: DBSession) -> dict[str, Any]:
     """
+    Generate an RFC 8785 (JCS) canonical JSON export for a given session.
+    
+    The export includes the full ordered event chain (using each event's canonical payload text), evidence class, chain-of-custody metadata, session metadata, and optional chain seal information.
+    
+    Parameters:
+        session_id (str): Session UUID string identifying the session to export.
+        db (DBSession): Database session used to load Session, EventChain, and ChainSeal records.
+    
+    Returns:
+        dict: Canonical export dictionary containing keys such as `export_version`, `export_timestamp`, `session_id`, `evidence_class`, `chain_authority`, `session_metadata`, `seal`, `events`, and `chain_of_custody`.
+    
+    Raises:
+        ValueError: If `session_id` is not a valid UUID string or if the session is not found.
     Generate an RFC 8785 canonical JSON export for the specified session.
     
     Builds a deterministic export containing the full canonical event chain (using each event's `payload_canonical`), export and session metadata, an evidence class, chain_of_custody information, and an optional seal section.

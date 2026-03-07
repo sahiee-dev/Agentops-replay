@@ -20,6 +20,22 @@ from .errors import IngestException, IngestErrorCode
 
 # --- VALID EVENT FIXTURE ---
 def make_valid_event(seq: int = 0, session_id: str = "test-session-001") -> dict:
+    """
+    Create a canonical valid ingestion event dictionary used by tests.
+    
+    Parameters:
+        seq (int): Sequence number to embed in `event_id` and `sequence_number`. Defaults to 0.
+        session_id (str): Session identifier to place in `session_id`. Defaults to "test-session-001".
+    
+    Returns:
+        dict: Event dictionary with the following keys:
+            - event_id (str): Formatted as "evt-{seq:03d}".
+            - session_id (str)
+            - sequence_number (int)
+            - timestamp_wall (str): ISO 8601 UTC timestamp string.
+            - event_type (str)
+            - payload (dict): Contains `input_facts`, `policy_version`, and `outcome`.
+    """
     return {
         "event_id": f"evt-{seq:03d}",
         "session_id": session_id,
@@ -295,7 +311,11 @@ class TestReplayAttacks:
         assert exc_info.value.error.error_code == IngestErrorCode.AUTHORITY_LEAK
     
     def test_altered_payload_same_sequence_rejected(self):
-        """Submitting altered payload at same sequence should be rejected."""
+        """
+        Reject submission of an altered payload using a sequence number that has already been ingested.
+        
+        Attempts to seal an event whose sequence equals the chain state's last_sequence and asserts sealing raises an IngestException with error code IngestErrorCode.SEQUENCE_REWIND.
+        """
         # First, seal the original event
         original = make_valid_event(seq=0)
         claim1 = validate_claim(original)
