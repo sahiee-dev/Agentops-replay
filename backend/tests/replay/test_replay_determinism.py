@@ -38,7 +38,15 @@ pytestmark = pytest.mark.skipif(jcs is None, reason="jcs module not found")
 
 
 def create_mock_events():
-    """Generates a consistent set of events for replay testing"""
+    """
+    Return a deterministic list of five mock replay event dictionaries for testing.
+    
+    Each event's `payload` is a JCS-canonicalized UTF-8 string representing the JSON payload. The sequence includes:
+    SESSION_START, TOOL_CALL (with a floating-point argument), TOOL_RESULT (nested object with specific key order), LOG_DROP, and SESSION_END, each with fixed timestamps and sequence numbers.
+    
+    Returns:
+        list: Five event dictionaries suitable for ingestion and replay testing.
+    """
     # Payloads must be strings in DB/Engine
     
     events = [
@@ -132,6 +140,16 @@ def diff_dicts(d1, d2, path=""):
 
 
 def test_replay_determinism():
+    """
+    Test that building a replay from the same verified session data yields bit-for-bit identical outputs and preserves canonicalized payload strings.
+    
+    Loads a verified session twice with identical mock events and a fixed seal, builds replays for each load, and asserts the serialized replay outputs are identical. Additionally, verifies that the frame corresponding to the tool call event:
+    - exposes its payload as a string,
+    - parses to the expected tool name and floating-point argument value (10.5),
+    - matches the canonical JCS string produced for the same payload content.
+    
+    The test will skip if the replay engine dependency is unavailable.
+    """
     print("\n>>> START REPLAY DETERMINISM TEST <<<")
     if load_verified_session is None:
         pytest.skip("app.replay.engine module not found")
@@ -199,4 +217,3 @@ if __name__ == "__main__":
         import traceback
         traceback.print_exc()
         exit(1)
-

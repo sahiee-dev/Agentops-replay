@@ -34,7 +34,7 @@ async def verify_session_api(session_id: str, db: DBSession = Depends(get_db)):
         # 1. Get session
         session = (
             db.query(Session)
-            .filter(Session.session_id_str == uuid.UUID(session_id))
+            .filter(Session.session_id_str == session_id)
             .first()
         )
 

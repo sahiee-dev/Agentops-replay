@@ -91,7 +91,7 @@ They are strict and override default agent behavior.
 
 ## Absolute Prohibitions
 
-53. Do not add dashboards as a primary feature.
+53. Do not add dashboards as a primary function/feature.
 54. Do not infer missing events.
 55. Do not reorder events for UX.
 56. Do not downgrade integrity for performance.
