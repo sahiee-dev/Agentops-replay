@@ -122,7 +122,7 @@ class IngestionWorker:
                 "  Policy: %s (version=%s, source_hash=%s)",
                 p.name,
                 p.version,
-                p.source_hash[:16] + "...",
+                p.policy_hash[:16] + "...",
             )
 
         return engine
