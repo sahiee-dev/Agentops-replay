@@ -7,18 +7,9 @@ Tracks framework version and provides compatibility warnings per goal.md require
 - Add semantic compatibility warnings
 """
 
-import importlib.metadata
-import warnings
+from typing import Optional, Tuple
 
-# Integration version - bump on breaking changes
-INTEGRATION_VERSION = "0.1.0"
-
-# Supported LangChain version range
-SUPPORTED_MIN = (0, 1, 0)
-SUPPORTED_MAX = (0, 3, 0)  # Exclusive upper bound
-
-
-def get_langchain_version() -> tuple[int, int, int] | None:
+def get_langchain_version() -> Optional[Tuple[int, int, int]]:
     """
     Retrieve the installed LangChain version as a (major, minor, patch) integer tuple.
 

@@ -11,14 +11,24 @@ CRITICAL REQUIREMENTS:
 import os
 import sys
 import uuid
-from datetime import UTC, datetime
-from typing import Any
+from datetime import datetime, timezone
+UTC = timezone.utc
+from typing import Any, Optional
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DBSession
 
 # Add verifier to Python path for shared hash functions
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../verifier"))
+# Support both local dev (relative) and Docker (/app/verifier)
+_verifier_paths = [
+    os.path.join(os.path.dirname(__file__), "../../../verifier"),  # Local dev
+    "/app/verifier",  # Docker
+]
+for _path in _verifier_paths:
+    if os.path.isdir(_path) and _path not in sys.path:
+        sys.path.insert(0, _path)
+        break
+
 import verifier_core
 from app.database import SessionLocal
 from app.models import ChainAuthority, ChainSeal, EventChain, Session, SessionStatus
@@ -35,6 +45,16 @@ class AuthorityViolation(Exception):
 
     pass
 
+def _parse_wall_timestamp(ts: str) -> datetime:
+    """
+    Normalizes a wall timestamp from the SDK.
+    Rejects ambiguous timestamps (no timezone) and returns naive UTC.
+    """
+    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        raise ValueError(f"Ambiguous timestamp (no timezone): {ts}")
+    return dt.astimezone(UTC).replace(tzinfo=None)
+
 
 class IngestService:
     """
@@ -47,19 +67,14 @@ class IngestService:
     - Append-only storage
     """
 
-    def __init__(self, service_id: str | None = None):
+    def __init__(self, service_id: Optional[str] = None):
         """
-        Initialize ingestion service.
-
-        CONSTITUTIONAL REQUIREMENT: service_id is IMMUTABLE.
-        - Set once at service startup
-        - NOT configurable per request
-        - Ideally derived from deployment identity
-
-        Args:
-            service_id: Static ingestion service identifier for CHAIN_SEAL.
-                       If not provided, reads from INGESTION_SERVICE_ID env var.
-                       Defaults to "default-ingest-01" if neither provided.
+        Freeze and record the ingestion service identifier used for CHAIN_SEAL operations.
+        
+        If provided, the given service_id becomes the immutable identifier for the service; otherwise the value is read from the INGESTION_SERVICE_ID environment variable and falls back to "default-ingest-01". This identifier is persisted on the instance and must not change for the lifetime of the process because CHAIN_SEAL integrity depends on a stable service identity.
+        
+        Parameters:
+            service_id (Optional[str]): Static ingestion service identifier for CHAIN_SEAL. If omitted, the environment variable INGESTION_SERVICE_ID is used, with a final fallback of "default-ingest-01".
         """
         # Freeze service identity at startup
         if service_id:
@@ -80,25 +95,25 @@ class IngestService:
 
     def start_session(
         self,
-        session_id_str: str | None = None,
+        session_id_str: Optional[str] = None,
         authority: str = "server",
-        agent_name: str | None = None,
-        user_id: int | None = None,
+        agent_name: Optional[str] = None,
+        user_id: Optional[int] = None,
     ) -> str:
         """
-        Start a new session with specified authority.
-
-        Args:
-            session_id_str: UUID string from SDK (optional, will generate if not provided)
-            authority: "server" or "sdk"
-            agent_name: Optional agent identifier
-            user_id: Optional user ID for legacy compatibility
-
+        Start a new ingestion session and persist it to the database.
+        
+        Parameters:
+            session_id_str (Optional[str]): Optional UUID string to use for the session; a new UUID is generated if not provided.
+            authority (str): Either "server" or "sdk", determining the session's ChainAuthority and whether the ingestion service id is recorded.
+            agent_name (Optional[str]): Optional agent identifier associated with the session.
+            user_id (Optional[int]): Optional legacy user identifier.
+        
         Returns:
-            session_id as string (UUID)
-
+            str: The created session's UUID string.
+        
         Raises:
-            ValueError: If authority is invalid
+            ValueError: If `authority` is not "server" or "sdk".
         """
         # Validate authority
         if authority not in ["server", "sdk"]:
@@ -122,6 +137,7 @@ class IngestService:
                 agent_name=agent_name,
                 user_id=user_id,
                 ingestion_service_id=self.service_id if authority == "server" else None,
+                is_replay=False,
             )
 
             db.add(session)
@@ -134,34 +150,40 @@ class IngestService:
             db.close()
 
     def append_events(
-        self, session_id: str, events: list[dict[str, Any]]
+        self,
+        session_id: str,
+        events: list[dict[str, Any]],
+        db: Optional[DBSession] = None,
     ) -> dict[str, Any]:
         """
-        Append events to session with constitutional validation.
-
-        CRITICAL OPERATIONS:
-        1. Server-side hash recomputation (ignore SDK hashes)
-        2. Strict sequence validation (hard rejection)
-        3. Atomic commit (all or none)
-
-        Args:
-            session_id: Session UUID string
-            events: List of event dictionaries from SDK
-
+        Append a batch of events to a session with constitutional validation and atomic commit.
+        
+        Performs server-side payload and event hash recomputation, enforces strict in-order sequence validation (hard rejection for gaps/duplicates), and persists all events atomically when the service owns the transaction.
+        
+        Parameters:
+        	db (Optional[DBSession]): External DB session to use for the operation. If provided, the caller retains transaction control and this method will not commit or close the session; if omitted, the method opens, commits, and closes its own DB session.
+        
         Returns:
-            dict with 'status', 'accepted_count', 'final_hash'
-
+        	dict: {
+        		'status': 'success',
+        		'accepted_count': int,         # number of events accepted
+        		'final_hash': str,            # event_hash of the last appended event (or genesis hash if none)
+        		'committed_events': list[dict] # canonical representations of committed events for downstream consumers
+        	}
+        
         Raises:
-            SequenceViolation: On sequence gaps/duplicates
-            ValueError: On validation failures
+        	SequenceViolation: If event sequence validation fails (gaps or duplicates).
+        	ValueError: On validation errors (e.g., missing/invalid session, inactive session) or database integrity errors.
         """
-        db = SessionLocal()
+        owns_session = db is None
+        if owns_session:
+            db = SessionLocal()
         try:
             # CRITICAL: Acquire row-level lock to prevent race conditions
             # FOR UPDATE ensures last_seq cannot change between validation and insert
             session = (
                 db.query(Session)
-                .filter(Session.session_id_str == uuid.UUID(session_id))
+                .filter(Session.session_id_str == session_id)
                 .with_for_update()
                 .first()
             )
@@ -175,10 +197,11 @@ class IngestService:
                 )
 
             # Validate sequence continuity (session is locked, no races possible)
-            self._validate_sequence(db, session, events)
+            self._validate_sequence(db, session, events, owns_session=owns_session)
 
             # Recompute hashes and store events
             stored_events = []
+            committed_events = []  # Canonical representations for PolicyEngine
             prev_hash = self._get_last_event_hash(db, session)
 
             for event_data in events:
@@ -201,29 +224,43 @@ class IngestService:
                 # Compute event hash
                 event_hash = verifier_core.compute_event_hash(event_envelope)
 
+                # Canonical payload
+                payload_canonical = verifier_core.jcs.canonicalize(payload).decode(
+                    "utf-8"
+                )
+
                 # Store in database
                 event_chain = EventChain(
                     event_id=uuid.UUID(event_envelope["event_id"]),
                     session_id=session.id,
+                    session_id_str=session.session_id_str,
                     sequence_number=event_envelope["sequence_number"],
-                    timestamp_wall=datetime.fromisoformat(
-                        event_envelope["timestamp_wall"].replace("Z", "+00:00")
-                    ),
+                    timestamp_wall=_parse_wall_timestamp(event_envelope["timestamp_wall"]),
                     timestamp_monotonic=event_data.get("timestamp_monotonic", 0),
                     event_type=event_envelope["event_type"],
                     source_sdk_ver=event_data.get("source_sdk_ver"),
                     schema_ver=event_data.get("schema_ver", "v0.6"),
-                    payload_canonical=verifier_core.jcs.canonicalize(payload).decode(
-                        "utf-8"
-                    ),
+                    payload_canonical=payload_canonical,
                     payload_hash=payload_hash,
-                    payload_jsonb=payload,
                     prev_event_hash=prev_hash,
                     event_hash=event_hash,
+                    chain_authority=session.chain_authority,
                 )
 
                 db.add(event_chain)
                 stored_events.append(event_chain)
+
+                # Build canonical committed event for downstream consumers
+                committed_events.append({
+                    "event_id": str(event_envelope["event_id"]),
+                    "session_id": session_id,
+                    "sequence_number": event_envelope["sequence_number"],
+                    "event_type": event_envelope["event_type"],
+                    "payload_canonical": payload_canonical,
+                    "payload_hash": payload_hash,
+                    "event_hash": event_hash,
+                    "chain_authority": str(session.chain_authority),
+                })
 
                 # Update for next iteration
                 prev_hash = event_hash
@@ -237,13 +274,15 @@ class IngestService:
                     # SQLAlchemy Column at runtime holds int, type checker sees Column[int]
                     session.total_drops = current_drops + dropped_count
 
-            # Atomic commit
-            db.commit()
+            # Commit only if we own the session
+            if owns_session:
+                db.commit()
 
             return {
                 "status": "success",
                 "accepted_count": len(events),
                 "final_hash": prev_hash,
+                "committed_events": committed_events,
             }
 
         except IntegrityError as e:
@@ -251,7 +290,8 @@ class IngestService:
             raise ValueError(f"Database integrity error: {e}")
 
         finally:
-            db.close()
+            if owns_session:
+                db.close()
 
     def seal_session(self, session_id: str) -> dict[str, Any]:
         """
@@ -280,7 +320,7 @@ class IngestService:
             # Get session
             session = (
                 db.query(Session)
-                .filter(Session.session_id_str == uuid.UUID(session_id))
+                .filter(Session.session_id_str == session_id)
                 .first()
             )
 
@@ -312,7 +352,7 @@ class IngestService:
             has_session_end = (
                 db.query(EventChain)
                 .filter(
-                    EventChain.session_id == session.id,
+                    EventChain.session_id == session.session_id_str,
                     EventChain.event_type == "SESSION_END",
                 )
                 .first()
@@ -328,7 +368,7 @@ class IngestService:
             # Get final event
             final_event = (
                 db.query(EventChain)
-                .filter(EventChain.session_id == session.id)
+                .filter(EventChain.session_id == session.session_id_str)
                 .order_by(EventChain.sequence_number.desc())
                 .first()
             )
@@ -338,7 +378,7 @@ class IngestService:
 
             # Count events
             event_count = (
-                db.query(EventChain).filter(EventChain.session_id == session.id).count()
+                db.query(EventChain).filter(EventChain.session_id == session.session_id_str).count()
             )
 
             # Create seal
@@ -375,11 +415,16 @@ class IngestService:
 
     # --- Private helper methods ---
 
-    def _get_last_event_hash(self, db: DBSession, session: Session) -> str | None:
-        """Get hash of last event in session, or None if no events."""
+    def _get_last_event_hash(self, db: DBSession, session: Session) -> Optional[str]:
+        """
+        Retrieve the hash of the last event for a session.
+        
+        Returns:
+            str: `verifier_core.GENESIS_HASH` if the session has no events, otherwise the last event's hash.
+        """
         last_event = (
             db.query(EventChain)
-            .filter(EventChain.session_id == session.id)
+            .filter(EventChain.session_id == session.session_id_str)
             .order_by(EventChain.sequence_number.desc())
             .first()
         )
@@ -391,7 +436,7 @@ class IngestService:
         """Get last sequence number in session, or -1 if no events."""
         last_event = (
             db.query(EventChain)
-            .filter(EventChain.session_id == session.id)
+            .filter(EventChain.session_id == session.session_id_str)
             .order_by(EventChain.sequence_number.desc())
             .first()
         )
@@ -400,7 +445,11 @@ class IngestService:
         return int(last_event.sequence_number) if last_event else -1
 
     def _validate_sequence(
-        self, db: DBSession, session: Session, events: list[dict[str, Any]]
+        self,
+        db: DBSession,
+        session: Session,
+        events: list[dict[str, Any]],
+        owns_session: bool = True,
     ) -> None:
         """
         Validate sequence continuity with HARD REJECTION RULES.
@@ -432,6 +481,7 @@ class IngestService:
                     dropped_count=0,
                     first_missing_seq=seq,
                     last_missing_seq=seq,
+                    owns_session=owns_session,
                 )
                 raise SequenceViolation(
                     f"Duplicate sequence: expected {expected}, got {seq}"
@@ -446,6 +496,7 @@ class IngestService:
                     dropped_count=gap_size,
                     first_missing_seq=expected,
                     last_missing_seq=seq - 1,
+                    owns_session=owns_session,
                 )
                 raise SequenceViolation(
                     f"Sequence gap: expected {expected}, got {seq}. Gap size: {gap_size}"
@@ -460,18 +511,20 @@ class IngestService:
         session: Session,
         reason: str,
         dropped_count: int,
-        first_missing_seq: int | None = None,
-        last_missing_seq: int | None = None,
+        first_missing_seq: Optional[int] = None,
+        last_missing_seq: Optional[int] = None,
+        owns_session: bool = True,
     ) -> None:
         """
         Emit LOG_DROP meta-event and increment session drop counter.
 
         CONSTITUTIONAL REQUIREMENT: Record sequence ranges for forensic traceability.
 
-        AUDIT GUARANTEE: This function commits immediately to ensure LOG_DROP is
-        persisted even when the batch is subsequently rejected via SequenceViolation.
-        This is INTENTIONAL for audit integrity - we must record WHY a batch was
-        rejected, not just silently discard it.
+        TRANSACTION BEHAVIOR:
+        - When owns_session=True: commits immediately to ensure LOG_DROP is
+          persisted even when the batch is subsequently rejected.
+        - When owns_session=False: adds LOG_DROP to caller's session without
+          committing. Caller is responsible for transaction control.
 
         The session row lock (acquired via with_for_update() in append_events)
         prevents race conditions during concurrent writes.
@@ -483,6 +536,7 @@ class IngestService:
             dropped_count: Number of events dropped
             first_missing_seq: First sequence number in gap (if known)
             last_missing_seq: Last sequence number in gap (if known)
+            owns_session: If True, commit immediately. If False, caller commits.
         """
         # Increment session drop counter
         # Cast Column to int and back for type checker
@@ -507,7 +561,7 @@ class IngestService:
         prev_hash = self._get_last_event_hash(db, session)
 
         # Compute single timestamp for consistency
-        now_ts = datetime.now(UTC)
+        now_ts = datetime.now(UTC).replace(microsecond=0)
         timestamp_iso = now_ts.isoformat().replace("+00:00", "Z")
 
         event_envelope = {
@@ -525,9 +579,9 @@ class IngestService:
         # Store LOG_DROP event
         log_drop_event = EventChain(
             event_id=uuid.UUID(str(event_envelope["event_id"])),
-            session_id=session.id,
+            session_id=session.session_id_str,
             sequence_number=next_seq,
-            timestamp_wall=now_ts,
+            timestamp_wall=now_ts.replace(tzinfo=None),
             timestamp_monotonic=0,  # Not critical for LOG_DROP
             event_type="LOG_DROP",
             source_sdk_ver="ingestion-service",
@@ -536,10 +590,13 @@ class IngestService:
                 "utf-8"
             ),
             payload_hash=payload_hash,
-            payload_jsonb=log_drop_payload,
             prev_event_hash=prev_hash,
             event_hash=event_hash,
+            chain_authority=session.chain_authority,
         )
 
         db.add(log_drop_event)
-        db.commit()
+        # CRITICAL: Only commit if we own the session.
+        # When owns_session=False, caller controls transaction boundary.
+        if owns_session:
+            db.commit()

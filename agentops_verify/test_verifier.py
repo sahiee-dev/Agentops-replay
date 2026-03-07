@@ -25,7 +25,21 @@ from agentops_sdk import jcs
 
 
 def make_sealed_chain(count: int = 3, session_id: str = "test-session") -> List[Dict[str, Any]]:
-    """Create a valid sealed event chain for testing."""
+    """
+    Generate a deterministic sealed event chain for use in tests.
+    
+    Each returned event is a dictionary representing a sealed event and includes the following keys:
+    `event_id`, `session_id`, `sequence_number`, `timestamp_wall`, `event_type`, `payload_hash`,
+    `prev_event_hash`, `event_hash`, `chain_authority`, and `payload`. Events are linked by `prev_event_hash`
+    so that each event (after the first) references the previous event's `event_hash`.
+    
+    Parameters:
+        count (int): Number of events to generate (default: 3).
+        session_id (str): Session identifier to embed in every event (default: "test-session").
+    
+    Returns:
+        List[Dict[str, Any]]: A list of `count` sealed event dictionaries in chain order (first to last).
+    """
     events = []
     prev_hash = None
     

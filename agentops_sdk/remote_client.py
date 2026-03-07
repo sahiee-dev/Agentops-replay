@@ -5,7 +5,7 @@ Extends existing SDK with SERVER authority mode via HTTP transport.
 """
 
 import os
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -27,8 +27,8 @@ class RemoteAgentOpsClient(AgentOpsClient):
 
     def __init__(
         self,
-        server_url: str | None = None,
-        api_key: str | None = None,
+        server_url: Optional[str] = None,
+        api_key: Optional[str] = None,
         max_retries: int = 5,
         retry_min_wait: float = 1.0,
         retry_max_wait: float = 10.0,
@@ -75,10 +75,10 @@ class RemoteAgentOpsClient(AgentOpsClient):
             self.http_client.headers["Authorization"] = f"Bearer {self.api_key}"
 
         # Remote session ID (from server)
-        self.remote_session_id: str | None = None
+        self.remote_session_id: Optional[str] = None
 
         # Pending events to send
-        self.pending_events: list[dict[str, Any]] = []
+        self.pending_events: List[Dict[str, Any]] = []
 
         # Track consecutive failures for kill-switch
         self.consecutive_failures = 0
@@ -88,7 +88,7 @@ class RemoteAgentOpsClient(AgentOpsClient):
         self.server_offline = False
         self.total_dropped_events = 0
 
-    def start_session(self, agent_id: str, tags: list[str] = None):
+    def start_session(self, agent_id: str, tags: Optional[List[str]] = None):
         """
         Start a remote session on the server and fall back to local buffering if the server is unreachable.
         
@@ -121,25 +121,26 @@ class RemoteAgentOpsClient(AgentOpsClient):
         # Always call parent to maintain local chain
         super().start_session(agent_id, tags)
 
-    def record(self, event_type: EventType, payload: dict[str, Any]):
+    def record(self, event_type: EventType, payload: Dict[str, Any]):
         """
         Record an event locally and queue it for remote batching and transmission.
         
         This delegates to the base implementation to preserve the local buffer, converts the most recently buffered event into the server-compatible event shape, and appends it to the local batch queue. If the client is marked offline the event is only recorded locally. When the queued batch reaches the configured batch size this method triggers a flush to the remote server.
         
         Parameters:
-            event_type (EventType): Category of the event being recorded; used for the local buffer entry and included in the queued server event.
-            payload (dict[str, Any]): Event payload to record and include in the queued server event.
+            event_type (EventType): Category of the event being recorded.
+            payload (dict[str, Any]): Event payload.
+            force (bool): If True, bypass buffer capacity checks in the base client.
         """
         # Always call parent to maintain local buffer
-        super().record(event_type, payload)
+        super().record(event_type, payload, force=force)
 
         # Skip remote send if server is offline
         if self.server_offline:
             return
 
         # Convert last buffered event to server format
-        last_proposal = self.buffer.events[-1] if self.buffer.events else None
+        last_proposal = self.buffer.queue[-1] if self.buffer.queue else None
         if last_proposal:
             server_event = {
                 "event_id": last_proposal.event_id,
