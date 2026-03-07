@@ -8,6 +8,16 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agentops_sdk import jcs
 
 def seal_session(input_path, output_path):
+    """
+    Seal a session of events by validating each event's payload hash, computing chained event hashes, and writing the sealed events to output_path.
+    
+    Parameters:
+        input_path (str): Filesystem path to a JSON file containing an array of unsealed events.
+        output_path (str): Filesystem path where the sealed session (JSON array) will be written.
+    
+    Raises:
+        ValueError: If a recomputed payload hash does not match an event's declared `payload_hash`.
+    """
     print(f"Reading unsealed events from {input_path}...")
     with open(input_path, 'r') as f:
         events = json.load(f)
