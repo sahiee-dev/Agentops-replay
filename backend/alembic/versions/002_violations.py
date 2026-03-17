@@ -10,6 +10,7 @@ Revises: 001_event_chains
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers
@@ -25,7 +26,7 @@ def upgrade() -> None:
         sa.Column("id", sa.String(), primary_key=True),
         sa.Column(
             "session_id",
-            sa.String(36),
+            postgresql.UUID(as_uuid=True),
             sa.ForeignKey("sessions.session_id_str"),
             nullable=False,
         ),
