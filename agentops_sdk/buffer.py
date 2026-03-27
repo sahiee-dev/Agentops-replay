@@ -1,5 +1,5 @@
 """
-agentops_sdk/buffer.py - RingBuffer with LOG_DROP support
+agentops_sdk/buffer.py - RingBuffer with LOG_DROP Support
 """
 
 from collections import deque
