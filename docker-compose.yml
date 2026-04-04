@@ -68,9 +68,17 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://agentops:agentops_secret@postgres:5432/agentops_replay
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: agentops
+      POSTGRES_PASSWORD: agentops_secret
+      POSTGRES_DB: agentops_replay
       REDIS_URL: redis://redis:6379
       SECRET_KEY: development-secret-key-change-in-production
       ENVIRONMENT: development
+    volumes:
+      - ./backend:/app
+      - ./verifier:/app/verifier
     ports:
       - "8000:8000"
     healthcheck:
@@ -96,10 +104,18 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://agentops:agentops_secret@postgres:5432/agentops_replay
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: agentops
+      POSTGRES_PASSWORD: agentops_secret
+      POSTGRES_DB: agentops_replay
       REDIS_URL: redis://redis:6379
       SECRET_KEY: development-secret-key-change-in-production
       ENVIRONMENT: development
       WORKER_CONSUMER_NAME: worker-01
+    volumes:
+      - ./backend:/app
+      - ./verifier:/app/verifier
     command: ["python", "-m", "app.worker.main"]
     healthcheck:
       test: ["CMD", "test", "-f", "/tmp/worker-heartbeat"]
