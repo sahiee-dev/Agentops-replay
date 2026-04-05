@@ -69,7 +69,7 @@ CHAIN_SEAL will include cryptographic signature:
   "seal_timestamp": "...",
   "session_digest": "...",
   "session_id": "...",
-  "spec_version": "v1.0"
+  "spec_version": "v1.1"
 }
 ```
 
