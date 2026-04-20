@@ -8,7 +8,6 @@ Constraints:
    - No NaN/Infinity.
    - Integers in range [-2^63, 2^63-1] usually, but JCS treats valid JSON numbers.
    - Formatting: no leading zeros, no "+", lowercase "e".
-   
 3. Objects: Keys sorted lexicographically by UCS-2 code units.
 4. Arrays: Order preserved.
 """
