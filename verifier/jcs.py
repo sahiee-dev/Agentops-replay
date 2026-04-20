@@ -1,7 +1,6 @@
 """
 jcs.py - Strict JSON Canonicalization Scheme (RFC 8785) Implementation
 Critical for AgentOps Replay verifiability.
-
 Constraints:
 1. Strings: UTF-8, NFC Only.
 2. Numbers: IEEE-754 doubles.
