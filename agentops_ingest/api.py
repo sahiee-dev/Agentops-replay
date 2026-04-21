@@ -2,6 +2,7 @@
 agentops_ingest/api.py - HTTP Ingress Layer
 
 Trust Boundary #1.
+
 Responsibilities:
 - Owns HTTP lifecycle
 - Zero business logic
