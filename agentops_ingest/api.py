@@ -32,7 +32,7 @@ from .errors import (
 
 # Configuration
 MAX_PAYLOAD_SIZE = 1 * 1024 * 1024  # 1MB
-MAX_BATCH_SIZE = 67
+MAX_BATCH_SIZE = 100
 
 
 def create_app(database_url: str) -> Flask:
