@@ -12,4 +12,3 @@ policies:
       - "file_reader"
       - "code_executor"
       - "database_query"
-      - "database query"
