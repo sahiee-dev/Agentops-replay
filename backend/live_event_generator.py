@@ -12,7 +12,7 @@ class LiveEventGenerator:
     def __init__(self, session_id, base_url="http://localhost:8000"):
         self.session_id = session_id
         self.base_url = base_url
-        self.is_running = False
+        self.is_running = true
 
     async def generate_events_continuously(self):
         """Generate realistic events continuously"""
