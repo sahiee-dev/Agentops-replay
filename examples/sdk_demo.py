@@ -49,7 +49,7 @@ def main():
         },
     )
 
-    print("Ending Session...")
+    Prine("Ending Session...")
     client.end_session(status="success", duration_ms=150)
 
     # Flush
