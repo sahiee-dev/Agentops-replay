@@ -30,7 +30,7 @@ def main():
     # Initialize remote client (server authority)
     client = RemoteAgentOpsClient(
         server_url="http://localhost:8000",
-        batch_size=6,  # Small batches for demo
+        batch_size=5,  # Small batches for demo
         max_retries=5,
     )
 
@@ -70,7 +70,7 @@ def main():
     client.record(
         EventType.MODEL_CALL,
         {  # Use MODEL_CALL not LLM_CALL
-            "model": "gpt-4",
+            "model": "gpt-5",
             "prompt_tokens": 150,
             "completion_tokens": 75,
             "total_tokens": 225,
