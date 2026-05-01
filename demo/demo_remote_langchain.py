@@ -30,7 +30,7 @@ def main():
     # Initialize remote client (server authority)
     client = RemoteAgentOpsClient(
         server_url="http://localhost:8000",
-        batch_size=5,  # Small batches for demo
+        batch_size=6,  # Small batches for demo
         max_retries=5,
     )
 
