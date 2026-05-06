@@ -1,453 +1,457 @@
 #!/usr/bin/env python3
 """
-agentops_verify.py - Standalone Verifier for AgentOps Replay logs.
-Strictly implements checks defined in EVENT_LOG_SPEC.md v0.5.
+agentops_verify.py — Standalone Verifier for AgentOps Replay logs.
+Implements TRD v2.0 sections 3.1–3.5.
 
 Usage:
-  python3 agentops_verify.py <session.jsonl> --format json
+  python3 agentops_verify.py <session.jsonl> [--format {text,json}]
+
+Exit codes:
+  0  PASS — chain is valid
+  1  FAIL — chain has integrity violations
+  2  ERROR — file not found, permission error, or malformed JSONL
 """
 
 import argparse
 import hashlib
 import json
 import sys
+import os
 from typing import Any
 
-import jcs  # Local module
+# Canonical JCS — single source of truth
+sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+from jcs import canonicalize as jcs_canonicalize
 
-# --- Constants ---
-SPEC_VERSION = "v0.6"
-SIGNED_FIELDS = [
-    "event_id",
-    "session_id",
-    "sequence_number",
-    "timestamp_wall",
-    "event_type",
-    "payload_hash",
-    "prev_event_hash",
-]
+VERIFIER_VERSION = "1.0"
+GENESIS_HASH = "0" * 64
 
+ALLOWED_EVENT_TYPES = {
+    "SESSION_START", "SESSION_END",
+    "LLM_CALL", "LLM_RESPONSE",
+    "TOOL_CALL", "TOOL_RESULT", "TOOL_ERROR",
+    "LOG_DROP",
+    "CHAIN_SEAL", "CHAIN_BROKEN", "REDACTION", "FORENSIC_FREEZE",
+}
 
-class VerificationError(Exception):
-    def __init__(self, code: str, message: str, context: dict[str, Any] | None = None):
-        self.code = code
-        self.message = message
-        self.context = context or {}
-
-
-def sha256(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
+REQUIRED_FIELDS = {
+    "seq", "event_type", "session_id", "timestamp",
+    "payload", "prev_hash", "event_hash",
+}
 
 
-def classify_evidence(authority: str, sealed: bool, complete: bool) -> str:
-    """Classify session as authoritative, partial authoritative, or non-authoritative evidence."""
-    if authority == "server":
-        if sealed and complete:
-            return "AUTHORITATIVE_EVIDENCE"
-        else:
-            # Unsealed or incomplete server sessions are still valuable but not compliance-grade
-            return "PARTIAL_AUTHORITATIVE_EVIDENCE"
-    elif authority == "sdk":
-        return "NON_AUTHORITATIVE_EVIDENCE"
-    else:
-        return "UNKNOWN_EVIDENCE"
+# ---------------------------------------------------------------------------
+# Check 1: Structural validity
+# ---------------------------------------------------------------------------
 
+def check_structural_validity(events: list[dict]) -> dict:
+    errors = []
+    for event in events:
+        seq = event.get("seq", "?")
+        for field in REQUIRED_FIELDS:
+            if field not in event:
+                errors.append(f"seq={seq}: Missing required field '{field}'")
+        if "seq" in event and not isinstance(event["seq"], int):
+            errors.append(f"seq={seq}: 'seq' must be a positive integer")
+        if "seq" in event and isinstance(event["seq"], int) and event["seq"] < 1:
+            errors.append(f"seq={seq}: 'seq' must be >= 1")
+        if "event_type" in event and event["event_type"] not in ALLOWED_EVENT_TYPES:
+            errors.append(f"seq={seq}: Unknown event_type '{event['event_type']}'")
+        if "session_id" in event and not isinstance(event["session_id"], str):
+            errors.append(f"seq={seq}: 'session_id' must be a string")
+        if "payload" in event and not isinstance(event["payload"], dict):
+            errors.append(f"seq={seq}: 'payload' must be a JSON object")
+        if "prev_hash" in event:
+            ph = event["prev_hash"]
+            if not (isinstance(ph, str) and len(ph) == 64 and all(c in "0123456789abcdef" for c in ph)):
+                errors.append(f"seq={seq}: 'prev_hash' must be 64-char lowercase hex")
+        if "event_hash" in event:
+            eh = event["event_hash"]
+            if not (isinstance(eh, str) and len(eh) == 64 and all(c in "0123456789abcdef" for c in eh)):
+                errors.append(f"seq={seq}: 'event_hash' must be 64-char lowercase hex")
 
-def verify_session(
-    events: list[dict[str, Any]], policy: dict[str, Any] | None = None
-) -> dict[str, Any]:
-    """
-    Core verification pipeline.
-    Returns structured report.
-    """
-    report: dict[str, Any] = {
-        "session_id": None,
-        "status": "PASS",
-        "violations": [],
-        "sealed": False,
-        "authority": "unknown",
-        "evidence_class": "UNKNOWN_EVIDENCE",
-        "partial_reasons": [],  # Why session is PARTIAL_AUTHORITATIVE
-        "replay_fingerprint": None,
-        "event_count": len(events),
-        "complete": False,
-        "total_drops": 0,
-        "partial": False,
+    return {
+        "status": "PASS" if not errors else "FAIL",
+        "events_checked": len(events),
+        "errors": errors,
     }
 
-    if not events:
-        report["status"] = "FAIL"
-        report["violations"].append(
-            {"type": "EMPTY_LOG", "message": "Log file is empty"}
-        )
-        return report
 
-    # 0. SINGLE AUTHORITY CHECK (Spec v0.6)
-    authorities = set()
-    for event in events:
-        if event.get("chain_authority"):
-            authorities.add(event["chain_authority"])
+# ---------------------------------------------------------------------------
+# Check 2: Sequence integrity
+# ---------------------------------------------------------------------------
 
-    if len(authorities) > 1:
-        report["status"] = "FAIL"
-        report["violations"].append(
-            {
-                "type": "MIXED_AUTHORITY",
-                "message": f"Session has mixed authorities: {authorities}. Spec v0.6 requires single authority per session.",
-            }
-        )
-        return report
+def check_sequence_integrity(events: list[dict]) -> dict:
+    errors = []
+    gaps = []
+    duplicates = []
 
-    # 1. Structural & Sequence Checks
-    prev_hash = None
-    expected_seq = 0
-    calculated_chain_hash = None
+    sorted_events = sorted(events, key=lambda e: e.get("seq", 0))
+    seqs = [e.get("seq") for e in sorted_events]
 
-    session_id = events[0].get("session_id")
-    report["session_id"] = session_id
+    # All must share the same session_id
+    session_ids = set(e.get("session_id") for e in events)
+    if len(session_ids) > 1:
+        errors.append(f"Multiple session_ids found: {session_ids}")
 
-    for i, event in enumerate(events):
+    # Check for duplicates
+    seen = {}
+    for s in seqs:
+        if s in seen:
+            duplicates.append(s)
+        seen[s] = True
+
+    # First seq must be 1
+    first_seq = seqs[0] if seqs else None
+    if first_seq != 1:
+        errors.append(f"First seq must be 1, got {first_seq}")
+
+    # Each subsequent seq must be previous + 1
+    for i in range(1, len(seqs)):
+        expected = seqs[i - 1] + 1
+        if seqs[i] != expected:
+            gap_msg = f"Expected seq={expected}, found seq={seqs[i]}"
+            gaps.append(gap_msg)
+            errors.append(gap_msg)
+
+    if duplicates:
+        errors.append(f"Duplicate seq values: {duplicates}")
+
+    return {
+        "status": "PASS" if not errors else "FAIL",
+        "first_seq": first_seq,
+        "last_seq": seqs[-1] if seqs else None,
+        "gaps": gaps,
+        "duplicates": duplicates,
+        "errors": errors,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Check 3: Hash chain integrity
+# ---------------------------------------------------------------------------
+
+def _compute_event_hash(event: dict) -> str:
+    event_for_hash = {k: v for k, v in event.items() if k != "event_hash"}
+    canonical_bytes = jcs_canonicalize(event_for_hash)
+    return hashlib.sha256(canonical_bytes).hexdigest()
+
+
+def check_hash_chain_integrity(events: list[dict]) -> dict:
+    errors = []
+    sorted_events = sorted(events, key=lambda e: e.get("seq", 0))
+
+    # FIX 3: Validate prev_hash of seq=1 equals GENESIS_HASH
+    first_events = [e for e in sorted_events if e.get("seq") == 1]
+    if first_events:
+        first_event = first_events[0]
+        if first_event.get("prev_hash") != GENESIS_HASH:
+            errors.append(
+                f"seq=1: prev_hash must be '{'0' * 64}' (genesis), "
+                f"got '{first_event.get('prev_hash')}'"
+            )
+
+    prev_event_hash: str | None = None
+
+    for event in sorted_events:
+        seq = event.get("seq", "?")
+
+        # Recompute event_hash
         try:
-            # A. Structure
-            _validate_envelope(event, i)
-
-            # Check Session Consistency
-            if event.get("session_id") != session_id:
-                raise VerificationError(
-                    "SESSION_MISMATCH",
-                    f"Event session_id {event.get('session_id')} does not match session {session_id}",
-                )
-
-            # B. Canonicalization & Payload Hash
-            payload = event.get("payload")
-            # Note: In a real JSONL, payload is likely a dictionary loaded from JSON.
-            # We canonicalize it back to bytes to verify hash.
-            canonical_payload = jcs.canonicalize(payload)
-            expected_payload_hash = sha256(canonical_payload)
-
-            if event["payload_hash"] != expected_payload_hash:
-                raise VerificationError(
-                    "PAYLOAD_HASH_MISMATCH",
-                    "Payload hash mismatch",
-                    {
-                        "expected": expected_payload_hash,
-                        "actual": event["payload_hash"],
-                    },
-                )
-
-            # C. Sequence Monotonicity
-            if event["sequence_number"] != expected_seq:
-                raise VerificationError(
-                    "SEQUENCE_GAP",
-                    f"Expected sequence {expected_seq}, got {event['sequence_number']}",
-                )
-
-            # D. Chain Integrity
-            # Check prev_event_hash
-            if i == 0:
-                if event["prev_event_hash"] is not None:
-                    raise VerificationError(
-                        "INVALID_GENESIS", "First event must have null prev_event_hash"
-                    )
-            elif event["prev_event_hash"] != prev_hash:
-                raise VerificationError(
-                    "CHAIN_BROKEN",
-                    "prev_event_hash does not match previous event_hash",
-                    {"expected": prev_hash, "actual": event["prev_event_hash"]},
-                )
-
-            # CHECKPOINT: Update authority if provided (last win)
-            if "chain_authority" in event:
-                report["authority"] = event["chain_authority"]
-
-            # Calculate current event hash
-            # Create object with ONLY signed fields
-            signed_obj = {k: event[k] for k in SIGNED_FIELDS if k in event}
-            # Spec v0.5: All signed fields must be present (prev_event_hash can be null but must exist)
-            for f in SIGNED_FIELDS:
-                if f not in event:
-                    raise VerificationError(
-                        "MISSING_SIGNED_FIELD", f"Required signed field missing: {f}"
-                    )
-
-            canonical_envelope = jcs.canonicalize(signed_obj)
-            calculated_hash = sha256(canonical_envelope)
-
-            if event["event_hash"] != calculated_hash:
-                raise VerificationError(
-                    "EVENT_HASH_MISMATCH",
-                    "Event hash signature invalid",
-                    {"expected": calculated_hash, "actual": event["event_hash"]},
-                )
-
-            # Prepare for next iteration
-            prev_hash = calculated_hash
-            expected_seq += 1
-            calculated_chain_hash = calculated_hash
-
-            # E. Check for Seal and Validate Metadata (Spec v0.6)
-            if event["event_type"] == "CHAIN_SEAL":
-                # Validate server authority CHAIN_SEAL has required metadata
-                if event.get("chain_authority") == "server":
-                    payload = event.get("payload", {})
-                    required_fields = [
-                        "ingestion_service_id",
-                        "seal_timestamp",
-                        "session_digest",
-                    ]
-                    if all(field in payload for field in required_fields):
-                        report["sealed"] = True
-                    else:
-                        missing = [f for f in required_fields if f not in payload]
-                        raise VerificationError(
-                            "INVALID_SEAL",
-                            "Server CHAIN_SEAL missing required metadata",
-                            {"missing_fields": missing},
-                        )
-                elif event.get("chain_authority") == "sdk":
-                    # SDK CHAIN_SEAL is valid for local authority mode
-                    report["sealed"] = True
-                else:
-                    raise VerificationError(
-                        "INVALID_SEAL",
-                        f"CHAIN_SEAL authority '{event.get('chain_authority')}' is not valid (must be 'server' or 'sdk')",
-                    )
-
-            # F. Track LOG_DROP events
-            # F. Track LOG_DROP events
-            if event["event_type"] == "LOG_DROP":
-                # Always degrade evidence class if LOG_DROP is present
-                report["partial_reasons"].append("LOG_DROP_PRESENT")
-                report["partial"] = True
-
-                drop_payload = event.get("payload", {})
-                dropped_count = drop_payload.get("dropped_count")
-
-                if isinstance(dropped_count, int) and dropped_count > 0:
-                    report["total_drops"] += dropped_count
-                else:
-                    # Invalid/missing count still degrades evidence, but we log warning
-                    report["warnings"] = report.get("warnings", [])
-                    report["warnings"].append(
-                        {
-                            "type": "INVALID_DROP_COUNT",
-                            "message": f"LOG_DROP at seq {i} has invalid dropped_count: {dropped_count}",
-                        }
-                    )
-
-        except VerificationError as e:
-            report["status"] = "FAIL"
-            report["violations"].append(
-                {
-                    "type": e.code,
-                    "message": e.message,
-                    "event_sequence": i,
-                    "event_id": event.get("event_id"),
-                    "context": e.context,
-                }
-            )
-            # Fail-fast?
-            # User request said: "Fail-Fast: Verification pipeline stops at the first failure."
-            break
+            expected_hash = _compute_event_hash(event)
         except Exception as e:
-            report["status"] = "FAIL"
-            report["violations"].append(
-                {"type": "INTERNAL_ERROR", "message": str(e), "event_sequence": i}
+            errors.append(f"seq={seq}: Failed to compute hash: {e}")
+            break
+
+        stored_hash = event.get("event_hash")
+        if stored_hash != expected_hash:
+            errors.append(
+                f"seq={seq} ({event.get('event_type', '?')}): "
+                f"event_hash mismatch — expected {expected_hash}, found {stored_hash}"
             )
             break
 
-    # Determine session completeness and partial reasons
-    has_session_end = any(e.get("event_type") == "SESSION_END" for e in events)
+        # Verify chain linkage
+        if prev_event_hash is not None:
+            if event.get("prev_hash") != prev_event_hash:
+                errors.append(
+                    f"seq={seq}: prev_hash does not match previous event_hash — "
+                    f"expected {prev_event_hash}, found {event.get('prev_hash')}"
+                )
+                break
 
-    # Track why session might be partial
-    if report["authority"] == "server":
-        if not report["sealed"]:
-            report["partial_reasons"].append("UNSEALED_SESSION")
-        if not has_session_end:
-            report["partial_reasons"].append("MISSING_SESSION_END")
-        if report["total_drops"] > 0:
-            if "LOG_DROP_PRESENT" not in report["partial_reasons"]:
-                report["partial_reasons"].append("LOG_DROP_PRESENT")
-        if report["status"] == "FAIL":
-            report["partial_reasons"].append("CHAIN_VALIDATION_FAILED")
+        prev_event_hash = stored_hash
 
-    report["complete"] = (
-        has_session_end
-        and report["status"] == "PASS"
-        and report["total_drops"] == 0
-        and not report["partial"]
-    )
+    return {
+        "status": "PASS" if not errors else "FAIL",
+        "errors": errors,
+    }
 
-    # Classify evidence
-    # Classify evidence
-    if report["status"] == "PASS":
-        evidence_class = classify_evidence(
-            authority=report["authority"],
-            sealed=report["sealed"],
-            complete=report["complete"],
-        )
+
+# ---------------------------------------------------------------------------
+# Check 4: Session completeness
+# ---------------------------------------------------------------------------
+
+def check_session_completeness(events: list[dict]) -> dict:
+    errors = []
+    sorted_events = sorted(events, key=lambda e: e.get("seq", 0))
+    event_types = [e.get("event_type") for e in sorted_events]
+
+    has_session_start = "SESSION_START" in event_types
+    has_session_end = "SESSION_END" in event_types
+    has_chain_seal = "CHAIN_SEAL" in event_types
+    log_drop_count = event_types.count("LOG_DROP")
+    chain_broken_count = event_types.count("CHAIN_BROKEN")
+
+    # Exactly one SESSION_START
+    if event_types.count("SESSION_START") != 1:
+        errors.append(f"Expected exactly 1 SESSION_START, found {event_types.count('SESSION_START')}")
+
+    # SESSION_START must have the lowest seq
+    if has_session_start:
+        start_seq = next(e["seq"] for e in sorted_events if e.get("event_type") == "SESSION_START")
+        if start_seq != sorted_events[0].get("seq"):
+            errors.append(f"SESSION_START must be at seq=1, found at seq={start_seq}")
+
+    # At least one SESSION_END or CHAIN_SEAL
+    if not has_session_end and not has_chain_seal:
+        errors.append("Session has no SESSION_END or CHAIN_SEAL")
+
+    # CHAIN_SEAL must be the absolute last event
+    if has_chain_seal:
+        last_seq = sorted_events[-1].get("seq")
+        seal_seq = next(e["seq"] for e in sorted_events if e.get("event_type") == "CHAIN_SEAL")
+        if seal_seq != last_seq:
+            errors.append(f"CHAIN_SEAL must be the last event (seq={last_seq}), found at seq={seal_seq}")
+
+    return {
+        "status": "PASS" if not errors else "FAIL",
+        "has_session_start": has_session_start,
+        "has_session_end": has_session_end,
+        "has_chain_seal": has_chain_seal,
+        "log_drop_count": log_drop_count,
+        "chain_broken_count": chain_broken_count,
+        "errors": errors,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Evidence class determination (TRD §3.5)
+# ---------------------------------------------------------------------------
+
+def determine_evidence_class(events: list[dict]) -> str:
+    has_chain_seal = any(e.get("event_type") == "CHAIN_SEAL" for e in events)
+    has_log_drop = any(e.get("event_type") == "LOG_DROP" for e in events)
+
+    if has_chain_seal and not has_log_drop:
+        return "AUTHORITATIVE_EVIDENCE"
+    elif has_chain_seal and has_log_drop:
+        return "PARTIAL_AUTHORITATIVE_EVIDENCE"
     else:
-        # Failed verification cannot be authoritative
-        evidence_class = "NON_AUTHORITATIVE_EVIDENCE"
-        if report["status"] == "FAIL":
-            report["partial_reasons"].append("VERIFICATION_FAILED")
-
-    report["evidence_class"] = evidence_class
-
-    # Policy enforcement
-    policy = policy or {}
-    if policy.get("reject_local_authority", False) and report["authority"] == "sdk":
-        report["status"] = "FAIL"
-        report["violations"].append(
-            {
-                "type": "POLICY_VIOLATION",
-                "message": "Local authority sessions are rejected by policy",
-                "evidence_class": evidence_class,
-            }
-        )
-        return report
-
-    if report["status"] == "PASS":
-        report["replay_fingerprint"] = calculated_chain_hash
-
-    return report
+        return "NON_AUTHORITATIVE_EVIDENCE"
 
 
-def _validate_envelope(event: dict[str, Any], index: int):
-    required = [
-        "event_id",
-        "session_id",
-        "sequence_number",
-        "event_type",
-        "payload_hash",
-        "event_hash",
-        "payload",
-        "schema_ver",
-    ]
-    for field in required:
-        if field not in event:
-            raise VerificationError("MISSING_FIELD", f"Missing required field: {field}")
+# ---------------------------------------------------------------------------
+# Output formatting (TRD §3.2)
+# ---------------------------------------------------------------------------
 
-    # Spec v0.6: strict schema_ver matching
-    if event["schema_ver"] not in [SPEC_VERSION, "v0.5"]:
-        raise VerificationError(
-            "SCHEMA_VERSION_MISMATCH",
-            f"Expected {SPEC_VERSION} or v0.5, got {event['schema_ver']}",
-        )
+def _fmt_check(label: str, result: dict, skipped: bool = False) -> str:
+    if skipped:
+        status = "(skipped — earlier check failed)"
+    elif result["status"] == "PASS":
+        status = "PASS"
+    else:
+        status = "FAIL"
+    return f"{label} {status}"
 
 
-def main():
-    parser = argparse.ArgumentParser(description="AgentOps Replay Verifier (Spec v0.6)")
-    parser.add_argument("file", help="Path to .jsonl log file")
-    parser.add_argument(
-        "--format", choices=["json", "text"], default="text", help="Output format"
+def print_text_output(
+    file_path: str,
+    session_id: str,
+    event_count: int,
+    evidence_class: str | None,
+    checks: dict,
+    overall: str,
+    check_results: dict,
+) -> None:
+    print("AgentOps Replay Verifier v1.0")
+    print("==============================")
+    print(f"File        : {os.path.basename(file_path)}")
+    print(f"Session ID  : {session_id}")
+    print(f"Events      : {event_count}")
+    if evidence_class:
+        print(f"Evidence    : {evidence_class}")
+    else:
+        print("Evidence    : (cannot determine — chain invalid)")
+    print()
+
+    c1 = check_results.get("structural")
+    c2 = check_results.get("sequence")
+    c3 = check_results.get("hash_chain")
+    c4 = check_results.get("completeness")
+
+    c1_status = c1["status"] if c1 else "FAIL"
+    c2_status = c2["status"] if c2 else "FAIL"
+    c3_status = c3["status"] if c3 else "FAIL"
+
+    print(f"[1/4] Structural validity ........... {c1_status}")
+    if c1 and c1["status"] == "FAIL":
+        for e in c1["errors"]:
+            print(f"      {e}")
+
+    print(f"[2/4] Sequence integrity ............. {c2_status}")
+    if c2 and c2["status"] == "FAIL":
+        for e in c2["errors"]:
+            print(f"      {e}")
+
+    print(f"[3/4] Hash chain integrity ........... {c3_status}")
+    if c3 and c3["status"] == "FAIL":
+        for e in c3["errors"]:
+            print(f"      {e}")
+
+    # Check 4 is skipped if earlier checks failed
+    earlier_failed = c1_status == "FAIL" or c2_status == "FAIL" or c3_status == "FAIL"
+    if earlier_failed:
+        print("[4/4] Session completeness .......... (skipped — earlier check failed)")
+    else:
+        c4_status = c4["status"] if c4 else "FAIL"
+        print(f"[4/4] Session completeness ........... {c4_status}")
+        if c4 and c4["status"] == "FAIL":
+            for e in c4["errors"]:
+                print(f"      {e}")
+
+    print()
+    if overall == "PASS":
+        print("Result: PASS ✅")
+    else:
+        print("Result: FAIL ❌")
+
+
+def build_json_output(
+    file_path: str,
+    session_id: str,
+    event_count: int,
+    evidence_class: str | None,
+    overall: str,
+    check_results: dict,
+    errors: list[str],
+) -> dict:
+    return {
+        "verifier_version": VERIFIER_VERSION,
+        "file": os.path.basename(file_path),
+        "session_id": session_id,
+        "event_count": event_count,
+        "evidence_class": evidence_class,
+        "result": overall,
+        "checks": {
+            "structural_validity": check_results.get("structural"),
+            "sequence_integrity": check_results.get("sequence"),
+            "hash_chain_integrity": check_results.get("hash_chain"),
+            "session_completeness": check_results.get("completeness"),
+        },
+        "errors": errors,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="AgentOps Replay Verifier v1.0"
     )
+    parser.add_argument("session_file", help="Path to JSONL session file to verify")
     parser.add_argument(
-        "--reject-local-authority",
-        action="store_true",
-        help="Reject sessions with local (SDK) authority",
+        "--format", choices=["text", "json"], default="text",
+        help="Output format (default: text)"
     )
-
     args = parser.parse_args()
 
-    events = []
-    export_metadata = None
+    # FIX 1: file/parse errors → exit code 2
     try:
-        # Try reading as full JSON first (Export format)
-        with open(args.file) as f:
-            content = f.read()
-            try:
-                data = json.loads(content)
-                if isinstance(data, dict) and "events" in data and isinstance(data["events"], list):
-                    # It is a Compliance Export
-                    events = data["events"]
-                    export_metadata = data
-                    if args.format != "json":
-                        print(f"Detected Compliance Export (Format v{data.get('export_version', 'unknown')})")
-                else:
-                    # It might be a single event or other JSON? Treat as line? 
-                    # If it's a list, maybe it's a list of events (not export format but valid JSON array)
-                    if isinstance(data, list):
-                        events = data
-                    else:
-                        # Fallback to lines if it was just one JSON object that wasn't an export
-                        # But read() consumed it.
-                        pass
-            except json.JSONDecodeError:
-                # Not a single JSON files, try JSONL
-                pass
-            
-            if not events:
-                # Try JSONL
-                events = []
-                for line in content.splitlines():
-                    if line.strip():
-                        events.append(json.loads(line))
-                        
-    except Exception as e:
-        print(
-            json.dumps(
-                {
-                    "status": "FAIL",
-                    "violations": [{"type": "LOAD_ERROR", "message": str(e)}],
-                }
-            )
-        )
-        sys.exit(1)
+        with open(args.session_file) as f:
+            raw = f.read()
+    except FileNotFoundError:
+        print(f"ERROR: File not found: {args.session_file}", file=sys.stderr)
+        sys.exit(2)
+    except PermissionError:
+        print(f"ERROR: Permission denied: {args.session_file}", file=sys.stderr)
+        sys.exit(2)
+    except OSError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(2)
 
-    policy = {"reject_local_authority": args.reject_local_authority}
-    report = verify_session(events, policy)
-    
-    # If using Export format, verify the summary matches
-    if export_metadata and report["status"] == "PASS":
-        # Meta-Verification: Does export claim match reality?
-        claimed_class = export_metadata.get("evidence_class")
-        actual_class = report["evidence_class"]
-        
-        if claimed_class != actual_class:
-            report["warnings"] = report.get("warnings", [])
-            report["warnings"].append({
-                "type": "METADATA_MISMATCH",
-                "message": f"Export claims {claimed_class} but verifier found {actual_class}"
-            })
-            # Should this fail verification? 
-            # Ideally yes, if the evidence is lying about itself.
-            # But let's keep it as warning for now unless intended otherwise.
+    events: list[dict] = []
+    try:
+        for line in raw.splitlines():
+            line = line.strip()
+            if line:
+                events.append(json.loads(line))
+    except json.JSONDecodeError as e:
+        print(f"ERROR: Malformed JSONL: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    file_path = args.session_file
+    event_count = len(events)
+    session_id = events[0].get("session_id", "unknown") if events else "unknown"
+    check_results: dict[str, dict] = {}
+    all_errors: list[str] = []
+
+    # Run checks in order; stop early if a check fails
+    c1 = check_structural_validity(events)
+    check_results["structural"] = c1
+
+    if c1["status"] == "PASS":
+        c2 = check_sequence_integrity(events)
+        check_results["sequence"] = c2
+    else:
+        all_errors.extend(c1["errors"])
+        c2 = {"status": "FAIL", "errors": ["skipped"]}
+        check_results["sequence"] = c2
+
+    if c1["status"] == "PASS" and c2["status"] == "PASS":
+        c3 = check_hash_chain_integrity(events)
+        check_results["hash_chain"] = c3
+    else:
+        all_errors.extend(c2.get("errors", []))
+        c3 = {"status": "FAIL", "errors": ["skipped"]}
+        check_results["hash_chain"] = c3
+
+    if c1["status"] == "PASS" and c2["status"] == "PASS" and c3["status"] == "PASS":
+        c4 = check_session_completeness(events)
+        check_results["completeness"] = c4
+        if c4["status"] == "FAIL":
+            all_errors.extend(c4["errors"])
+    else:
+        all_errors.extend(c3.get("errors", []))
+        c4 = {"status": "FAIL", "errors": ["skipped"]}
+        check_results["completeness"] = None  # type: ignore[assignment]
+
+    # Determine overall result
+    all_passed = all(
+        check_results.get(k, {}).get("status") == "PASS"
+        for k in ["structural", "sequence", "hash_chain", "completeness"]
+        if check_results.get(k) is not None
+    )
+    overall = "PASS" if all_passed else "FAIL"
+
+    # Evidence class only determinable on PASS
+    evidence_class: str | None = determine_evidence_class(events) if overall == "PASS" else None
 
     if args.format == "json":
-        print(json.dumps(report, indent=2))
+        output = build_json_output(
+            file_path, session_id, event_count,
+            evidence_class, overall, check_results, all_errors
+        )
+        print(json.dumps(output, indent=2))
     else:
-        print(f"Session: {report['session_id']}")
-        print(f"Status: {report['status']}")
-        print(f"Evidence Class: {report.get('evidence_class', 'UNKNOWN')}")
-        print(f"Sealed: {report['sealed']}")
-        print(f"Complete: {report['complete']}")
-        print(f"Authority: {report['authority']}")
-        if report["total_drops"] > 0:
-            print(f"Total Drops: {report['total_drops']}")
+        print_text_output(
+            file_path, session_id, event_count,
+            evidence_class, check_results, overall, check_results
+        )
 
-        # FAIL LOUDLY for policy violations
-        if report["status"] == "FAIL":
-            policy_violations = [
-                v for v in report["violations"] if v.get("type") == "POLICY_VIOLATION"
-            ]
-            if policy_violations:
-                print("\n⚠️  POLICY VIOLATION ⚠️")
-                for v in policy_violations:
-                    print(f"Reason: {v['message']}")
-                    print(f"Evidence Class: {v.get('evidence_class')}")
-
-        if report["violations"]:
-            print("\nViolations:")
-            for v in report["violations"]:
-                print(
-                    f"  - [{v['type']}] Seq {v.get('event_sequence')}: {v['message']}"
-                )
-        elif report["status"] == "PASS":
-            print(f"\nFingerprint: {report['replay_fingerprint']}")
-
-    if report["status"] == "FAIL":
-        sys.exit(1)
+    sys.exit(0 if overall == "PASS" else 1)
 
 
 if __name__ == "__main__":

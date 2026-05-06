@@ -1,62 +1,72 @@
 """
-examples/sdk_demo.py - Prove SDK Compliance via Verification
+examples/sdk_demo.py — Minimal working example (local authority mode).
+
+Demonstrates the AgentOps Replay SDK end-to-end:
+  SDK → JSONL → Verifier
+
+Usage:
+    python3 examples/sdk_demo.py
 """
 
 import os
 import sys
 
-# Add root to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Allow running from any directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from agentops_sdk.client import AgentOpsClient
 from agentops_sdk.events import EventType
 
 
-def main():
-    print("Initializing AgentOps Client (Local Authority Mode)...")
-    # Enable local authority to generate verifiable hashes locally
-    client = AgentOpsClient(local_authority=True)
+def main() -> None:
+    print("Initializing AgentOps Client (local_authority=True)...")
+    client = AgentOpsClient(local_authority=True, buffer_size=1000)
 
-    print("Starting Session...")
-    client.start_session(agent_id="demo-agent-01", tags=["verification-test"])
+    print("Starting session...")
+    session_id = client.start_session(agent_id="demo-agent-01")
+    print(f"  session_id: {session_id}")
 
-    print("Recording Events...")
-    # 1. Model Request
+    print("Recording events...")
+
     client.record(
-        EventType.MODEL_REQUEST,
+        EventType.LLM_CALL,
         {
-            "model": "gpt-4",
-            "provider": "openai",
-            "messages": [{"role": "user", "content": "Hello"}],
-            "parameters": {"temperature": 0.7},
+            "model_id": "gpt-4",
+            "prompt": "What is the capital of France?",
         },
     )
 
-    # 2. Tool Call
+    client.record(
+        EventType.LLM_RESPONSE,
+        {
+            "model_id": "gpt-4",
+            "content": "The capital of France is Paris.",
+        },
+    )
+
     client.record(
         EventType.TOOL_CALL,
-        {"tool_name": "calculator", "args": {"expression": "2 + 2"}},
-    )
-
-    # 3. Decision Trace (Governance)
-    client.record(
-        EventType.DECISION_TRACE,
         {
-            "decision_id": "dec-123",
-            "inputs": {"expression": "2 + 2"},
-            "outputs": {"result": 4},
-            "justification": "math_policy_v1",
+            "tool_name": "calculator",
+            "args": {"expression": "2 + 2"},
         },
     )
 
-    print("Ending Session...")
-    client.end_session(status="success", duration_ms=150)
+    client.record(
+        EventType.TOOL_RESULT,
+        {
+            "tool_name": "calculator",
+            "result": 4,
+        },
+    )
 
-    # Flush
-    outfile = "sdk_session.jsonl"
+    print("Ending session...")
+    client.end_session(status="success")
+
+    outfile = "session.jsonl"
     print(f"Flushing to {outfile}...")
     client.flush_to_jsonl(outfile)
-    print("Done.")
+    print(f"Done. Output: {os.path.abspath(outfile)}")
 
 
 if __name__ == "__main__":

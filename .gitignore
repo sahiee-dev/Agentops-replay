@@ -72,3 +72,8 @@ temp/
 # Monitoring
 prometheus_data/
 grafana_data/
+.venv
+backend/venv
+frontend/node_modules
+session.jsonl
+sdk_session.jsonl

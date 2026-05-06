@@ -1,107 +1,67 @@
-"""
-agentops_sdk/envelope.py - ProposedEvent and Envelope Logic
-"""
-
-import datetime
 import hashlib
-import json
-import uuid
-from dataclasses import asdict, dataclass
-from typing import Any
+import datetime
+import sys
+import os
 
-from .events import SCHEMA_VER, EventType
-
-# We need JCS for local authority signatures.
-# Vendoring JCS into SDK for standalone distribution
-try:
-    from . import jcs
-except ImportError:
-    import jcs  # Fallback if installed as package
+# CRITICAL: Import JCS from verifier — the single canonical copy
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'verifier'))
+from jcs import canonicalize as jcs_canonicalize
 
 
-@dataclass
-class ProposedEvent:
-    event_id: str
-    session_id: str
-    sequence_number: int  # Hint (unless local authority)
-    timestamp_wall: str
-    timestamp_monotonic: int
-    event_type: EventType
-    source_sdk_ver: str
-    schema_ver: str
-    payload_hash: str  # Calculated locally
-    prev_event_hash: str | None  # Hint
-    event_hash: str | None  # None unless finalized
-    payload: bytes  # Canonicalized JSON bytes
-    chain_authority: str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        # Return dict matching Spec v0.4
-        d = asdict(self)
-        # Check None -> null conversion
-        d["payload"] = json.loads(
-            self.payload
-        )  # Decode for JSON serialization (python dict)
-        # But wait, to_dict usually goes to JSON.
-        # The payload field in envelope is bytes? No, spec says bytes but JSON mapping is nested object.
-        # Spec: "bytes payload = 12; // Canonicalized JSON"
-        # In JSON: "payload": {...}
-        return d
+# The prev_hash value for the first event in any session (seq=1)
+GENESIS_HASH = "0" * 64
 
 
-def create_proposal(
-    session_id: str,
+def build_event(
     seq: int,
-    event_type: EventType,
-    payload: dict[str, Any],
-    prev_hash: str | None,
-    local_authority: bool = False,
-) -> ProposedEvent:
-    # 1. Canonicalize Payload
-    canonical_payload = jcs.canonicalize(payload)
-    p_hash = hashlib.sha256(canonical_payload).hexdigest()
+    event_type: str,
+    session_id: str,
+    payload: dict,
+    prev_hash: str,
+) -> dict:
+    """
+    Build a complete event envelope with computed hashes.
 
-    # 2. Envelope
-    ts_wall = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-    import time
+    This is the single source of truth for event construction.
+    The SDK must not construct events by any other means.
 
-    ts_mono = int(time.monotonic() * 1000)  # Convert to milliseconds
+    The 7-field envelope (TRD §2.3):
+        seq, event_type, session_id, timestamp, payload, prev_hash, event_hash
 
-    proposal = ProposedEvent(
-        event_id=str(uuid.uuid4()),  # UUID7 preferred
-        session_id=session_id,
-        sequence_number=seq,
-        timestamp_wall=ts_wall,
-        timestamp_monotonic=ts_mono,
-        event_type=event_type,
-        source_sdk_ver="python-sdk-0.1",
-        schema_ver=SCHEMA_VER,
-        payload_hash=p_hash,
-        prev_event_hash=prev_hash,
-        event_hash=None,
-        payload=canonical_payload,
-        chain_authority="sdk" if local_authority else None,
-    )
+    Hash computation:
+    1. Build event dict WITHOUT event_hash field
+    2. JCS canonicalize (RFC 8785)
+    3. SHA-256 the UTF-8 bytes
+    4. Set event_hash to hex digest
+    """
+    timestamp = _utc_timestamp()
 
-    # 3. Finalize if Local Authority
-    if local_authority:
-        signed_fields = [
-            "event_id",
-            "session_id",
-            "sequence_number",
-            "timestamp_wall",
-            "event_type",
-            "payload_hash",
-            "prev_event_hash",
-        ]
-        # Construct signed object
-        d = proposal.to_dict()
-        # Ensure only signed fields
-        signed_obj = {k: d[k] for k in signed_fields if k in d}
+    event = {
+        "seq": seq,
+        "event_type": event_type,
+        "session_id": session_id,
+        "timestamp": timestamp,
+        "payload": payload,
+        "prev_hash": prev_hash,
+    }
 
-        # JCS
-        canonical_env = jcs.canonicalize(signed_obj)
-        proposal.event_hash = hashlib.sha256(canonical_env).hexdigest()
-        proposal.chain_authority = "sdk"
+    event["event_hash"] = _compute_event_hash(event)
+    return event
 
-    return proposal
+
+def _compute_event_hash(event: dict) -> str:
+    """
+    SHA-256 of the JCS canonical form, excluding the event_hash field itself.
+    """
+    event_for_hash = {k: v for k, v in event.items() if k != "event_hash"}
+    canonical_bytes = jcs_canonicalize(event_for_hash)
+    return hashlib.sha256(canonical_bytes).hexdigest()
+
+
+def _utc_timestamp() -> str:
+    """
+    UTC time as ISO 8601 with microsecond precision.
+    Format: 2026-05-05T10:30:00.123456Z
+    """
+    now = datetime.datetime.utcnow()
+    return now.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"

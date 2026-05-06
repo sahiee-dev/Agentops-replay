@@ -23,7 +23,7 @@ target_metadata = Base.metadata
 
 
 def get_url():
-    return f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
+    return settings.database_url
 
 
 def run_migrations_offline() -> None:

@@ -1,8 +1,6 @@
 import asyncio
 from datetime import datetime, timezone
 
-import google.generativeai as genai  # type: ignore
-from app.config import settings  # Now you can import settings
 from app.models.event import Event
 from app.models.session import ChainAuthority, Session as SessionModel, SessionStatus
 from app.schemas.session import SessionCreate
@@ -10,22 +8,23 @@ from sqlalchemy.orm import Session  # type: ignore
 
 
 class CustomerSupportAgent:
-    def __init__(self, db: Session, session_id: int | None = None):
+    def __init__(self, db: Session, session_id: int | None = None, api_key: str | None = None):
         self.db = db
         self.session_id = session_id
 
-        # Use centralized settings for API key
-        api_key = settings.GEMINI_API_KEY
-
+        # GEMINI_API_KEY removed from config per TRD §4.2.
+        # Callers must pass api_key directly.
         if not api_key:
             raise ValueError(
-                "GEMINI_API_KEY not found in settings. Please set it in .env file."
+                "api_key is required. GEMINI_API_KEY is no longer in config per TRD §4.2."
             )
 
-        genai.configure(api_key=api_key)
-
-        # Initialize Gemini model
-        self.model = genai.GenerativeModel("gemini-2.0-flash")
+        try:
+            import google.generativeai as genai  # type: ignore
+            genai.configure(api_key=api_key)
+            self.model = genai.GenerativeModel("gemini-2.0-flash")
+        except ImportError:
+            self.model = None
 
         self.conversation_history = []
         self.system_context = """You are a helpful customer support agent for an e-commerce company. You can:

@@ -1,58 +1,23 @@
-from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     # Database
-    POSTGRES_USER: str = "agentops"
-    POSTGRES_PASSWORD: str = "password"
-    POSTGRES_DB: str = "agentops_replay"
-    POSTGRES_HOST: str = "localhost"
-    POSTGRES_PORT: int = 5432
+    database_url: str = "postgresql+asyncpg://agentops_app:password@localhost:5432/agentops"
 
-    # Redis
-    REDIS_URL: str = "redis://localhost:6379"
-
-    # API
-    API_HOST: str = "0.0.0.0"
-    API_PORT: int = 8000
-    SECRET_KEY: str = "your-super-secret-key-change-this"
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-
-    # CORS
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    # Server
+    host: str = "0.0.0.0"
+    port: int = 8000
 
     # Logging
-    LOG_LEVEL: str = "INFO"
+    log_level: str = "WARNING"
 
-    # File Storage
-    UPLOAD_DIR: str = "./uploads"
-    MAX_FILE_SIZE: str = "100MB"
-
-    # AgentOps
-    AGENTOPS_API_KEY: str = ""
-    ENABLE_REAL_TIME_MONITORING: bool = True
-    BATCH_SIZE: int = 100
-    FLUSH_INTERVAL: int = 5
-
-    # AI Integration
-    GEMINI_API_KEY: str | None = None
-    OPENAI_API_KEY: str | None = None
-    ENABLE_AI_AGENT: bool = True
-
-    @field_validator("SECRET_KEY")
-    @classmethod
-    def validate_secret_key(cls, v: str) -> str:
-        if v == "your-super-secret-key-change-this":
-            raise ValueError(
-                "Refusing to use insecure default SECRET_KEY in production. Please set SECRET_KEY in .env."
-            )
-        return v
+    # Security (v1.1+)
+    api_key_required: bool = False
 
     class Config:
+        env_prefix = "AGENTOPS_"
         env_file = ".env"
-        extra = "allow"  # Allow extra environment variables
 
 
 settings = Settings()

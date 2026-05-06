@@ -33,84 +33,65 @@ Verifier (Independent Validation)
 Compliance Reports (Evidence)
 ```
 
-## Quick Start
-
-### 1. Verify Existing Logs
+## Quickstart — 5 minutes to PASS ✅
 
 ```bash
-python3 verifier/agentops_verify.py session.jsonl --format json
+# Install
+pip install agentops-replay
+
+# Run the demo
+python examples/sdk_demo.py
+
+# Verify the output
+agentops-verify session.jsonl
 ```
 
-### 2. Record Agent Events
-
-```python
-from agentops_sdk.client import AgentOpsClient
-from agentops_sdk.events import EventType
-
-# Local authority mode for testing
-client = AgentOpsClient(local_authority=True)
-client.start_session(agent_id="my-agent")
-
-# Record events
-client.record(EventType.TOOL_CALL, {
-    "tool_name": "calculator",
-    "args": {"expression": "2 + 2"}
-})
-
-client.end_session(status="success", duration_ms=150)
-client.flush_to_jsonl("my_session.jsonl")
+Expected output:
 ```
+AgentOps Replay Verifier v1.0
+==============================
+File        : session.jsonl
+Session ID  : <uuid>
+Events      : 6
+Evidence    : NON_AUTHORITATIVE_EVIDENCE
 
-### 3. Verify Your Session
+[1/4] Structural validity ........... PASS
+[2/4] Sequence integrity ............. PASS
+[3/4] Hash chain integrity ........... PASS
+[4/4] Session completeness ........... PASS
 
-```bash
-python3 verifier/agentops_verify.py my_session.jsonl
-# Output: PASS ✅
+Result: PASS ✅
+Evidence: NON_AUTHORITATIVE_EVIDENCE
 ```
-
-### 4. LangChain Integration
-
-```python
-from agentops_replay.integrations.langchain import AgentOpsCallbackHandler
-
-# Initialize the callback handler
-handler = AgentOpsCallbackHandler(
-    agent_id="my-langchain-agent",
-    local_authority=True,  # Use False for production (server sealing)
-    redact_pii=False       # Set True to hash sensitive data
-)
-
-# Use with any LangChain component
-handler.start_session()
-agent.invoke({"input": "your query"}, config={"callbacks": [handler]})
-handler.end_session()
-handler.export_to_jsonl("session.jsonl")
-```
-
-See [`examples/langchain_demo/`](examples/langchain_demo/) for a complete working example.
 
 ## Project Structure
 
 ```
-├── CONSTITUTION.md                  # Immutable project principles
-├── CHAIN_AUTHORITY_INVARIANTS.md    # v1.0 - Cryptographic authority separation
-├── FAILURE_MODES.md                 # v1.0 - Component failure semantics
-├── EVENT_LOG_SPEC.md                # v0.6 - The truth
-├── SCHEMA.md                        # Strict payload definitions
-├── verifier/
-│   ├── agentops_verify.py   # Standalone verification tool
-│   ├── jcs.py               # RFC 8785 canonicalization
-│   └── test_vectors/        # Canonical valid/invalid logs
 ├── agentops_sdk/
 │   ├── client.py            # Main SDK entry point
-│   ├── events.py            # Strict event types
-│   ├── envelope.py          # Event proposals
-│   └── buffer.py            # Ring buffer + LOG_DROP
+│   ├── events.py            # 12 canonical EventType values
+│   ├── envelope.py          # 7-field envelope + JCS hash
+│   └── buffer.py            # Thread-safe ring buffer + LOG_DROP
+├── verifier/
+│   ├── agentops_verify.py   # Standalone CLI verifier
+│   ├── jcs.py               # RFC 8785 canonical JSON (authoritative copy)
+│   └── test_vectors/        # valid_session, tampered_hash, sequence_gap
+├── backend/
+│   ├── app/                 # FastAPI ingestion service
+│   ├── alembic/             # DB migrations (001 schema, 002 permissions)
+│   └── docker-compose.yml   # Postgres + app deployment
 ├── sdk/python/agentops_replay/
-│   └── integrations/langchain/  # LangChain callback handler
-└── examples/
-    ├── langchain_demo/      # LangChain agent demo
-    └── sdk_demo.py          # Working example
+│   └── integrations/langchain/handler.py  # LangChain callback handler
+├── tests/
+│   ├── unit/                # test_buffer, test_envelope, test_events, test_verifier
+│   ├── integration/         # test_ingestion_api (requires Docker)
+│   └── e2e/                 # test_full_flow
+├── docs/
+│   ├── EVENT_LOG_SPEC.md              # 7-field envelope, 12 event types, hash algorithm
+│   ├── CHAIN_AUTHORITY_INVARIANTS.md  # Trust model, evidence classes
+│   └── FAILURE_MODES.md              # LOG_DROP, CHAIN_BROKEN, fail-open/closed
+├── .github/workflows/ci.yml  # CI: unit + integration + E2E
+└── examples/sdk_demo.py      # Working local-authority demo
 ```
 
 ## What Makes This Different?
@@ -125,18 +106,22 @@ See [`examples/langchain_demo/`](examples/langchain_demo/) for a complete workin
 
 ## Current Status
 
-**Phase 4 Complete**: LangChain Integration ✅  
-**Status**: Green (validated)
+**Phase 11 Complete** — Full repair and hardening against TRD v2.0 ✅
 
-### Recent Updates (Day 3)
-
-- LangChain callback handler implemented
-- Demo agent with tools (lookup_order, issue_refund, send_email)
-- PII incident simulation documented
-- Mock demo mode (no API key required)
-- Full verification workflow tested
-
-**Next**: Phase 5 (Compliance Artifacts)
+| Component | Status |
+|---|---|
+| SDK (client, buffer, envelope, events) | ✅ TRD-compliant |
+| Verifier (agentops_verify.py) | ✅ Exit codes 0/1/2, JSON + text output |
+| Test vectors (valid, tampered, gap) | ✅ Regenerated |
+| Backend router (health, ingest, export) | ✅ 3 endpoints only |
+| Alembic migrations (001 + 002) | ✅ Append-only permissions |
+| Docker Compose | ✅ Postgres + app |
+| LangChain handler | ✅ Privacy-by-design, canonical event types |
+| Unit tests (19 tests) | ✅ All passing |
+| Integration tests | ✅ Structured (requires Docker for DB tests) |
+| E2E tests | ✅ Local authority + buffer overflow |
+| CI workflow | ✅ .github/workflows/ci.yml |
+| Documentation | ✅ EVENT_LOG_SPEC, CHAIN_AUTHORITY_INVARIANTS, FAILURE_MODES |
 
 ## Development
 
@@ -148,12 +133,19 @@ See [`examples/langchain_demo/`](examples/langchain_demo/) for a complete workin
 ### Run Tests
 
 ```bash
-# Generate test vectors
-python3 verifier/generator.py
+# Unit tests (no dependencies required)
+pytest tests/unit/ -v
 
-# Verify all test cases
-python3 verifier/agentops_verify.py verifier/test_vectors/valid_session.jsonl
-python3 verifier/agentops_verify.py verifier/test_vectors/invalid_hash.jsonl  # Should fail
+# E2E tests — local authority mode
+pytest tests/e2e/ -v -k "not server_authority"
+
+# Integration tests — requires Docker
+cd backend && docker-compose up -d
+pytest tests/integration/ -v
+
+# Regenerate and verify test vectors
+python3 verifier/generator.py
+agentops-verify verifier/test_vectors/valid_session.jsonl
 ```
 
 ## Roadmap

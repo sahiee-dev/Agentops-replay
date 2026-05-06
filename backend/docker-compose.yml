@@ -1,0 +1,57 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: agentops
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_superuser_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app_user_setup:
+    image: postgres:15-alpine
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: postgres_superuser_password
+    command: >
+      psql -h db -U postgres -c
+      "DO $$ BEGIN
+       IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'agentops_app') THEN
+         CREATE USER agentops_app WITH PASSWORD 'apppassword';
+       END IF; END $$;
+       CREATE DATABASE IF NOT EXISTS agentops;
+       GRANT USAGE ON SCHEMA public TO agentops_app;"
+    restart: "no"
+
+  server:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      AGENTOPS_DATABASE_URL: postgresql+asyncpg://agentops_app:apppassword@db:5432/agentops
+      AGENTOPS_LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "
+        cd /app/backend &&
+        alembic upgrade head &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000
+      "
+
+volumes:
+  pgdata:
