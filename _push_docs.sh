@@ -7,8 +7,7 @@ git checkout -b add-agentops-docs
 git add AgentOps_docs/AGENT_CONTEXT.md
 
 
-git add AgentOps_docs/AGENT_PROMPT.md
-git commit -m "docs: add AGENT_PROMPT.md"
+
 
 git add AgentOps_docs/BUILD_SEQUENCE.md
 git commit -m "docs: add BUILD_SEQUENCE.md"
