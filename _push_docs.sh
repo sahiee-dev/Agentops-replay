@@ -5,7 +5,7 @@ cd /Users/lulu/Desktop/agentops-replay-pro
 git checkout -b add-agentops-docs
 
 git add AgentOps_docs/AGENT_CONTEXT.md
-git commit -m "docs: add AGENT_CONTEXT.md"
+
 
 git add AgentOps_docs/AGENT_PROMPT.md
 git commit -m "docs: add AGENT_PROMPT.md"
