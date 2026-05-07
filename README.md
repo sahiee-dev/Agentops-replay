@@ -1,52 +1,43 @@
 # AgentOps Replay
 
-> **The system of record for AI agent behavior**
+AgentOps Replay is a cryptographically verifiable, immutable event logging system for AI agents.
 
-AgentOps Replay is an open-source, production-grade observability and audit system for AI agents. Unlike traditional monitoring tools, AgentOps Replay provides **cryptographically verifiable, immutable event logs** designed for incident investigation, compliance, and post-mortems.
+## Why This Exists
 
-## Why AgentOps Replay?
-
-When your AI agent crashes, leaks PII, or makes an unexpected decision, you need more than logs—you need **evidence**.
-
-AgentOps Replay is built for:
-
-- **Incident Response**: Step-by-step replay of agent behavior
-- **Compliance**: Audit-grade timelines with tamper-evident integrity
-- **Governance**: Policy violation detection and reporting
-- **Trust**: Cryptographic proof that logs haven't been modified
-
-## Core Principles
-
-1. **Auditability** over convenience
-2. **Correctness** over performance
-3. **Evidence** over interpretation
+* **For Developers:** Debug agent failures with deterministic replay and zero guesswork.
+* **For Enterprise Security:** Guarantee tamper-evident audit trails and fail-closed compliance for AI workflows.
+* **For Researchers:** Establish a formal system model and benchmark for AI agent accountability.
 
 ## Architecture
 
-```
+```text
 Agent SDK (Untrusted Producer)
+    ↓  (Hash-Chained Events)
+Local JSONL / Ingestion Service
+    ↓  (Immutable Log)
+Standalone Verifier (Independent Validation)
     ↓
-Event Log (Immutable, Hash-Chained)
-    ↓
-Verifier (Independent Validation)
-    ↓
-Compliance Reports (Evidence)
+Compliance Reports (PASS ✅)
 ```
 
 ## Quickstart — 5 minutes to PASS ✅
 
-```bash
-# Install
-pip install agentops-replay
+Get a local-authority session running and verified in under 5 minutes on a fresh machine.
 
-# Run the demo
+```bash
+# 1. Clone and install
+git clone https://github.com/sahiee-dev/Agentops-replay.git
+cd Agentops-replay
+pip install -e .
+
+# 2. Run the demo to generate a session log
 python examples/sdk_demo.py
 
-# Verify the output
+# 3. Verify the output cryptographically
 agentops-verify session.jsonl
 ```
 
-Expected output:
+**Expected output:**
 ```
 AgentOps Replay Verifier v1.0
 ==============================
@@ -61,127 +52,54 @@ Evidence    : NON_AUTHORITATIVE_EVIDENCE
 [4/4] Session completeness ........... PASS
 
 Result: PASS ✅
-Evidence: NON_AUTHORITATIVE_EVIDENCE
 ```
 
-## Project Structure
+## Evidence Classes
 
-```
-├── agentops_sdk/
-│   ├── client.py            # Main SDK entry point
-│   ├── events.py            # 12 canonical EventType values
-│   ├── envelope.py          # 7-field envelope + JCS hash
-│   └── buffer.py            # Thread-safe ring buffer + LOG_DROP
-├── verifier/
-│   ├── agentops_verify.py   # Standalone CLI verifier
-│   ├── jcs.py               # RFC 8785 canonical JSON (authoritative copy)
-│   └── test_vectors/        # valid_session, tampered_hash, sequence_gap
-├── backend/
-│   ├── app/                 # FastAPI ingestion service
-│   ├── alembic/             # DB migrations (001 schema, 002 permissions)
-│   └── docker-compose.yml   # Postgres + app deployment
-├── sdk/python/agentops_replay/
-│   └── integrations/langchain/handler.py  # LangChain callback handler
-├── tests/
-│   ├── unit/                # test_buffer, test_envelope, test_events, test_verifier
-│   ├── integration/         # test_ingestion_api (requires Docker)
-│   └── e2e/                 # test_full_flow
-├── docs/
-│   ├── EVENT_LOG_SPEC.md              # 7-field envelope, 12 event types, hash algorithm
-│   ├── CHAIN_AUTHORITY_INVARIANTS.md  # Trust model, evidence classes
-│   └── FAILURE_MODES.md              # LOG_DROP, CHAIN_BROKEN, fail-open/closed
-├── .github/workflows/ci.yml  # CI: unit + integration + E2E
-└── examples/sdk_demo.py      # Working local-authority demo
-```
+| Evidence Class | Condition | Trust Guarantee |
+| --- | --- | --- |
+| `AUTHORITATIVE_EVIDENCE` | Server emitted `CHAIN_SEAL`, zero `LOG_DROP` | Highest. Log is complete, verified by server. |
+| `PARTIAL_AUTHORITATIVE_EVIDENCE` | Server emitted `CHAIN_SEAL`, but contains `LOG_DROP` | High integrity, but some events were lost (e.g. buffer overflow). |
+| `NON_AUTHORITATIVE_EVIDENCE` | No `CHAIN_SEAL` (Local mode) | Cryptographically valid sequence, but vulnerable to truncation. |
 
-## What Makes This Different?
+## AgentOps Replay vs Alternatives
 
-| Feature          | AgentOps Replay         | Traditional Observability |
-| ---------------- | ----------------------- | ------------------------- |
-| **Immutability** | Hash-chained events     | Mutable logs              |
-| **Verification** | Independent CLI tool    | Trust the vendor          |
-| **Compliance**   | Audit-grade exports     | Dashboard screenshots     |
-| **Authority**    | Server-authoritative    | Client-side only          |
-| **Redaction**    | PII-safe with integrity | Delete = evidence loss    |
+| Feature | AgentOps Replay | Traditional Observability |
+| --- | --- | --- |
+| **Immutability** | Hash-chained events (RFC 8785) | Mutable logs |
+| **Verification** | Independent CLI tool (`agentops-verify`) | Trust the vendor |
+| **Compliance** | Audit-grade exports | Dashboard screenshots |
+| **Authority** | Server-authoritative | Client-side only |
+| **Redaction** | PII-safe with hash integrity intact | Delete = evidence loss |
 
-## Current Status
+## Component Overview
 
-**Phase 11 Complete** — Full repair and hardening against TRD v2.0 ✅
+1. **`agentops_sdk`**: The core dependency-free Python client that computes hashes and writes the event envelope.
+2. **`verifier`**: The standalone CLI tool to validate sequence and hash integrity. Uses zero external dependencies.
+3. **`backend`**: FastAPI ingestion service providing authoritative chain seals and append-only database storage.
+4. **`sdk/` (Legacy/Integrations)**: Contains integrations such as the LangChain callback handler. 
 
-| Component | Status |
-|---|---|
-| SDK (client, buffer, envelope, events) | ✅ TRD-compliant |
-| Verifier (agentops_verify.py) | ✅ Exit codes 0/1/2, JSON + text output |
-| Test vectors (valid, tampered, gap) | ✅ Regenerated |
-| Backend router (health, ingest, export) | ✅ 3 endpoints only |
-| Alembic migrations (001 + 002) | ✅ Append-only permissions |
-| Docker Compose | ✅ Postgres + app |
-| LangChain handler | ✅ Privacy-by-design, canonical event types |
-| Unit tests (19 tests) | ✅ All passing |
-| Integration tests | ✅ Structured (requires Docker for DB tests) |
-| E2E tests | ✅ Local authority + buffer overflow |
-| CI workflow | ✅ .github/workflows/ci.yml |
-| Documentation | ✅ EVENT_LOG_SPEC, CHAIN_AUTHORITY_INVARIANTS, FAILURE_MODES |
+## Deep Dives
 
-## Development
+* **Enterprise & Security:** See [MARKET_ENTERPRISE_SECURITY.md](MARKET_ENTERPRISE_SECURITY.md) for API key auth, SIEM webhooks, and compliance mappings.
+* **Research Roadmap:** See [RESEARCH_PAPER_ROADMAP.md](RESEARCH_PAPER_ROADMAP.md) for our formal system model, adversarial test suites, and academic roadmap.
 
-### Requirements
+## Development Setup
 
-- Python 3.11+ (pinned for float determinism)
-- No external dependencies for verification
-
-### Run Tests
+**Requirements:**
+- Python 3.11+ (Pinned for float determinism in JCS canonicalization)
 
 ```bash
-# Unit tests (no dependencies required)
+# Run unit tests (no dependencies required)
 pytest tests/unit/ -v
-
-# E2E tests — local authority mode
-pytest tests/e2e/ -v -k "not server_authority"
-
-# Integration tests — requires Docker
-cd backend && docker-compose up -d
-pytest tests/integration/ -v
 
 # Regenerate and verify test vectors
 python3 verifier/generator.py
 agentops-verify verifier/test_vectors/valid_session.jsonl
+
+# Start the Ingestion Service (Docker required)
+cd backend && docker-compose up -d
 ```
-
-## Roadmap
-
-- [x] Constitutional layer (CONSTITUTION.md)
-- [x] Chain authority invariants (CHAIN_AUTHORITY_INVARIANTS.md)
-- [x] Failure mode documentation (FAILURE_MODES.md)
-- [x] Event Log Spec v0.6
-- [x] Standalone verifier (`agentops-verify`)
-- [x] Python SDK (local authority mode)
-- [x] LangChain integration
-- [ ] Ingestion service (server authority)
-- [ ] Compliance report generators
-- [ ] Long-term storage backend
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
-
-**Key principle**: If a change violates the Constitution or breaks the verifier, it's invalid—even if it "works."
 
 ## License
-
 Apache 2.0 - See [LICENSE](LICENSE)
-
-## Citation
-
-```bibtex
-@software{agentops_replay,
-  title = {AgentOps Replay: Immutable Event Logging for AI Agents},
-  author = {Sahir},
-  year = {2026},
-  url = {https://github.com/sahiee-dev/Agentops-replay}
-}
-```
-
----
-
-**Built for production. Designed for trust.**
