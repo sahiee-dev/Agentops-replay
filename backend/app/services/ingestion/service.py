@@ -281,7 +281,7 @@ class IngestionService:
 
         if result is None:
             # No events yet - genesis state
-            return -1, GENESIS_HASH
+            return 0, GENESIS_HASH
 
         return result.sequence_number, result.event_hash
 

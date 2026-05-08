@@ -215,7 +215,7 @@ def validate_sequence_monotonicity(
     Returns:
         (is_valid, error_message) tuple
     """
-    expected_seq = 0
+    expected_seq = 1
 
     for i, event in enumerate(events):
         actual_seq = event.get("sequence_number")
