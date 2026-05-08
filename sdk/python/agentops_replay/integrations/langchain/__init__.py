@@ -18,7 +18,7 @@ Usage:
     agent.run("query", callbacks=[handler])
 """
 
-from .callback import AgentOpsCallbackHandler
+from .handler import AgentOpsCallbackHandler
 from .version import INTEGRATION_VERSION, check_compatibility, get_langchain_version
 
 __all__ = [

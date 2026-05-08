@@ -20,6 +20,6 @@ COPY backend/ /app/backend/
 # Install backend Python dependencies
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/backend
 
 EXPOSE 8000

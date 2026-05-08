@@ -37,8 +37,14 @@ class AgentOpsClient:
         self._agent_id = agent_id or str(uuid.uuid4())
         self._buffer = RingBuffer(capacity=max(buffer_size, 1))
         self._session_id: str | None = None
+        self._finished_session_id: str | None = None
         self._next_seq: int = 1
         self._last_hash: str = GENESIS_HASH
+
+    @property
+    def session_id(self) -> str | None:
+        """Current or most recent session ID."""
+        return self._session_id or self._finished_session_id
 
     # ------------------------------------------------------------------
     # Public API
@@ -84,10 +90,10 @@ class AgentOpsClient:
         if self._session_id is None:
             return
 
-        # FIX 4: server-authority type guard
-        if hasattr(event_type, 'is_server_authority') and event_type.is_server_authority:
-            # SDK must never produce server-authority events
-            self._emit_log_drop(reason="attempted_server_authority_event")
+        from agentops_sdk.events import EventType
+        if isinstance(event_type, EventType) and not event_type.is_sdk_authority:
+            # Treat as a buffer overflow / LOG_DROP
+            self._emit_log_drop(reason="SERVER_AUTHORITY_VIOLATION")
             return
 
         # Flush any pending buffer overflow drops first
@@ -140,6 +146,7 @@ class AgentOpsClient:
             pass  # Never crash the agent on end_session
 
         # FIX 3: session_id cleared — no CHAIN_SEAL emitted
+        self._finished_session_id = self._session_id
         self._session_id = None
 
     def flush_to_jsonl(self, path: str) -> None:
@@ -167,8 +174,9 @@ class AgentOpsClient:
         from agentops_sdk.sender import EventSender  # FIX 5: no httpx/remote_client
         sender = EventSender(server_url=self._server_url)
         events = self._buffer.drain()
+        session_id = self._session_id or self._finished_session_id or "unknown"
         return sender.send_batch(
-            session_id=self._session_id or "unknown",
+            session_id=session_id,
             events=events,
         )
 

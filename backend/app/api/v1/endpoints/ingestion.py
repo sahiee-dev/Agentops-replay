@@ -61,6 +61,11 @@ router = APIRouter()
 @router.post(
     "",
     status_code=status.HTTP_201_CREATED,
+    response_model=IngestionResult,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"model": RejectionResponse},
+        status.HTTP_409_CONFLICT: {"model": RejectionResponse},
+    },
     summary="Ingest event batch",
     description="""
 Ingest a batch of events into a session.
@@ -74,25 +79,22 @@ Ingest a batch of events into a session.
 - All writes are atomic (full batch or nothing)
 """,
 )
-async def ingest_batch(request: dict) -> dict:
+async def ingest_batch(
+    request: IngestBatchRequest, db: DBSession = Depends(get_db if get_db else lambda: None)
+) -> IngestionResult:
     """
     Ingest a batch of events.
 
     This endpoint establishes SERVER authority for all events.
     SDK-provided hashes are logged but never trusted.
     """
-    if IngestionService is None or get_db is None:
+    if IngestionService is None or get_db is None or db is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"status": "error", "code": "SERVICE_UNAVAILABLE",
                     "message": "Ingestion service not yet implemented"},
         )
-    """
-    Ingest a batch of events.
 
-    This endpoint establishes SERVER authority for all events.
-    SDK-provided hashes are logged but never trusted.
-    """
     try:
         service = IngestionService(db)
 
@@ -106,6 +108,16 @@ async def ingest_batch(request: dict) -> dict:
         # Commit transaction
         db.commit()
 
+        chain_seal_obj = None
+        if result.sealed:
+            chain_seal_obj = {
+                "evidence_class": result.evidence_class,
+                "session_digest": result.session_digest,
+                "final_event_hash": result.final_hash,
+                "event_count": result.event_count,
+                "ingestion_service_id": result.ingestion_service_id,
+            }
+
         return IngestionResult(
             status="success",
             accepted_count=result.accepted_count,
@@ -115,6 +127,7 @@ async def ingest_batch(request: dict) -> dict:
             seal_timestamp=result.seal_timestamp,
             session_digest=result.session_digest,
             evidence_class=result.evidence_class,
+            chain_seal=chain_seal_obj,
         )
 
     except StateConflictError as e:

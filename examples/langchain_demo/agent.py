@@ -7,247 +7,171 @@ This agent demonstrates AgentOps Replay capturing:
 - Decision traces
 
 All events are captured and can be verified for compliance/audit.
+
+Usage:
+    python3 agent.py                    # Mock mode (no API key needed)
+    OPENAI_API_KEY=... python3 agent.py # Real LLM mode
 """
 
 import os
 import sys
+import json
 
 # Add project root to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-sys.path.insert(
-    0,
-    os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "sdk", "python")
-    ),
-)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, PROJECT_ROOT)
+sys.path.insert(0, os.path.join(PROJECT_ROOT, "sdk", "python"))
 
-import json
-from datetime import datetime
-from decimal import Decimal
+# Mock mode detection
+USE_MOCK = not (os.environ.get("OPENAI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"))
 
-# Try LangChain imports
-try:
-    from langchain.agents import AgentExecutor, create_react_agent
-    from langchain_core.prompts import PromptTemplate
-    from langchain_core.tools import tool
-    from langchain_openai import ChatOpenAI
+OUTPUT_FILE = os.path.join(os.path.dirname(__file__), "langchain_session.jsonl")
 
-    LANGCHAIN_INSTALLED = True
-except ImportError:
-    LANGCHAIN_INSTALLED = False
-    print(
-        "Warning: LangChain not installed. Install with: pip install langchain langchain-openai"
-    )
 
-# Simulated database
-ORDERS_DB = {
-    "ORD-001": {
-        "customer_id": "C-12345",
-        "customer_email": "john.doe@example.com",
+def run_mock_demo():
+    """
+    Run a mock LangChain-style session using only the AgentOps SDK.
+    Produces a verifiable JSONL with correct chain hashes.
+    No LangChain or API key required.
+    """
+    from agentops_sdk.client import AgentOpsClient
+    from agentops_sdk.events import EventType
+    import hashlib
+
+    print("=" * 60)
+    print("AgentOps Replay - LangChain Demo (Mock Mode)")
+    print("=" * 60)
+    print()
+    print("[!] No API key detected. Running in mock mode.")
+    print()
+
+    client = AgentOpsClient(local_authority=True, buffer_size=1000)
+    session_id = client.start_session(agent_id="customer-support-demo-v1")
+    print(f"[+] Session started: {session_id}")
+
+    # Simulate: LLM_CALL (agent receives query)
+    prompt_text = "Can you look up order ORD-001 and tell me its status?"
+    prompt_hash = hashlib.sha256(prompt_text.encode()).hexdigest()
+    client.record(EventType.LLM_CALL, {
+        "model_id": "gpt-4o-mini",
+        "provider": "openai",
+        "prompt_hash": prompt_hash,
+        "prompt_count": 1,
+    })
+    print("    - LLM_CALL recorded (prompt hashed, not stored)")
+
+    # Simulate: TOOL_CALL (agent decides to call lookup_order)
+    tool_args = {"order_id": "ORD-001"}
+    args_hash = hashlib.sha256(json.dumps(tool_args, sort_keys=True).encode()).hexdigest()
+    client.record(EventType.TOOL_CALL, {
+        "tool_name": "lookup_order",
+        "args_hash": args_hash,
+    })
+    print("    - TOOL_CALL recorded (args hashed)")
+
+    # Simulate: TOOL_RESULT (tool returns order info)
+    tool_result = {
+        "order_id": "ORD-001",
         "status": "shipped",
         "items": ["Widget Pro", "Gadget Plus"],
         "total": 149.99,
         "refund_eligible": True,
-        "shipped_date": "2026-01-20",
-    },
-    "ORD-002": {
-        "customer_id": "C-67890",
-        "customer_email": "jane.smith@example.com",
-        "status": "delivered",
-        "items": ["Super Deluxe Package"],
-        "total": 299.99,
-        "refund_eligible": False,
-        "delivered_date": "2026-01-22",
-    },
-    "ORD-003": {
-        "customer_id": "C-11111",
-        "customer_email": "bob.johnson@example.com",
-        "status": "processing",
-        "items": ["Basic Kit"],
-        "total": 49.99,
-        "refund_eligible": True,
-    },
-}
+    }
+    result_hash = hashlib.sha256(json.dumps(tool_result, sort_keys=True).encode()).hexdigest()
+    client.record(EventType.TOOL_RESULT, {
+        "tool_name": "lookup_order",
+        "result_hash": result_hash,
+        "duration_ms": 12,
+    })
+    print("    - TOOL_RESULT recorded (result hashed, no PII)")
 
-REFUNDS_ISSUED = []
-EMAILS_SENT = []
+    # Simulate: LLM_RESPONSE (agent formulates response)
+    response_text = "Order ORD-001 is currently shipped. It contains Widget Pro and Gadget Plus."
+    content_hash = hashlib.sha256(response_text.encode()).hexdigest()
+    client.record(EventType.LLM_RESPONSE, {
+        "content_hash": content_hash,
+        "finish_reason": "stop",
+        "completion_token_count": 24,
+    })
+    print("    - LLM_RESPONSE recorded (content hashed)")
+
+    # End session
+    client.end_session(status="success", duration_ms=500)
+    print("    - SESSION_END recorded")
+
+    # Export
+    client.flush_to_jsonl(OUTPUT_FILE)
+    print()
+    print(f"[+] Session exported to: {OUTPUT_FILE}")
+    return True
 
 
-# Define tools
-if LANGCHAIN_INSTALLED:
+def run_real_demo():
+    """
+    Run with real LangChain and OpenAI. Requires OPENAI_API_KEY.
+    """
+    try:
+        from langchain.agents import AgentExecutor, create_react_agent
+        from langchain_core.prompts import PromptTemplate
+        from langchain_core.tools import tool
+        from langchain_openai import ChatOpenAI
+    except ImportError:
+        print("ERROR: LangChain not installed.")
+        print("Install with: pip install langchain langchain-openai langchain-core")
+        return False
 
+    from agentops_replay.integrations.langchain import AgentOpsCallbackHandler
+
+    print("=" * 60)
+    print("AgentOps Replay - LangChain Demo (Real LLM Mode)")
+    print("=" * 60)
+    print()
+
+    # Initialize handler
+    handler = AgentOpsCallbackHandler(
+        agent_id="customer-support-demo-v1",
+        local_authority=True,
+        buffer_size=10000,
+        redact_pii=False,
+        tags=["demo", "langchain"],
+    )
+    handler.start_session()
+    print(f"[+] Session started: {handler.client.session_id}")
+
+    # Define tools
     @tool
     def lookup_order(order_id: str) -> str:
-        """
-        Retrieve order information by order ID.
-
-        Returns:
-                A JSON-formatted string. On success the JSON contains the fields:
-                - `order_id`: the requested order identifier
-                - `status`: current order status
-                - `items`: list of items on the order
-                - `total`: order total amount
-                - `refund_eligible`: whether the order is eligible for refunds
-                - `customer_email`: customer's email address (PII; will be captured)
-                On failure the JSON contains an `error` field with an explanatory message.
-        """
-        order = ORDERS_DB.get(order_id)
+        """Retrieve order information by order ID."""
+        orders = {
+            "ORD-001": {
+                "order_id": "ORD-001",
+                "status": "shipped",
+                "items": ["Widget Pro", "Gadget Plus"],
+                "total": 149.99,
+                "refund_eligible": True,
+            },
+        }
+        order = orders.get(order_id)
         if not order:
             return json.dumps({"error": f"Order {order_id} not found"})
+        return json.dumps(order)
 
-        # Return order info (note: includes PII - email)
-        return json.dumps(
-            {
-                "order_id": order_id,
-                "status": order["status"],
-                "items": order["items"],
-                "total": order["total"],
-                "refund_eligible": order["refund_eligible"],
-                "customer_email": order["customer_email"],  # PII - will be captured!
-            }
-        )
+    # Create LLM + agent
+    api_key = os.environ.get("OPENAI_API_KEY")
+    callbacks = [handler]
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=api_key, callbacks=callbacks)
 
-    @tool
-    def issue_refund(order_id: str, amount: float, reason: str) -> str:
-        """
-        Create and record a refund for an eligible order.
-
-        Parameters:
-            order_id (str): Identifier of the order to refund.
-            amount (float): Refund amount in USD.
-            reason (str): Reason for issuing the refund.
-
-        Returns:
-            str: A JSON-encoded string describing the outcome.
-                 - Success: {"success": True, "refund_id": <id>, "amount_refunded": <amount>, "message": <text>}
-                 - Order not found: {"error": "Order <id> not found"}
-                 - Not eligible: {"error": "Order <id> is not eligible for refund", "status": <order_status>}
-                 - Amount exceeds total: {"error": "Refund amount $<amount> exceeds order total $<total>"}
-        """
-        order = ORDERS_DB.get(order_id)
-        if not order:
-            return json.dumps({"error": f"Order {order_id} not found"})
-
-        if not order.get("refund_eligible"):
-            return json.dumps(
-                {
-                    "error": f"Order {order_id} is not eligible for refund",
-                    "status": order["status"],
-                }
-            )
-
-        # Use Decimal for safe monetary comparison
-        refund_amount = Decimal(str(amount))
-        order_total = Decimal(str(order["total"]))
-        
-        if refund_amount > order_total:
-            return json.dumps(
-                {
-                    "error": f"Refund amount ${refund_amount} exceeds order total ${order_total}"
-                }
-            )
-
-        refund_record = {
-            "refund_id": f"REF-{len(REFUNDS_ISSUED) + 1:04d}",
-            "order_id": order_id,
-            "amount": amount,
-            "reason": reason,
-            "timestamp": datetime.now().isoformat(),
-        }
-        REFUNDS_ISSUED.append(refund_record)
-
-        return json.dumps(
-            {
-                "success": True,
-                "refund_id": refund_record["refund_id"],
-                "amount_refunded": amount,
-                "message": f"Refund of ${amount} issued for order {order_id}",
-            }
-        )
-
-    @tool
-    def send_email(to_email: str, subject: str, body: str) -> str:
-        """
-        Send an email record to the specified recipient and append it to the in-memory email store.
-
-        Parameters:
-            to_email (str): Recipient email address (contains PII).
-            subject (str): Email subject line.
-            body (str): Email body content.
-
-        Returns:
-            str: JSON string with keys `success` (`True` on success), `email_id` (the created email identifier), and `message` (human-readable confirmation).
-        """
-        email_record = {
-            "email_id": f"EMAIL-{len(EMAILS_SENT) + 1:04d}",
-            "to": to_email,  # PII!
-            "subject": subject,
-            "body": body,
-            "timestamp": datetime.now().isoformat(),
-        }
-        EMAILS_SENT.append(email_record)
-
-        return json.dumps(
-            {
-                "success": True,
-                "email_id": email_record["email_id"],
-                "message": f"Email sent to {to_email}",
-            }
-        )
-
-
-def get_tools():
-    """
-    List the tool callables exposed for agent use.
-
-    Returns:
-        A list of tool callables (lookup_order, issue_refund, send_email) when LangChain is installed, or an empty list if LangChain is not available.
-    """
-    if not LANGCHAIN_INSTALLED:
-        return []
-    return [lookup_order, issue_refund, send_email]
-
-
-def create_agent(api_key: str | None = None, callbacks=None):
-    """
-    Create and return a configured customer support agent executor.
-
-    Parameters:
-        api_key (str | None): OpenAI API key to use; if omitted, the `OPENAI_API_KEY` environment variable is used.
-        callbacks (optional): Iterable of LangChain callback handlers to attach to the LLM and agent.
-
-    Returns:
-        AgentExecutor: A configured agent executor that exposes the customer support agent with the registered tools and prompt.
-
-    Raises:
-        ImportError: If required LangChain components are not available.
-    """
-    if not LANGCHAIN_INSTALLED:
-        raise ImportError("LangChain not installed")
-
-    # Create LLM
-    llm = ChatOpenAI(
-        model="gpt-4o-mini", temperature=0, api_key=api_key, callbacks=callbacks
-    )
-
-    # Create tools
-    tools = get_tools()
-
-    # Create prompt
-    template = """You are a helpful customer support agent. You help customers with their orders.
+    template = """You are a helpful customer support agent.
 
 You have access to the following tools:
-
 {tools}
 
 Use the following format:
-
 Question: the input question you must answer
 Thought: you should always think about what to do
 Action: the action to take, should be one of [{tool_names}]
 Action Input: the input to the action
 Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
 Thought: I now know the final answer
 Final Answer: the final answer to the original input question
 
@@ -257,39 +181,40 @@ Question: {input}
 Thought:{agent_scratchpad}"""
 
     prompt = PromptTemplate.from_template(template)
-
-    # Create agent
+    tools = [lookup_order]
     agent = create_react_agent(llm, tools, prompt)
-
-    # Create executor
-    agent_executor = AgentExecutor(
-        agent=agent,
-        tools=tools,
-        verbose=True,
-        handle_parsing_errors=True,
-        callbacks=callbacks,
+    executor = AgentExecutor(
+        agent=agent, tools=tools, verbose=True,
+        handle_parsing_errors=True, callbacks=callbacks,
     )
 
-    return agent_executor
+    # Run query
+    query = "Can you look up order ORD-001 and tell me its status?"
+    print(f"\n[+] Query: {query}")
+    print("-" * 40)
+
+    try:
+        result = executor.invoke({"input": query}, config={"callbacks": callbacks})
+        print(f"Response: {result.get('output', 'No output')}")
+    except Exception as e:
+        print(f"ERROR: {e}")
+
+    # End and export
+    handler.end_session(status="success")
+    handler.export_to_jsonl(OUTPUT_FILE)
+    print(f"\n[+] Session exported to: {OUTPUT_FILE}")
+    return True
 
 
-def get_refunds():
-    """
-    Retrieve a copy of all refund records issued by the agent.
+if __name__ == "__main__":
+    if USE_MOCK:
+        success = run_mock_demo()
+    else:
+        success = run_real_demo()
 
-    Each refund record is a dict containing keys such as `refund_id`, `order_id`, `amount`, `reason`, and `timestamp`.
+    if success:
+        print()
+        print("To verify:")
+        print(f"  python3 ../../verifier/agentops_verify.py {OUTPUT_FILE}")
 
-    Returns:
-        list: A shallow copy of the list of refund record dictionaries; modifying the returned list does not affect the internal store.
-    """
-    return REFUNDS_ISSUED.copy()
-
-
-def get_emails():
-    """
-    Retrieve a copy of all email records sent by the agent.
-
-    Returns:
-        list: A list of email record dictionaries, each containing keys such as `email_id`, `to`, `subject`, `body`, and `timestamp`.
-    """
-    return EMAILS_SENT.copy()
+    sys.exit(0 if success else 1)

@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Database
-    database_url: str = "postgresql+asyncpg://agentops_app:password@localhost:5432/agentops"
+    database_url: str = "postgresql://agentops_app:password@localhost:5432/agentops"
 
     # Server
     host: str = "0.0.0.0"

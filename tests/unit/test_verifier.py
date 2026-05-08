@@ -120,3 +120,36 @@ def test_partial_authoritative_with_log_drop():
         assert data["evidence_class"] == "PARTIAL_AUTHORITATIVE_EVIDENCE"
     finally:
         os.unlink(tmp)
+
+
+def test_missing_session_start_fails():
+    """Session without SESSION_START → FAIL (session_completeness)."""
+    from agentops_sdk.envelope import build_event, GENESIS_HASH
+
+    events = []
+    prev = GENESIS_HASH
+    session_id = "no-start-test"
+
+    # Skip SESSION_START — go directly to LLM_CALL and SESSION_END
+    for seq, etype, payload in [
+        (1, "LLM_CALL", {"model_id": "test"}),
+        (2, "SESSION_END", {"status": "success"}),
+    ]:
+        e = build_event(seq, etype, session_id, payload, prev)
+        events.append(e)
+        prev = e["event_hash"]
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+        for e in events:
+            f.write(json.dumps(e) + "\n")
+        tmp = f.name
+
+    try:
+        r = run_verifier(tmp, "json")
+        assert r.returncode == 1, f"Expected exit 1, got {r.returncode}"
+        data = json.loads(r.stdout)
+        assert data["result"] == "FAIL"
+        assert data["checks"]["session_completeness"]["status"] == "FAIL"
+        assert data["checks"]["session_completeness"]["has_session_start"] is False
+    finally:
+        os.unlink(tmp)

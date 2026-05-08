@@ -54,6 +54,9 @@ class RawEventCreate(BaseModel):
     timestamp_monotonic: int = Field(
         ..., ge=0, description="Client timestamp (OPAQUE, stored verbatim)"
     )
+    timestamp: str = Field(
+        ..., description="ISO 8601 wall timestamp (REQUIRED for verification)"
+    )
     payload: dict[str, Any] = Field(default_factory=dict, description="Event payload")
 
     # Optional SDK-provided fields (NEVER TRUSTED for authority)
@@ -107,6 +110,11 @@ class IngestionResult(BaseModel):
     seal_timestamp: str | None = Field(None, description="ISO 8601 seal timestamp")
     session_digest: str | None = Field(None, description="Session digest hash")
     evidence_class: str | None = Field(None, description="Evidence classification")
+
+    # CHAIN_SEAL event summary — non-None when sealed=True
+    chain_seal: dict[str, Any] | None = Field(
+        None, description="Seal event summary (only present when sealed=True)"
+    )
 
 
 # --- Rejection Response ---

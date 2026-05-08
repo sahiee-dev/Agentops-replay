@@ -16,6 +16,7 @@ class Session(Base):
     chain_authority = Column(String(50), nullable=True)
     total_drops = Column(Integer, default=0)
     ingestion_service_id = Column(String(100), nullable=True)
+    evidence_class = Column(String(50), nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="sessions")

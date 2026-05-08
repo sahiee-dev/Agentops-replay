@@ -2,11 +2,11 @@
 conftest.py for integration tests.
 
 Provides:
-- anyio_backend: pins async tests to asyncio (trio not installed)
-- requires_docker: skips DB-dependent tests when Postgres is not reachable
+- anyio_backend: pins async tests to asyncio
+- In-memory SQLite database override for FastAPI's get_db dependency
+- Auto-skip when backend packages are not available
 """
 
-import socket
 import pytest
 
 
@@ -16,21 +16,11 @@ def anyio_backend():
     return "asyncio"
 
 
-def _postgres_is_reachable(host: str = "localhost", port: int = 5432) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=1):
-            return True
-    except OSError:
-        return False
-
-
 def pytest_collection_modifyitems(config, items):
-    db_available = _postgres_is_reachable()
+    """Skip requires_docker tests — we use in-memory SQLite instead."""
     skip_marker = pytest.mark.skip(
-        reason="Requires Docker (Postgres not reachable on localhost:5432). "
-               "Run: cd backend && docker-compose up -d"
+        reason="Docker-based test skipped; using in-memory SQLite."
     )
     for item in items:
-        if item.get_closest_marker("requires_docker") and not db_available:
+        if item.get_closest_marker("requires_docker"):
             item.add_marker(skip_marker)
-

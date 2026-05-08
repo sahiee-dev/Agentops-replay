@@ -21,15 +21,13 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-# Add verifier to path for JCS import (LOCKED to verifier implementation)
-# Path: backend/app/services/ingestion/hasher.py -> ../../../../verifier
-_verifier_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "verifier")
-)
-if _verifier_path not in sys.path:
-    sys.path.insert(0, _verifier_path)
+import os
+import sys
 
+# Add verifier to path for JCS import (LOCKED to verifier implementation)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'verifier'))
 from jcs import canonicalize  # AUTHORITATIVE: verifier's RFC 8785 implementation
+
 
 
 class RejectionReason(Enum):
@@ -149,8 +147,9 @@ def recompute_chain(
 
         # Validate required fields before computing hash
         event_type = event.get("event_type")
-        timestamp_monotonic = event.get("timestamp_monotonic")
+        timestamp_wall = event.get("timestamp_wall")
         sequence_number = event.get("sequence_number")
+        session_id_str = event.get("session_id")
 
         if event_type is None:
             return ChainResult(
@@ -158,21 +157,33 @@ def recompute_chain(
                 rejection_reason=RejectionReason.MISSING_REQUIRED_FIELD,
                 rejection_details=f"Event {idx} missing required field 'event_type'",
             )
-        if timestamp_monotonic is None:
+        if timestamp_wall is None:
             return ChainResult(
                 valid=False,
                 rejection_reason=RejectionReason.MISSING_REQUIRED_FIELD,
-                rejection_details=f"Event {idx} missing required field 'timestamp_monotonic'",
+                rejection_details=f"Event {idx} missing required field 'timestamp_wall'",
             )
+        
+        # Ensure timestamp is string for JCS
+        if not isinstance(timestamp_wall, str):
+            # Convert datetime to ISO format with Z suffix to match verifier/export
+            from datetime import datetime
+            if isinstance(timestamp_wall, datetime):
+                timestamp_str = timestamp_wall.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
+            else:
+                timestamp_str = str(timestamp_wall)
+        else:
+            timestamp_str = timestamp_wall
 
-        # Compute event hash
-        # Hash includes: prev_hash + sequence + event_type + payload_hash
+        # Compute event hash over the 7-field envelope (minus event_hash)
+        # Fields: seq, event_type, session_id, timestamp, payload, prev_hash
         event_data = {
-            "prev_hash": prev_hash,
-            "sequence_number": sequence_number,
+            "seq": sequence_number,
             "event_type": event_type,
-            "payload_hash": payload_hash,
-            "timestamp_monotonic": timestamp_monotonic,
+            "session_id": session_id_str,
+            "timestamp": timestamp_str,
+            "payload": payload,
+            "prev_hash": prev_hash,
         }
         event_canonical = canonicalize(event_data)
         event_hash = hashlib.sha256(event_canonical).hexdigest()
