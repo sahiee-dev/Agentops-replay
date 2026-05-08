@@ -7,6 +7,7 @@ Used by BOTH ingestion service AND standalone verifier to ensure deterministic h
 
 Any modification to hash computation MUST update golden vector tests.
 """
+from __future__ import annotations
 
 import hashlib
 from typing import Any

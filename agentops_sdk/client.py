@@ -1,6 +1,8 @@
 """
 agentops_sdk/client.py - Main SDK Entry Point
 """
+from __future__ import annotations
+
 
 import json
 import uuid
