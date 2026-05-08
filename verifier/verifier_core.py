@@ -7,6 +7,7 @@ Used by BOTH ingestion service AND standalone verifier to ensure deterministic h
 
 Any modification to hash computation MUST update golden vector tests.
 """
+from __future__ import annotations
 
 import hashlib
 from typing import Any
@@ -214,7 +215,7 @@ def validate_sequence_monotonicity(
     Returns:
         (is_valid, error_message) tuple
     """
-    expected_seq = 0
+    expected_seq = 1
 
     for i, event in enumerate(events):
         actual_seq = event.get("sequence_number")

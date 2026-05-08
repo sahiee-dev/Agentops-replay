@@ -39,6 +39,11 @@ jobs:
       - name: Run unit tests
         run: pytest tests/unit/ -v
 
+      - name: Zero-dependency verifier check
+        run: |
+          python3 -m venv /tmp/bare_venv
+          /tmp/bare_venv/bin/python verifier/agentops_verify.py verifier/test_vectors/valid_session.jsonl
+
       - name: Verify test vectors
         run: |
           python3 verifier/generator.py

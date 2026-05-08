@@ -1,6 +1,9 @@
 # AgentOps Replay — Event Log Specification (ELS v1.0)
 
-This document is the authoritative specification for the event log format used by AgentOps Replay. All SDK implementations, ingestion services, verifiers, and replay tools must conform to this specification. Any deviation from these rules produces an invalid chain.
+Version: 1.0
+Status: Stable
+Last Updated: May 2026
+This document is the authoritative specification for the event log format.
 
 ---
 

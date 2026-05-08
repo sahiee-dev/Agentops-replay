@@ -35,10 +35,12 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Environment variables
+# Environment variables — NEVER commit real keys
 .env
-.env.local
-.env.production
+.env.*
+*.env
+!.env.example
+backend/.env
 
 # Database
 *.db

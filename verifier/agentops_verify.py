@@ -12,6 +12,8 @@ Exit codes:
   2  ERROR — file not found, permission error, or malformed JSONL
 """
 
+from __future__ import annotations
+
 import argparse
 import hashlib
 import json

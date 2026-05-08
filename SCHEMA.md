@@ -1,143 +1,124 @@
-# SCHEMA.md (v0.2)
+# AgentOps Replay — Event Payload Schema
 
-This document defines the strict **Payload Schemas** for each `EventType` defined in `EVENT_LOG_SPEC.md` v0.2.
+This document defines the exact payload schemas for the 12 canonical event types in AgentOps Replay. All implementations must adhere to these schemas to ensure interoperability and verifiability.
 
-**STATUS: FROZEN. DO NOT MODIFY WITHOUT RFC.**
+---
 
-## Validation Strategy (Transparency)
-
-All payloads must validate against the JSON Schema.
-**Canonicalization:** Payloads must be serialized using RFC 8785 (JCS) before hashing.
-
-## 1. Lifecycle Events
+## SDK-Authority Events
 
 ### SESSION_START
-
+Marks the beginning of a session.
 ```json
 {
   "agent_id": "string (required)",
-  "tags": ["string"],
-  "environment": "prod|staging|dev (required)",
-  "framework": "string (required)",
-  "framework_version": "string (required)",
-  "sdk_version": "string (required)",
-  "system_prompt_hash": "sha256 (optional)"
+  "model_id": "string (optional)",
+  "tags": "list of strings (optional)"
 }
 ```
 
 ### SESSION_END
-
+Marks the end of a session.
 ```json
 {
-  "status": "success|failure|timeout|cancelled (required)",
-  "reason": "string (optional)",
-  "duration_ms": "uint64 (required)",
-  "total_cost_usd": "float (optional)"
+  "status": "string (required, 'success' or 'error')"
 }
 ```
 
-## 2. Execution Events
+### LLM_CALL
+Records an invocation of an LLM.
+```json
+{
+  "prompt_hash": "string (required, SHA-256 hex)",
+  "model_id": "string (required)"
+}
+```
+
+### LLM_RESPONSE
+Records a completion from an LLM.
+```json
+{
+  "content_hash": "string (required, SHA-256 hex)",
+  "finish_reason": "string (required)"
+}
+```
 
 ### TOOL_CALL
-
+Records a tool invocation.
 ```json
 {
   "tool_name": "string (required)",
-  "tool_id": "string (optional, for correlation)",
-  "args": "object (required)",
-  "args_hash": "sha256 (optional, required if args is redacted)",
-  "timeout_ms": "int (optional)"
+  "args_hash": "string (required, SHA-256 hex)"
 }
 ```
 
 ### TOOL_RESULT
-
+Records a tool output.
 ```json
 {
   "tool_name": "string (required)",
-  "tool_id": "string (optional, must match call)",
-  "result": "object|string (required)",
-  "result_hash": "sha256 (optional, required if result is redacted)",
-  "status": "success|error (required)",
-  "duration_ms": "uint64 (required)"
+  "result_hash": "string (required, SHA-256 hex)"
 }
 ```
 
-## 3. Interaction Events
-
-### MODEL_REQUEST
-
-```json
-{
-  "model": "string (required)",
-  "provider": "openai|anthropic|azure|... (required)",
-  "messages": [
-    {
-      "role": "system|user|assistant|tool",
-      "content": "string (required by schema, but may be '[REDACTED]')",
-      "content_hash": "sha256 (optional, REQUIRED if content is '[REDACTED]')",
-      "name": "string (optional)"
-    }
-  ],
-  "parameters": {
-    "temperature": "float",
-    "top_p": "float",
-    "max_tokens": "int"
-  }
-}
-```
-
-### MODEL_RESPONSE
-
-```json
-{
-  "model": "string (required)",
-  "content": "string (required, may be '[REDACTED]')",
-  "content_hash": "sha256 (optional, REQUIRED if content is '[REDACTED]')",
-  "role": "assistant (required)",
-  "finish_reason": "stop|length|tool_calls|content_filter (required)",
-  "usage": {
-    "prompt_tokens": "int",
-    "completion_tokens": "int",
-    "total_tokens": "int"
-  }
-}
-```
-
-## 4. Governance Events (Verified)
-
-### DECISION_TRACE
-
-_Structured evidence of a decision. NO FREEFORM THOUGHTS._
-
-```json
-{
-  "decision_id": "uuid (required)",
-  "inputs": "object (required)",
-  "outputs": "object (required)",
-  "justification": "string (required - policy/rule/logic used)",
-  "policy_version": "string (optional)"
-}
-```
-
-### ERROR
-
+### TOOL_ERROR
+Records a tool or LLM error.
 ```json
 {
   "error_type": "string (required)",
-  "message": "string (required)",
-  "stack_trace": "string (optional)",
-  "fatal": "boolean (required)"
+  "error_message": "string (required, max 500 chars)"
 }
 ```
 
-### ANNOTATION
-
+### LOG_DROP
+Records data loss.
 ```json
 {
-  "annotator_id": "string (required)",
-  "annotation_type": "flag|comment|rating (required)",
-  "content": "object (required)",
-  "target_event_id": "uuid (optional)"
+  "count": "integer (required)",
+  "reason": "string (required, 'buffer_overflow' or 'internal_error')",
+  "seq_range_start": "integer (required)",
+  "seq_range_end": "integer (required)"
+}
+```
+
+---
+
+## Server-Authority Events
+
+### CHAIN_SEAL
+Records the authoritative closing of a valid chain.
+```json
+{
+  "final_hash": "string (required, SHA-256 hex)",
+  "authority": "string (required, 'server')",
+  "event_count": "integer (required)",
+  "server_timestamp": "string (required, ISO 8601)",
+  "server_version": "string (required)"
+}
+```
+
+### CHAIN_BROKEN
+Records a detected sequence gap.
+```json
+{
+  "gap_start": "integer (required)",
+  "gap_end": "integer (required)"
+}
+```
+
+### REDACTION
+Records a payload modification for compliance.
+```json
+{
+  "original_event_id": "string (required, UUID)",
+  "redaction_reason": "string (required)"
+}
+```
+
+### FORENSIC_FREEZE
+Records an administrative integrity lock.
+```json
+{
+  "freeze_id": "string (required, UUID)",
+  "freeze_reason": "string (required)"
 }
 ```

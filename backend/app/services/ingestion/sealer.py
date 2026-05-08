@@ -19,8 +19,6 @@ from typing import Any
 
 from app.models import ChainAuthority
 
-from .hasher import recompute_chain
-
 
 class SealStatus(Enum):
     """Result status of sealing attempt."""
@@ -62,7 +60,9 @@ def seal_chain(
 
     Args:
         session_id: Session UUID
-        events: List of events to seal (will be recomputed)
+        events: List of event dicts. Each must have at least 'event_hash'
+                and 'sequence_number'. These are pre-validated by the ingestion
+                service — the sealer uses them only for digest computation.
         ingestion_service_id: ID of the ingestion service issuing the seal
         existing_seal: If not None, indicates chain was previously sealed → REJECT
         total_drops: Number of LOG_DROP events (affects evidence class)
@@ -79,57 +79,43 @@ def seal_chain(
             session_digest=existing_seal.get("session_digest"),
         )
 
-    # Recompute chain to establish authority
-    chain_result = recompute_chain(events)
-
-    if not chain_result.valid:
-        reason_value = (
-            chain_result.rejection_reason.value
-            if chain_result.rejection_reason
-            else "INVALID_CHAIN"
-        )
+    if not events:
         return SealResult(
             status=SealStatus.INVALID_CHAIN,
-            rejection_reason=f"{reason_value}: {chain_result.rejection_details}",
+            rejection_reason="Cannot seal empty event list",
         )
 
-    # Ensure we have recomputed events
-    recomputed = chain_result.recomputed_events
-    if recomputed is None:
+    # Extract final hash from the last event
+    final_hash = events[-1].get("event_hash")
+    if not final_hash:
         return SealResult(
             status=SealStatus.INVALID_CHAIN,
-            rejection_reason="No recomputed events available",
+            rejection_reason="Last event missing event_hash",
         )
 
-    final_hash = chain_result.final_hash
-    if final_hash is None:
-        return SealResult(
-            status=SealStatus.INVALID_CHAIN, rejection_reason="No final hash computed"
-        )
+    event_count = len(events)
 
     # Compute session digest (hash of all event hashes)
     session_digest = _compute_session_digest(
-        session_id=session_id, events=recomputed, final_hash=final_hash
+        session_id=session_id, events=events, final_hash=final_hash
     )
 
     # Determine evidence class
     evidence_class = _determine_evidence_class(
-        total_drops=total_drops, event_count=chain_result.event_count
+        total_drops=total_drops, event_count=event_count
     )
 
     # Capture timestamp once for consistency
     now = datetime.now(UTC)
-    seal_timestamp = (
-        now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
-    )
+    seal_timestamp = now.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
 
     return SealResult(
         status=SealStatus.SEALED,
         evidence_class=evidence_class,
         session_digest=session_digest,
-        final_event_hash=chain_result.final_hash,
+        final_event_hash=final_hash,
         seal_timestamp=seal_timestamp,
-        event_count=chain_result.event_count,
+        event_count=event_count,
         ingestion_service_id=ingestion_service_id,
     )
 

@@ -1,5 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, JSON
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -13,7 +12,7 @@ class Event(Base):
     event_type = Column(String(50), nullable=False, index=True)
     timestamp = Column(DateTime, nullable=False, index=True)
     tool_name = Column(String(50), nullable=True, index=True)
-    flags = Column(ARRAY(String), nullable=True)
+    flags = Column(JSON, nullable=True)  # Was ARRAY(String) — JSON is portable
     sequence_number = Column(Integer, nullable=True)
 
     # Relationship back to session

@@ -263,7 +263,6 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
         if self.client:
             self.client.start_session(
                 agent_id=self.agent_id,
-                tags=all_tags
             )
 
         self._session_active = True
@@ -628,7 +627,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             "log": action.log if hasattr(action, 'log') else ""
         }
 
-        self.client.record(EventType.DECISION_TRACE, payload)
+        self.client.record(EventType.LLM_CALL, payload)
 
     def on_agent_finish(
         self,
@@ -661,7 +660,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             "log": finish.log if hasattr(finish, 'log') else ""
         }
 
-        self.client.record(EventType.DECISION_TRACE, payload)
+        self.client.record(EventType.LLM_CALL, payload)
 
     # =========================================================================
     # Chain Callbacks (optional, for completeness)
@@ -742,7 +741,7 @@ class AgentOpsCallbackHandler(BaseCallbackHandler):
             "chain_type": "chain"
         }
 
-        self.client.record(EventType.ERROR, payload)
+        self.client.record(EventType.TOOL_ERROR, payload)
         
         # Clean up run_id_map to prevent memory leak
         self._run_id_map.pop(str(run_id), None)

@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:15-alpine
@@ -24,14 +22,13 @@ services:
         condition: service_healthy
     environment:
       PGPASSWORD: postgres_superuser_password
-    command: >
-      psql -h db -U postgres -c
-      "DO $$ BEGIN
-       IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'agentops_app') THEN
-         CREATE USER agentops_app WITH PASSWORD 'apppassword';
-       END IF; END $$;
-       CREATE DATABASE IF NOT EXISTS agentops;
-       GRANT USAGE ON SCHEMA public TO agentops_app;"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        psql -h db -U postgres -tc "SELECT 1 FROM pg_roles WHERE rolname='agentops_app'" | grep -q 1 || psql -h db -U postgres -c "CREATE USER agentops_app WITH PASSWORD 'apppassword';"
+        psql -h db -U postgres -tc "SELECT 1 FROM pg_database WHERE datname='agentops'" | grep -q 1 || psql -h db -U postgres -c "CREATE DATABASE agentops;"
+        psql -h db -U postgres -d agentops -c "GRANT ALL PRIVILEGES ON SCHEMA public TO agentops_app;"
     restart: "no"
 
   server:
@@ -42,14 +39,15 @@ services:
       db:
         condition: service_healthy
     environment:
-      AGENTOPS_DATABASE_URL: postgresql+asyncpg://agentops_app:apppassword@db:5432/agentops
+      AGENTOPS_DATABASE_URL: postgresql://agentops_app:apppassword@db:5432/agentops
+      MIGRATION_DATABASE_URL: postgresql://postgres:postgres_superuser_password@db:5432/agentops
       AGENTOPS_LOG_LEVEL: INFO
     ports:
       - "8000:8000"
     command: >
       sh -c "
         cd /app/backend &&
-        alembic upgrade head &&
+        AGENTOPS_DATABASE_URL=$$MIGRATION_DATABASE_URL alembic upgrade head &&
         uvicorn app.main:app --host 0.0.0.0 --port 8000
       "
 

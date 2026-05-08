@@ -16,6 +16,7 @@ FAILURE SEMANTICS:
 """
 
 import logging
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -23,7 +24,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DBSession
 
-from app.models import ChainSeal, EventChain, Session, SessionStatus
+from app.models import ChainSeal, EventChain, Session, SessionStatus, User
 from app.services.ingestion.hasher import (
     GENESIS_HASH,
     ChainResult,
@@ -77,6 +78,8 @@ class IngestionResultData:
     seal_timestamp: str | None = None
     session_digest: str | None = None
     evidence_class: str | None = None
+    event_count: int = 0
+    ingestion_service_id: str | None = None
 
 
 class IngestionService:
@@ -114,6 +117,13 @@ class IngestionService:
             StateConflictError: 409 - sealed session or sequence conflict
             BadRequestError: 400 - invalid input or seal request
         """
+        # Map schema field "timestamp" to model field "timestamp_wall" for all events
+        for event_dict in events:
+            if "timestamp" in event_dict:
+                event_dict["timestamp_wall"] = event_dict.pop("timestamp")
+            # Ensure session_id is present for hasher
+            event_dict["session_id"] = session_id_str
+
         # =========================================================
         # SINGLE TRANSACTION BLOCK - ALL OR NOTHING
         # =========================================================
@@ -125,7 +135,7 @@ class IngestionService:
         self._validate_session_not_sealed(session)
 
         # 3. Get existing chain state
-        last_sequence, last_hash = self._get_chain_state(int(session.id))
+        last_sequence, last_hash = self._get_chain_state(session.session_id_str)
 
         # 4. Validate sequence continuity
         self._validate_sequence_continuity(events, last_sequence)
@@ -177,6 +187,8 @@ class IngestionService:
             seal_timestamp=seal_data.seal_timestamp if seal_data else None,
             session_digest=seal_data.session_digest if seal_data else None,
             evidence_class=seal_data.evidence_class if seal_data else None,
+            event_count=seal_data.event_count if seal_data else 0,
+            ingestion_service_id=seal_data.ingestion_service_id if seal_data else None,
         )
 
     # =========================================================
@@ -193,11 +205,58 @@ class IngestionService:
         session = self.db.execute(stmt).scalar_one_or_none()
 
         if session is None:
-            raise BadRequestError(
-                code="SESSION_NOT_FOUND", message=f"Session {session_id_str} not found"
-            )
+            # AUTO-CREATE SESSION (Authoritative mode requirement)
+            logger.info("Session %s not found, creating new session", session_id_str)
+            return self._create_session(session_id_str)
 
         return session
+
+    def _get_or_create_system_user(self) -> User:
+        """Ensure the __system__ user exists for session attribution."""
+        stmt = select(User).where(User.username == "__system__")
+        user = self.db.execute(stmt).scalar_one_or_none()
+
+        if not user:
+            user = User(username="__system__", email="system@agentops.local")
+            self.db.add(user)
+            self.db.flush()  # Get ID
+
+        return user
+
+    def _create_session(self, session_id_str: str) -> Session:
+        """Create a new session automatically on first ingestion."""
+        system_user = self._get_or_create_system_user()
+
+        try:
+            session = Session(
+                session_id_str=session_id_str,
+                user_id=system_user.id,
+                status=SessionStatus.ACTIVE.value,
+                chain_authority="SERVER",
+                total_drops=0,
+            )
+            self.db.add(session)
+            self.db.flush()
+        except Exception:  # Handle potential race condition (Unique constraint)
+            self.db.rollback()
+            # Try to re-fetch if someone else created it
+            stmt = (
+                select(Session)
+                .where(Session.session_id_str == session_id_str)
+                .with_for_update()
+            )
+            res = self.db.execute(stmt).scalar_one_or_none()
+            if res:
+                return res
+            raise  # Re-raise if it was something else
+
+        # Re-fetch with lock to ensure consistency
+        stmt = (
+            select(Session)
+            .where(Session.session_id_str == session_id_str)
+            .with_for_update()
+        )
+        return self.db.execute(stmt).scalar_one()
 
     def _validate_session_not_sealed(self, session: Session) -> None:
         """INVARIANT: Sealed sessions cannot accept new events."""
@@ -210,11 +269,11 @@ class IngestionService:
                 },
             )
 
-    def _get_chain_state(self, session_id: int) -> tuple[int, str]:
+    def _get_chain_state(self, session_id_str: str) -> tuple[int, str]:
         """Get last sequence number and hash from existing chain."""
         stmt = (
             select(EventChain.sequence_number, EventChain.event_hash)
-            .where(EventChain.session_id == session_id)
+            .where(EventChain.session_id == session_id_str)
             .order_by(EventChain.sequence_number.desc())
             .limit(1)
         )
@@ -222,7 +281,7 @@ class IngestionService:
 
         if result is None:
             # No events yet - genesis state
-            return -1, GENESIS_HASH
+            return 0, GENESIS_HASH
 
         return result.sequence_number, result.event_hash
 
@@ -327,19 +386,32 @@ class IngestionService:
             # Parse timestamp
             ts_mono = event_data.get("timestamp_monotonic", 0)
 
-            # Create wall timestamp (use current time as server receipt time)
+            # Map schema field "timestamp" to model field "timestamp_wall"
+            if "timestamp" in event_data:
+                event_data["timestamp_wall"] = event_data.pop("timestamp")
+
+            # Resolve wall timestamp — parse string to datetime if needed
             now = datetime.now(UTC)
+            raw_ts = event_data.get("timestamp_wall", now)
+            if isinstance(raw_ts, str):
+                try:
+                    timestamp_wall = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+                except (ValueError, TypeError):
+                    timestamp_wall = now
+            elif isinstance(raw_ts, datetime):
+                timestamp_wall = raw_ts
+            else:
+                timestamp_wall = now
 
             event = EventChain(
-                session_id=session.id,
-                session_id_str=str(session.session_id_str),
+                event_id=str(uuid.uuid4()),
+                session_id=session.session_id_str,
                 sequence_number=event_data["sequence_number"],
-                timestamp_wall=now,
+                timestamp_wall=timestamp_wall,
                 timestamp_monotonic=ts_mono,
                 event_type=event_data["event_type"],
                 payload_canonical=event_data["payload_canonical"],
                 payload_hash=event_data["payload_hash"],
-                payload_jsonb=event_data.get("payload"),
                 prev_event_hash=event_data["prev_event_hash"],
                 event_hash=event_data["event_hash"],
                 chain_authority="SERVER",  # INVARIANT: Always SERVER
@@ -353,7 +425,7 @@ class IngestionService:
         # Get all events for seal computation
         stmt = (
             select(EventChain)
-            .where(EventChain.session_id == session.id)
+            .where(EventChain.session_id == session.session_id_str)
             .order_by(EventChain.sequence_number)
         )
         all_events = list(self.db.execute(stmt).scalars())
@@ -391,11 +463,19 @@ class IngestionService:
                 message=seal_result.rejection_reason or "Sealing failed",
             )
 
+        # Parse seal_timestamp string to datetime for the DateTime column
+        if seal_result.seal_timestamp:
+            seal_ts = datetime.fromisoformat(
+                seal_result.seal_timestamp.replace("Z", "+00:00")
+            )
+        else:
+            seal_ts = datetime.now(UTC)
+
         # Create ChainSeal record
         chain_seal = ChainSeal(
             session_id=session.id,
             ingestion_service_id=INGESTION_SERVICE_ID,
-            seal_timestamp=seal_result.seal_timestamp,
+            seal_timestamp=seal_ts,
             session_digest=seal_result.session_digest,
             final_event_hash=seal_result.final_event_hash,
             event_count=seal_result.event_count,

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import time
 import urllib.request
@@ -33,8 +35,14 @@ class EventSender:
         """
         POST events to /v1/ingest.
 
-        Request body: {"session_id": str, "events": [...]}
+        Translates SDK envelope fields to server-expected fields:
+          SDK field  →  Server field
+          seq        →  sequence_number
+          timestamp  →  timestamp_monotonic (epoch-converted)
+          prev_hash  →  prev_event_hash
+          payload    →  payload
 
+        Request body: {"session_id": str, "events": [...], "seal": bool}
         Returns parsed response dict on success.
 
         Raises
@@ -42,9 +50,31 @@ class EventSender:
         ConnectionError: After max_retries failed attempts.
         ValueError: If server returns 4xx (client error — do not retry).
         """
+        # Translate SDK events to server schema
+        translated = []
+        for event in events:
+            server_event = {
+                "event_type": event["event_type"],
+                "sequence_number": event["seq"],
+                "timestamp_monotonic": _timestamp_to_monotonic(event.get("timestamp", "")),
+                "timestamp": event.get("timestamp", ""),
+                "payload": event.get("payload", {}),
+                # SDK hashes are logged but never trusted by the server
+                "event_hash": event.get("event_hash"),
+                "prev_event_hash": event.get("prev_hash"),
+            }
+            translated.append(server_event)
+
+        # Determine if we should request sealing
+        # Seal if the last event is SESSION_END
+        seal = False
+        if translated and translated[-1]["event_type"] == "SESSION_END":
+            seal = True
+
         body = {
             "session_id": session_id,
-            "events": events,
+            "events": translated,
+            "seal": seal,
         }
         return self._post("/v1/ingest", body)
 
@@ -85,3 +115,17 @@ class EventSender:
             f"Failed to POST to {url} after {self._max_retries} attempts. "
             f"Last error: {last_error}"
         )
+
+
+def _timestamp_to_monotonic(ts: str) -> int:
+    """Convert ISO 8601 timestamp string to epoch microseconds for timestamp_monotonic."""
+    if not ts:
+        return 0
+    try:
+        from datetime import datetime
+        # Strip trailing Z and parse
+        clean = ts.rstrip("Z")
+        dt = datetime.fromisoformat(clean)
+        return int(dt.timestamp() * 1_000_000)
+    except (ValueError, TypeError):
+        return 0

@@ -15,96 +15,55 @@ Read these documents in order:
 ## Development Setup
 
 ```bash
-# Clone the repo
+# 1. Clone and install in editable mode with all dependencies
 git clone https://github.com/sahiee-dev/Agentops-replay.git
 cd Agentops-replay
+pip install -e ".[langchain,server,dev]"
 
-# Verify your environment
-python3 --version  # Must be 3.11+
-
-# Run the verifier
-python3 verifier/agentops_verify.py verifier/test_vectors/valid_session.jsonl
+# 2. Verify your environment
+python3 --version  # Must be 3.11+ (CI uses 3.11)
 ```
 
-## Quality Gate Contract
+## Running the Test Suite
 
-> **A PR is invalid if:**
->
-> - Ruff fails (`ruff check .`)
-> - MyPy strict fails (`mypy .`)
-> - Coverage < 90% (`pytest --cov-fail-under=90`)
-> - Verifier output changes without spec update
-> - `# type: ignore` added without inline justification
+We use `pytest` for all testing.
 
-**Python Version**: 3.11 is canonical. See `.python-version`. CI is the source of truth.
+```bash
+# Run fast unit tests (local only)
+pytest tests/unit/
 
-**Tool Versions**: Pinned in `pyproject.toml [project.optional-dependencies.dev]`. Do not upgrade without testing.
+# Run integration tests (requires SQLite, no network)
+pytest tests/integration/
 
-**Do not relax the gates to make CI green. Make the code earn the green.**
+# Run full E2E suite (requires local backend)
+pytest tests/e2e/
 
-## Contribution Areas
+# Run with coverage
+pytest --cov=agentops_sdk --cov=verifier --cov-fail-under=90
+```
 
-### 1. Verifier Improvements
+## The Frozen Fields Rule
 
-- Add test vectors for edge cases
-- Improve error messages
-- Add performance benchmarks
+**CRITICAL**: Event envelope fields (`seq`, `event_type`, `session_id`, `timestamp`, `payload`, `prev_hash`, `event_hash`) are strictly frozen. They participate in the cryptographic hash chain. Never rename, remove, or change the type of these fields. Doing so constitutes a breaking change to the protocol and requires a major version bump and a migration of all existing logs.
 
-**Constraint**: Verifier must remain zero-dependency.
+## Verification of Test Vectors
 
-### 2. SDK Enhancements
+Before submitting a PR, you must verify that the standalone verifier still correctly identifies the canonical test vectors.
 
-- Add redaction helpers
-- Improve buffer strategies
-- Add retry logic
+```bash
+# Should PASS
+python3 verifier/agentops_verify.py verifier/test_vectors/valid_session.jsonl
 
-**Constraint**: SDK output must pass `agentops-verify` unchanged.
+# Should FAIL
+python3 verifier/agentops_verify.py verifier/test_vectors/tampered_hash.jsonl
+python3 verifier/agentops_verify.py verifier/test_vectors/sequence_gap.jsonl
+```
 
-### 3. Framework Integrations
+## PR Checklist
 
-- LangChain integration (in progress)
-- CrewAI integration
-- AutoGen integration
-
-**Constraint**: Deterministic payload extraction only.
-
-### 4. Documentation
-
-- Improve examples
-- Add tutorials
-- Fix typos
-
-## Pull Request Process
-
-1. **Create a branch**: `git checkout -b feature/your-feature`
-2. **Make changes**: Follow existing code style
-3. **Test**: Run `agentops-verify` on generated logs
-4. **Commit**: Use descriptive commit messages
-5. **Push**: `git push origin feature/your-feature`
-6. **PR**: Include:
-   - What changed
-   - Why it's needed
-   - Verification output (if applicable)
-
-## Code Style
-
-- Python: Follow PEP 8
-- No external dependencies for core verifier
-- Explicit is better than implicit
-- Fail loudly, never silently
-
-## Testing Requirements
-
-All PRs must:
-
-1. Pass existing test vectors
-2. Not introduce spec drift
-3. Include verification output if touching SDK/verifier
-
-## Questions?
-
-Open an issue with the `question` label.
-
-## License
-
-By contributing, you agree that your contributions will be licensed under Apache 2.0.
+- [ ] Unit tests pass (`pytest tests/unit/`)
+- [ ] No new copies of JCS (import from `verifier/jcs.py`)
+- [ ] No hardcoded secrets or API keys
+- [ ] `from __future__ import annotations` added for Python 3.9 compatibility
+- [ ] Documentation updated if schemas changed
+- [ ] You have read and understood [CONSTITUTION.md](CONSTITUTION.md)
