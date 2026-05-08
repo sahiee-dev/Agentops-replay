@@ -71,9 +71,9 @@ def _make_valid_batch(session_id: str, seal: bool = False) -> dict:
     events = []
     prev = GENESIS_HASH
     specs = [
-        (0, "SESSION_START", {"agent_id": "test-agent", "model_id": "test-model"}),
-        (1, "LLM_CALL", {"model_id": "test-model", "prompt_hash": "abc123"}),
-        (2, "SESSION_END", {"status": "success"}),
+        (1, "SESSION_START", {"agent_id": "test-agent", "model_id": "test-model"}),
+        (2, "LLM_CALL", {"model_id": "test-model", "prompt_hash": "abc123"}),
+        (3, "SESSION_END", {"status": "success"}),
     ]
     for seq, etype, payload in specs:
         e = build_event(seq, etype, session_id, payload, prev)
