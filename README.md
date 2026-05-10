@@ -17,10 +17,10 @@ Local JSONL / Ingestion Service
     ↓  (Immutable Log)
 Standalone Verifier (Independent Validation)
     ↓
-Compliance Reports (PASS ✅)
+Compliance Reports (PASS)
 ```
 
-## Quickstart — 5 minutes to PASS ✅
+## Quickstart — 5 minutes to PASS
 
 Get a local-authority session running and verified in under 5 minutes on a fresh machine.
 
@@ -51,7 +51,7 @@ Evidence    : NON_AUTHORITATIVE_EVIDENCE
 [3/4] Hash chain integrity ........... PASS
 [4/4] Session completeness ........... PASS
 
-Result: PASS ✅
+Result: PASS
 ```
 
 ## Evidence Classes
