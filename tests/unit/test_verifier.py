@@ -23,6 +23,13 @@ def test_valid_session_passes():
     data = json.loads(r.stdout)
     assert data["result"] == "PASS"
     assert data["evidence_class"] == "NON_AUTHORITATIVE_EVIDENCE"
+    ta = data["trust_assumptions"]
+    assert ta["independent_server_verification"] == False
+    assert ta["server_identity_verified"] == False
+    assert ta["byzantine_server_defended"] == False
+    assert ta["session_freshness_verified"] == False
+    assert ta["clock_accuracy_required"] == False
+    assert ta["instrumentation_complete"] == "unknown"
 
 
 def test_tampered_hash_fails():
@@ -31,6 +38,9 @@ def test_tampered_hash_fails():
     data = json.loads(r.stdout)
     assert data["result"] == "FAIL"
     assert data["checks"]["hash_chain_integrity"]["status"] == "FAIL"
+    ta = data["trust_assumptions"]
+    assert ta["byzantine_server_defended"] == False
+    assert ta["session_freshness_verified"] == False
 
 
 def test_sequence_gap_fails():
@@ -39,6 +49,9 @@ def test_sequence_gap_fails():
     data = json.loads(r.stdout)
     assert data["result"] == "FAIL"
     assert data["checks"]["sequence_integrity"]["status"] == "FAIL"
+    ta = data["trust_assumptions"]
+    assert ta["byzantine_server_defended"] == False
+    assert ta["session_freshness_verified"] == False
 
 
 def test_exit_code_2_on_missing_file():
@@ -80,6 +93,14 @@ def test_authoritative_evidence_with_chain_seal():
         assert r.returncode == 0
         data = json.loads(r.stdout)
         assert data["evidence_class"] == "AUTHORITATIVE_EVIDENCE"
+        ta = data["trust_assumptions"]
+        assert ta["independent_server_verification"] == True
+        assert ta["server_identity_verified"] == False
+        assert ta["ingestion_service_assumed_honest"] == True
+        assert ta["full_chain_rewrite_defended"] == False
+        assert ta["byzantine_server_defended"] == False
+        assert ta["session_freshness_verified"] == False
+        assert ta["instrumentation_complete"] == "unknown"
     finally:
         os.unlink(tmp)
 
@@ -118,6 +139,12 @@ def test_partial_authoritative_with_log_drop():
         r = run_verifier(tmp, "json")
         data = json.loads(r.stdout)
         assert data["evidence_class"] == "PARTIAL_AUTHORITATIVE_EVIDENCE"
+        ta = data["trust_assumptions"]
+        assert ta["independent_server_verification"] == True
+        assert ta["ingestion_service_assumed_honest"] == True
+        assert ta["byzantine_server_defended"] == False
+        assert ta["session_freshness_verified"] == False
+        assert ta["instrumentation_complete"] == "incomplete"
     finally:
         os.unlink(tmp)
 
@@ -151,5 +178,33 @@ def test_missing_session_start_fails():
         assert data["result"] == "FAIL"
         assert data["checks"]["session_completeness"]["status"] == "FAIL"
         assert data["checks"]["session_completeness"]["has_session_start"] is False
+        ta = data["trust_assumptions"]
+        assert ta["byzantine_server_defended"] == False
+        assert ta["session_freshness_verified"] == False
     finally:
         os.unlink(tmp)
+
+
+def test_trust_assumptions_honest_about_limits():
+    """
+    The system must never overclaim its guarantees.
+    These fields must always be False/unknown in v1.0.
+    """
+    result = subprocess.run(
+        [sys.executable, VERIFIER,
+         os.path.join(VECTORS, "valid_session.jsonl"),
+         "--format", "json"],
+        capture_output=True, text=True
+    )
+    data = json.loads(result.stdout)
+    ta = data["trust_assumptions"]
+
+    # These must NEVER be True in v1.0 — they would be overclaims
+    assert ta["byzantine_server_defended"] == False, \
+        "v1.0 does not defend against Byzantine server"
+    assert ta["session_freshness_verified"] == False, \
+        "v1.0 does not verify session freshness"
+    assert ta["clock_accuracy_required"] == False, \
+        "Ordering is cryptographic, not timestamp-based"
+    assert ta["instrumentation_complete"] in ("unknown", "incomplete"), \
+        "Instrumentation completeness is never provable from the chain alone"

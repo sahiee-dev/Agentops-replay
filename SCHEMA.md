@@ -122,3 +122,7 @@ Records an administrative integrity lock.
   "freeze_reason": "string (required)"
 }
 ```
+
+## Trust Model
+
+The formal guarantee provided by each evidence class when verifying sessions conforming to this schema is documented in [docs/TRUST_MODEL.md](docs/TRUST_MODEL.md).

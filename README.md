@@ -79,6 +79,10 @@ Result: PASS ✅
 3. **`backend`**: FastAPI ingestion service providing authoritative chain seals and append-only database storage.
 4. **`sdk/` (Legacy/Integrations)**: Contains integrations such as the LangChain callback handler. 
 
+## Documentation
+
+- [Trust Model](docs/TRUST_MODEL.md) — formal guarantees, threat model, trust assumptions, and known limitations
+
 ## Deep Dives
 
 * **Enterprise & Security:** See [MARKET_ENTERPRISE_SECURITY.md](MARKET_ENTERPRISE_SECURITY.md) for API key auth, SIEM webhooks, and compliance mappings.

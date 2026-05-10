@@ -88,6 +88,8 @@ AgentOps Replay is designed to provide specific integrity guarantees against fou
 **Capability:** The adversary is a system administrator with root access to the Ingestion Service.
 **Defense:** While an admin can delete entire sessions, they cannot *silently* modify them. The existence of the standalone verifier allows third-party auditors to verify logs exported from the system. If the admin attempts to forge a `CHAIN_SEAL` for a modified chain, they would need to compromise the server's signing key (if implemented) or produce a hash collision. The independent verifier remains the final check.
 
+The four adversary models A1–A4 are formally analyzed in [docs/TRUST_MODEL.md](TRUST_MODEL.md) §4.1–4.4. Adversary A5 (full chain rewrite) is documented as a known limitation in §4.5.
+
 ---
 
 ## 5. Security Objectives
