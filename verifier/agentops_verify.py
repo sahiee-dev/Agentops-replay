@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac as hmac_module
 import json
 import sys
 import os
@@ -24,6 +25,7 @@ from typing import Any
 # Canonical JCS — single source of truth
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from jcs import canonicalize as jcs_canonicalize
+from verifier_core import build_trust_assumptions
 
 VERIFIER_VERSION = "1.0"
 GENESIS_HASH = "0" * 64
@@ -254,6 +256,40 @@ def determine_evidence_class(events: list[dict]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# HMAC verification (server identity check)
+# ---------------------------------------------------------------------------
+
+def verify_chain_seal_hmac(events: list[dict], hmac_key: str) -> bool:
+    """
+    Verify the CHAIN_SEAL event's hmac field using the provided key.
+
+    The seal HMAC is HMAC-SHA256(key, final_event_hash) where
+    final_event_hash is the event_hash of the event immediately
+    preceding the CHAIN_SEAL.
+
+    Returns True only if a CHAIN_SEAL with a valid hmac field is found
+    and the computed digest matches.
+    """
+    seal_events = [e for e in events if e.get("event_type") == "CHAIN_SEAL"]
+    if not seal_events:
+        return False
+
+    seal = seal_events[0]
+    stored_hmac = seal.get("hmac") or seal.get("seal_hmac")
+    if not stored_hmac:
+        return False
+
+    # The HMAC covers the prev_hash of the CHAIN_SEAL (= final session hash)
+    final_hash = seal.get("prev_hash", "")
+    key_bytes = hmac_key.encode()
+    computed = hmac_module.new(
+        key_bytes, final_hash.encode(), digestmod=hashlib.sha256
+    ).hexdigest()
+
+    return hmac_module.compare_digest(computed, stored_hmac)
+
+
+# ---------------------------------------------------------------------------
 # Output formatting (TRD §3.2)
 # ---------------------------------------------------------------------------
 
@@ -275,6 +311,8 @@ def print_text_output(
     checks: dict,
     overall: str,
     check_results: dict,
+    trust_assumptions: dict | None = None,
+    verbose: bool = False,
 ) -> None:
     print("AgentOps Replay Verifier v1.0")
     print("==============================")
@@ -322,6 +360,22 @@ def print_text_output(
             for e in c4["errors"]:
                 print(f"      {e}")
 
+    # Show trust assumptions when verbose or evidence is authoritative
+    show_trust = verbose or evidence_class in (
+        "AUTHORITATIVE_EVIDENCE", "SIGNED_AUTHORITATIVE_EVIDENCE"
+    )
+    if show_trust and trust_assumptions:
+        print()
+        print("Trust assumptions:")
+        yn = lambda v: "YES" if v else "NO"
+        ic = trust_assumptions.get("instrumentation_complete", "unknown").upper()
+        print(f"  Independent server verification: {yn(trust_assumptions['independent_server_verification'])}")
+        print(f"  Server identity verified (HMAC): {yn(trust_assumptions['server_identity_verified'])}")
+        print(f"  Instrumentation complete:        {ic}")
+        print(f"  Full chain rewrite defended:     {yn(trust_assumptions['full_chain_rewrite_defended'])}")
+        print(f"  Byzantine server defended:       NO (v1.0)")
+        print(f"  Session freshness verified:      NO")
+
     print()
     if overall == "PASS":
         print("Result: PASS ✅")
@@ -337,6 +391,8 @@ def build_json_output(
     overall: str,
     check_results: dict,
     errors: list[str],
+    hmac_verified: bool = False,
+    trust_assumptions: dict | None = None,
 ) -> dict:
     return {
         "verifier_version": VERIFIER_VERSION,
@@ -345,12 +401,14 @@ def build_json_output(
         "event_count": event_count,
         "evidence_class": evidence_class,
         "result": overall,
+        "hmac_verified": hmac_verified,
         "checks": {
             "structural_validity": check_results.get("structural"),
             "sequence_integrity": check_results.get("sequence"),
             "hash_chain_integrity": check_results.get("hash_chain"),
             "session_completeness": check_results.get("completeness"),
         },
+        "trust_assumptions": trust_assumptions,
         "errors": errors,
     }
 
@@ -367,6 +425,14 @@ def main() -> None:
     parser.add_argument(
         "--format", choices=["text", "json"], default="text",
         help="Output format (default: text)"
+    )
+    parser.add_argument(
+        "--hmac-key", default=None,
+        help="HMAC-SHA256 key for verifying CHAIN_SEAL server identity"
+    )
+    parser.add_argument(
+        "--verbose", action="store_true",
+        help="Show full trust assumptions in text output"
     )
     args = parser.parse_args()
 
@@ -441,16 +507,32 @@ def main() -> None:
     # Evidence class only determinable on PASS
     evidence_class: str | None = determine_evidence_class(events) if overall == "PASS" else None
 
+    # HMAC verification
+    hmac_key_provided = bool(args.hmac_key)
+    hmac_verified = (
+        verify_chain_seal_hmac(events, args.hmac_key)
+        if hmac_key_provided else False
+    )
+
+    # Build trust assumptions (always present)
+    ta = build_trust_assumptions(
+        events, hmac_verified, hmac_key_provided, evidence_class or ""
+    )
+
     if args.format == "json":
         output = build_json_output(
             file_path, session_id, event_count,
-            evidence_class, overall, check_results, all_errors
+            evidence_class, overall, check_results, all_errors,
+            hmac_verified=hmac_verified,
+            trust_assumptions=ta,
         )
         print(json.dumps(output, indent=2))
     else:
         print_text_output(
             file_path, session_id, event_count,
-            evidence_class, check_results, overall, check_results
+            evidence_class, check_results, overall, check_results,
+            trust_assumptions=ta,
+            verbose=args.verbose,
         )
 
     sys.exit(0 if overall == "PASS" else 1)

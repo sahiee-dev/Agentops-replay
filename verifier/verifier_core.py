@@ -249,6 +249,72 @@ def check_mixed_authority(events: list[dict[str, Any]]) -> tuple[bool, set[str] 
     return has_mixed, authorities if has_mixed else None
 
 
+def build_trust_assumptions(
+    events: list[dict],
+    hmac_verified: bool,
+    hmac_key_provided: bool,
+    evidence_class: str,
+) -> dict:
+    """
+    Build the trust_assumptions field for JSON output.
+
+    This documents what the verifier DID and DID NOT verify.
+    It answers: "AUTHORITATIVE relative to what trust assumptions?"
+
+    Per docs/TRUST_MODEL.md §6.
+    """
+    has_chain_seal = any(
+        e.get("event_type") == "CHAIN_SEAL" for e in events
+    )
+    has_log_drop = any(
+        e.get("event_type") == "LOG_DROP" for e in events
+    )
+
+    return {
+        # Was an independent process (Ingestion Service) involved?
+        "independent_server_verification": has_chain_seal,
+
+        # Was the server's identity cryptographically verified?
+        # True only if HMAC key was provided AND HMAC matched.
+        "server_identity_verified": hmac_verified,
+
+        # Was a key provided at all?
+        "hmac_key_provided": hmac_key_provided,
+
+        # Was instrumentation complete?
+        # "unknown" always — verifier cannot know what was not captured.
+        # "incomplete" if LOG_DROP events are present.
+        "instrumentation_complete": (
+            "incomplete" if has_log_drop else "unknown"
+        ),
+
+        # Was freshness (session recency) verified?
+        # Never — verifier does not check timestamps against current time.
+        "session_freshness_verified": False,
+
+        # Is the Ingestion Service assumed honest (not Byzantine)?
+        # True whenever CHAIN_SEAL is present — we trust the server.
+        # False means no server was involved.
+        "ingestion_service_assumed_honest": has_chain_seal,
+
+        # Does the system defend against a Byzantine Ingestion Service?
+        # No in v1.0. Requires transparency log (v2.0).
+        "byzantine_server_defended": False,
+
+        # Is clock accuracy required for ordering guarantees?
+        # No — ordering is cryptographic (hash chain), not timestamp-based.
+        "clock_accuracy_required": False,
+
+        # Does the Verifier defend against full-chain rewrite by an attacker
+        # who knows the hash algorithm?
+        # Only if HMAC verified (server-authority + key provided).
+        "full_chain_rewrite_defended": hmac_verified,
+
+        # Reference to the formal trust model
+        "trust_model_ref": "docs/TRUST_MODEL.md",
+    }
+
+
 # Golden vector for hash determinism testing
 GOLDEN_TEST_PAYLOAD = {
     "test": "data",

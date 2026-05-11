@@ -5,6 +5,8 @@ Status: Stable
 Last Updated: May 2026
 This document is the authoritative specification for chain authority and principal invariants.
 
+> For the complete formal trust model including threat boundaries, liveness assumptions, and epistemic limits, see [docs/TRUST_MODEL.md](TRUST_MODEL.md)
+
 ---
 
 This document specifies the trust model and authority separation rules that govern event production in AgentOps Replay. These invariants are not optional; they are enforced by the ingestion service and verified by the standalone verifier. Any implementation that violates these rules produces evidence that cannot be trusted.
@@ -79,6 +81,8 @@ The Verifier must be implementation-independent. It cannot share configuration, 
 1. **Untrusted (SDK):** Because it is co-located with the adversary (the agent code).
 2. **Trusted-Verify (Server):** Because it is the system's "root of trust" for ingestion. We trust the server to verify the client, but we verify the server's work via the chain.
 3. **Independent (Verifier):** Because it is the final auditor. It has no skin in the game and no state to protect.
+
+For the complete formal analysis of what each trust level guarantees and what it does not, including liveness assumptions and Byzantine fault tolerance limits, see [docs/TRUST_MODEL.md](TRUST_MODEL.md) §1–5.
 
 ---
 

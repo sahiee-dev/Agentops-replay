@@ -126,3 +126,5 @@ function determine_evidence_class(events):
 ```
 
 A session that fails any integrity check has `evidence_class = null`. Evidence class is only meaningful for passing sessions.
+
+For complete formal definitions of each evidence class including trust assumptions, adversary model, and epistemic limits, see [docs/TRUST_MODEL.md](TRUST_MODEL.md).
