@@ -20,7 +20,7 @@ Standalone Verifier (Independent Validation)
 Evidence Class + Trust Assumptions (PASS / FAIL)
 ```
 
-## Quickstart — 5 minutes to PASS
+## Quickstart — Get to PASS in 5 minutes
 
 Get a local-authority session running and verified in under 5 minutes on a fresh machine.
 
@@ -144,6 +144,8 @@ agentops-verify verifier/test_vectors/valid_session.jsonl
 agentops-verify verifier/test_vectors/signed_authoritative_session.jsonl \
   --hmac-key test-hmac-key-32bytes-long
 
+> Community contributions are welcome.
+
 # Verify with trust assumptions visible
 agentops-verify session.jsonl --verbose
 
@@ -152,6 +154,12 @@ cd backend && docker-compose up -d
 curl http://localhost:8000/health
 ```
 
+
 ## License
 
 Apache 2.0 — See [LICENSE](LICENSE)
+
+
+## Contributors
+
+Thanks to all contributors supporting the project.
