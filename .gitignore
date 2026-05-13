@@ -79,3 +79,4 @@ backend/venv
 frontend/node_modules
 session.jsonl
 sdk_session.jsonl
+images/
