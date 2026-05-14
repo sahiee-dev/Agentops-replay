@@ -7,6 +7,7 @@ This document is the authoritative specification for chain authority and princip
 
 > For the complete formal trust model including threat boundaries, liveness assumptions, and epistemic limits, see [docs/TRUST_MODEL.md](TRUST_MODEL.md)
 
+
 ---
 
 This document specifies the trust model and authority separation rules that govern event production in AgentOps Replay. These invariants are not optional; they are enforced by the ingestion service and verified by the standalone verifier. Any implementation that violates these rules produces evidence that cannot be trusted.
