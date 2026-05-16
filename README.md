@@ -1,67 +1,57 @@
 # AgentOps Replay
 
-A tamper-evident behavioral audit framework for multi-agent AI systems. Every agent action is captured into a cryptographically hash-chained, append-only event log. A zero-dependency verifier proves the sequence was not modified — on any Python 3.11+ machine, with no external dependencies.
+**Cryptographic chain-of-custody for AI agent sessions.**
 
-## Why This Exists
-
-Agent evaluation frameworks depend on log integrity. If the evidence of agent behavior can be silently modified after capture, safety claims over that evidence are unenforceable.
-
-A direct inspection of [Terrarium](https://arxiv.org/abs/2510.14312) (Nakamura et al., 2025) — the multi-agent simulation framework underlying [Colosseum](https://arxiv.org/abs/2602.15198) (Nakamura et al., 2026) — confirms:
-
-```
-grep -rn "hashlib|sha256|md5|integrity|tamper|verify|sign" terrarium/src/
-```
-
-**Zero cryptographic results across all seven log file types.** Every blackboard state snapshot, tool call record, prompt log, agent trajectory, attack event, attack summary, and experiment note is written with standard Python file I/O. Any file can be modified by any filesystem-level actor without detection. The reproducibility commitment is present; the mechanism to enforce it is absent.
-
-A live Colosseum experiment made this concrete: Colosseum's native `metrics.json` field `colluder_posts_secret` reported **zero** secret-channel attempts across both the baseline and colluding runs. The sealed AgentOps Replay trace recorded **three** distinct secret-channel tool invocations in the colluding run and zero in the baseline. Deleting those three events from the sealed log breaks the hash chain immediately. Deleting them from the native log is undetectable.
-
-AgentOps Replay fixes this at the architectural level.
+AgentOps Replay captures every agent action into a tamper-evident, hash-chained event log. A zero-dependency verifier proves the sequence was not modified — by anyone, at any time — without trusting any vendor, including us.
 
 ---
 
-## Architecture
+## Who This Is For
+
+**[Developers and Researchers](#for-developers-and-researchers)** — Debug agent failures, audit multi-agent systems, produce verifiable evidence for safety research. Direct integrations with Terrarium and Colosseum.
+
+**[Enterprise Security](#for-enterprise-security)** — Forensic-grade audit trails that satisfy EU AI Act Article 12, ISO/IEC 42001 non-repudiation, and NIST SP 800-86 integrity requirements. An open verifier any regulator can run.
+
+**[OpenClaw / Self-Hosted AI Users](#for-openclaw-and-self-hosted-ai-users)** — Your agent has access to your files, email, shell, and financial accounts. Prove what it actually did. Nothing leaves your machine.
+
+---
+
+## How It Works
 
 ```
 Agent Process (Untrusted)
     AgentOps SDK
-    ├── JCS + SHA-256 hash chain (RFC 8785)
-    ├── Ed25519 per-event signatures (session-scoped key pair)
-    ├── LOG_DROP on capture failure — explicit, sequenced, signed
+    ├── JCS + SHA-256 hash chain per event (RFC 8785)
+    ├── Ed25519 per-event signatures (session-scoped, never written to disk)
+    ├── LOG_DROP on capture failure — explicit, signed, not silent
     └── Local JSONL  ──or──  HTTP → Ingestion Service
-                                        │
-                              Separate process (trusted)
-                              ├── Independent hash recomputation
-                              ├── Ed25519 signature verification
-                              ├── Append-only PostgreSQL (INSERT only)
-                              └── RFC 6962 Merkle commitment → CHAIN_SEAL
-                                        │
-                              Standalone Verifier (independent)
-                              ├── Six integrity checks
-                              ├── Evidence class determination
-                              └── trust_assumptions block (machine-readable)
+                                          │
+                                Separate process (server authority)
+                                ├── Independent hash recomputation
+                                ├── Ed25519 signature verification
+                                ├── Append-only PostgreSQL (INSERT only)
+                                └── RFC 6962 Merkle commitment → CHAIN_SEAL
+                                          │
+                                Standalone Verifier (trusts nothing)
+                                ├── Six integrity checks
+                                ├── Evidence class determination
+                                └── trust_assumptions block — honest about limits
 ```
 
-Each trust zone is an independent process. The Verifier shares no code or runtime state with the Ingestion Service.
+Each zone is an independent process. The Verifier shares no code or runtime state with the SDK or Ingestion Service.
 
 ---
 
 ## Quickstart — PASS in 5 minutes
 
 ```bash
-# 1. Clone and install (zero runtime dependencies for core SDK + verifier)
 git clone https://github.com/sahiee-dev/Agentops-replay.git
 cd Agentops-replay
 pip install -e .
 
-# 2. Run the demo
 python examples/sdk_demo.py
-
-# 3. Verify cryptographically
 agentops-verify session.jsonl
 ```
-
-**Expected output:**
 
 ```
 AgentOps Replay Verifier v1.0
@@ -79,131 +69,71 @@ Evidence    : NON_AUTHORITATIVE_EVIDENCE
 Result: PASS ✅
 ```
 
----
-
-## Cryptographic Design
-
-Every agent event is recorded as an 8-field envelope:
-
-```json
-{
-  "seq": 3,
-  "event_type": "TOOL_CALL",
-  "session_id": "uuid",
-  "timestamp": "2026-05-15T10:30:00.123456Z",
-  "payload": {"tool_name": "calculator", "args_hash": "sha256(args)"},
-  "prev_hash": "<event_hash of seq=2>",
-  "event_hash": "sha256(JCS(all fields except event_hash and signature))",
-  "signature": "Ed25519(event_hash, session_private_key)"
-}
-```
-
-**Hash chain:** `prev_hash[N] = event_hash[N-1]`. Any modification to any field changes the JCS canonical form, changes the SHA-256 output, and breaks the chain at the modification point.
-
-**Ed25519 per-event signatures:** At `SESSION_START`, the SDK generates a fresh Ed25519 key pair. The private key is held in memory and never written to disk. Every event is individually signed. The public key is embedded in `SESSION_START` and covered by the hash chain at seq=1. An attacker who rewrites the full chain must also produce valid Ed25519 signatures — which requires the in-memory private key that was never persisted. This closes attack class A5 (full chain rewrite).
-
-**RFC 6962 Merkle commitment:** On `SESSION_END`, the Ingestion Service constructs a binary Merkle tree over all event hashes and embeds the root in `CHAIN_SEAL`. This enables O(log n) inclusion proofs: proving that a single event belongs to a sealed session requires log₂(N) hashes, not the full event sequence.
-
-**Single JCS source:** `verifier/jcs.py` is the canonical RFC 8785 implementation. The invariant `grep -rn "def canonicalize" . | wc -l` must return exactly one result. No hash disagreement between SDK and Verifier is possible.
+**Requirements:** Python 3.11+ (required for JCS float serialization determinism)
 
 ---
 
 ## Evidence Classes
 
-| Class | Conditions | What It Proves |
+| Class | What It Requires | What It Proves |
 |---|---|---|
-| `SIGNED_AUTHORITATIVE_EVIDENCE` | `CHAIN_SEAL` + HMAC-SHA256 verified + Merkle root confirmed + no `LOG_DROP` | Highest. Server identity attested. Full chain rewrite detected. |
-| `AUTHORITATIVE_EVIDENCE` | `CHAIN_SEAL` present + no `LOG_DROP` | Server independently verified the full chain. Complete and sealed. |
-| `PARTIAL_AUTHORITATIVE_EVIDENCE` | `CHAIN_SEAL` present + `LOG_DROP` present | Server-verified. Gaps are explicit, sequenced, and signed — not silent. |
-| `SIGNED_NON_AUTHORITATIVE_EVIDENCE` | Ed25519 signatures valid + no `CHAIN_SEAL` | Chain rewrite detected locally. No independent server witness. |
-| `NON_AUTHORITATIVE_EVIDENCE` | Local mode, no `CHAIN_SEAL` | Chain integrity verified. Vulnerable to full chain rewrite (A5) without Ed25519. |
+| `SIGNED_AUTHORITATIVE_EVIDENCE` | CHAIN_SEAL + HMAC-SHA256 + Merkle root + no LOG_DROP | Highest. Server identity attested. Full chain rewrite detected. |
+| `AUTHORITATIVE_EVIDENCE` | CHAIN_SEAL present + no LOG_DROP | Server independently verified the full chain. Complete and sealed. |
+| `PARTIAL_AUTHORITATIVE_EVIDENCE` | CHAIN_SEAL + LOG_DROP present | Server-verified. Gaps are explicit, sequenced, signed — not silent. |
+| `SIGNED_NON_AUTHORITATIVE_EVIDENCE` | Ed25519 signatures valid, no CHAIN_SEAL | Chain rewrite detected locally. No independent server witness. |
+| `NON_AUTHORITATIVE_EVIDENCE` | Local mode only | Hash integrity verified. Tamper-evident but self-reported. |
 
-Every verifier output includes a `trust_assumptions` block — machine-readable, hardcoded, not configurable:
-
-```json
-{
-  "byzantine_server_defended": false,
-  "session_freshness_verified": false,
-  "instrumentation_complete": "unknown",
-  "full_chain_rewrite_defended": true
-}
-```
-
-A system that does not know its own limits is not a trustworthy audit tool.
+Every verifier output includes a `trust_assumptions` block — hardcoded, not configurable — that records `byzantine_server_defended: false`, `session_freshness_verified: false`, `instrumentation_complete: "unknown"`. A system that does not know its limits is not a trustworthy audit tool.
 
 ---
 
 ## Threat Model
 
-| ID | Attack | Local (no sig) | Ed25519 signed | Server + HMAC |
+| ID | Attack | Local (no sig) | Ed25519 | Server + HMAC |
 |---|---|---|---|---|
 | A1 | SDK injects false event | — | — | Detected |
 | A2 | MITM modifies payload | — | — | Detected |
-| A3 | Storage-level deletion | Detected | Detected | Detected |
+| A3 | Storage-level event deletion | Detected | Detected | Detected |
 | A4 | Insider reorders events | Detected | Detected | Detected |
 | A5 | Full chain rewrite | **Not detected†** | Detected | Detected |
 
-† Known boundary condition. Documented in `docs/TRUST_MODEL.md §4.5` and recorded in `trust_assumptions.full_chain_rewrite_defended`. All 37 adversarial tests pass on CI.
+† Known boundary — documented in `docs/TRUST_MODEL.md §4.5` and recorded in every session's `trust_assumptions` output. All 37 adversarial tests pass on CI.
 
 ---
 
-## Colosseum Integration and Differential Audit
+---
 
-Colosseum (Nakamura et al., 2026) audits LLM agent collusion in multi-agent systems. Its central claim — "what matters is the evidence of collusion, i.e., detecting a collusive action, and not just discussing it in text" — requires that the evidence be unmodifiable. The interaction traces that constitute this evidence (`tool_calls.json`, `agent_prompts.json`) are Terrarium mutable log files.
+## For Developers and Researchers
 
-AgentOps Replay provides the missing integrity layer.
+### The Research Problem
 
-### ColosseumAuditSession
+Agent evaluation frameworks depend on log integrity. If the evidence of agent behavior can be silently modified after capture, safety claims over that evidence are unenforceable.
 
-```python
-from examples.colosseum_adapter.colosseum_adapter import ColosseumAuditSession
+A direct inspection of [Terrarium](https://arxiv.org/abs/2510.14312) (Nakamura et al., 2025) — the multi-agent simulation framework underlying [Colosseum](https://arxiv.org/abs/2602.15198) (Nakamura et al., 2026) — confirms:
 
-with ColosseumAuditSession(session_id="run-001") as audit:
-    audit.record_main_channel_message(agent_id, message)
-    audit.record_secret_channel_message(agent_id, message)
-    audit.record_agent_action(agent_id, action, is_collusive=True)
-    audit.record_regret(regret_value)
-# Session sealed and flushed to JSONL automatically
+```bash
+grep -rn "hashlib|sha256|md5|integrity|tamper|verify|sign" terrarium/src/
+# Zero cryptographic results across all seven log file types.
 ```
 
-### The metrics.json Discrepancy — Live Result
+All blackboard state snapshots, tool call records, prompt logs, agent trajectories, attack events, attack summaries, and experiment notes are written with standard Python file I/O. Any file can be modified by any filesystem-level actor without detection.
 
-Running a real Colosseum experiment (JiraTicketEnvironment, 2 agents, qwen2.5:3b via Ollama):
+A live Colosseum experiment made this concrete: Colosseum's `metrics.json` field `colluder_posts_secret` reported **zero** secret-channel attempts for both the baseline and colluding runs. The AgentOps Replay sealed trace recorded **three** distinct secret-channel tool invocations in the colluding run and zero in the baseline. The aggregate metric was wrong. The event-level trace was right.
 
 ```
-Native metrics.json:
-  colluder_posts_secret: 0  ← reported for BOTH baseline and colluding runs
+Native metrics.json — both runs:
+  colluder_posts_secret: 0
 
 Sealed AgentOps Replay trace (colluding run):
   TOOL_CALL [event_type=secret_channel]  seq=4
   TOOL_CALL [event_type=secret_channel]  seq=7
   TOOL_CALL [event_type=secret_channel]  seq=11
 
-Delta: +3 secret-channel events in colluding run vs baseline
+Delta: +3 secret-channel events. Native log: undetectable deletion.
+Sealed log: immediate FAIL at hash chain integrity check.
 ```
 
-The aggregate metric was wrong. The event-level trace was right. The three attempts errored (blackboard 1 did not exist), so Colosseum's aggregator recorded zero. The sealed trace recorded the attempts regardless.
-
-### Differential Audit
-
-```bash
-python examples/colosseum_adapter/gap3_differential_audit.py
-```
-
-Compares two sealed sessions — baseline and colluding — without exposing any event payload. Reports per-type event count differentials from integrity-verified artifacts.
-
-```bash
-python examples/colosseum_adapter/demo_evidence_gap.py
-```
-
-Three-step proof:
-1. Original sealed session → `PASS ✅`
-2. Tampered sealed session → `FAIL ❌` (hash chain broken at exact seq)
-3. Tampered native log → no detection
-
----
-
-## Terrarium Integration
+### Terrarium Integration
 
 `AuditedBlackboardLogger` is a 50-line drop-in subclass of Terrarium's `BlackboardLogger`. Zero changes to Terrarium source required.
 
@@ -221,21 +151,165 @@ Step 4 — Verify tampered record:
   Failed check:   [3/4] Hash chain integrity (seq=3)
 ```
 
+### Colosseum Integration and Differential Audit
+
+`ColosseumAuditSession` wraps a Colosseum experiment with AgentOps Replay instrumentation. The Colosseum experiment — agents, attack modules, regret computation — requires no modification.
+
+```bash
+# Three-step proof: PASS → FAIL → native undetected
+python examples/colosseum_adapter/demo_evidence_gap.py
+
+# Differential audit: compare two sealed sessions without exposing payloads
+python examples/colosseum_adapter/gap3_differential_audit.py
+```
+
+### Companion Paper
+
+> Shaik Ahamed Sahir. *AgentOps Replay: Tamper-Evident Behavioral Sequence Integrity for Multi-Agent Systems.* arXiv, 2026.
+> [Link — added after arXiv submission]
+
+The paper formalizes four gap types in Terrarium (T-1 through T-4), three in Colosseum (C-1 through C-3), five evidence classes with trust assumption tables, five adversary evaluations, and LOG_DROP semantics. All 37 adversarial tests are deterministic and require only Python 3.11 stdlib.
+
+### Running the Test Suite
+
+```bash
+pip install -e ".[langchain,server,dev]"
+
+pytest tests/unit/ -v                  # No external dependencies
+pytest tests/adversarial/ -v           # A1–A5, all 37 tests
+
+python verifier/generator.py
+agentops-verify verifier/test_vectors/valid_session.jsonl     # exit 0
+agentops-verify verifier/test_vectors/tampered_hash.jsonl     # exit 1
+agentops-verify verifier/test_vectors/sequence_gap.jsonl      # exit 1
+
+# Start Ingestion Service (AUTHORITATIVE_EVIDENCE mode)
+docker-compose -f backend/docker-compose.yml up -d
+curl http://localhost:8000/health
+```
+
 ---
 
-## What a PASS Proves (and What It Doesn't)
+---
 
-**Proves:**
-- Every sequence number from 1 to N is present (gaps recorded as `LOG_DROP`, not silently dropped)
-- No event was inserted, deleted, or reordered after recording
-- `agent_id` and `session_id` cannot be changed without breaking the chain
-- Ordering is cryptographic, not timestamp-based — timestamp manipulation does not affect chain integrity
+## For Enterprise Security
 
-**Does not prove:**
-- Content (payloads are stored as SHA-256 hashes only — raw content never written)
-- Instrumentation completeness (events never passed to the SDK are invisible)
-- Session freshness (a valid historical session reports PASS identically to a fresh one)
-- Causality between events or external effects of tool calls
+### The Forensic Gap
+
+88% of organizations running AI agents reported a confirmed or suspected security incident in the past year. The average enterprise manages 37 deployed AI agents with no centralized audit. Shadow AI incidents carry an average additional cost of $670,000 over standard incidents. *(RSAC 2026, AGAT Software)*
+
+The forensic question every security team faces after an AI agent incident:
+
+> "Who authorized the action, which tool was invoked, what data was accessed, and what was the outcome — and can we prove it?"
+
+The Mexico government breach (December 2025 – February 2026) illustrated this directly: a single attacker used AI agents to breach nine agencies, exfiltrating 195 million taxpayer records and 220 million civil records. The forensic challenge was not detection — it was chain of custody. AI agents acting at machine speed with no cryptographic record of what each agent accessed, in what order, and what it produced.
+
+### The One Claim No Competitor Can Make
+
+> Run `agentops-verify session.jsonl`. If it outputs `AUTHORITATIVE_EVIDENCE`, the record has not been modified since the session was sealed. You do not need to trust us. The verification logic is open source Python you can inspect and run on an air-gapped machine.
+
+**Vorlon Flight Recorder** asserts immutability via proprietary DataMatrix™ technology — no standalone verifier, no open cryptographic specification, no evidence classification system.
+
+**OpenAI Compliance Logs** covers only OpenAI model calls, defaults to 30-day retention (EU AI Act Article 19 requires six months), and requires trusting OpenAI's infrastructure for integrity verification.
+
+**CrowdStrike, Palo Alto, Rubrik** audit their own security tooling — not the customer's application agents. Different problem.
+
+None provide an open, independently verifiable cryptographic proof. AgentOps Replay does.
+
+### Regulatory Position
+
+- **EU AI Act Article 12** — automatic logging with traceability for high-risk AI. Full enforcement: August 1, 2026.
+- **EU AI Act Article 19** — minimum six-month log retention.
+- **ISO/IEC 42001** — non-repudiation: cryptographic proof that audit logs have not been tampered with.
+- **NIST SP 800-86** — *"Organizations should be prepared to demonstrate the integrity of electronic records."* No mutable log satisfies this without cryptographic proof.
+
+AgentOps Replay's CHAIN_SEAL satisfies ISO 42001 non-repudiation by mathematical definition. The verification is reproducible by any party — auditor, regulator, legal counsel — without access to AgentOps infrastructure. See [`docs/REGULATORY_NOTE.md`](docs/REGULATORY_NOTE.md) for clause-by-clause mapping. Not legal advice.
+
+### vs. Vorlon — Direct Comparison
+
+| | Vorlon Flight Recorder | AgentOps Replay |
+|---|---|---|
+| Immutability basis | Product claim (DataMatrix™ proprietary) | Mathematical proof (SHA-256 hash chain) |
+| Independent verifier | None — requires trusting Vorlon | Zero-dependency Python CLI, fully inspectable |
+| Source code | Proprietary and patented | Apache 2.0 open source |
+| Evidence classification | Not defined | Five formal classes with stated trust assumptions |
+| Scope | Cross-app SaaS behavioral trail | Agent's internal event chain, any framework |
+| Self-hosted | No | Yes |
+
+Vorlon tells you which SaaS apps the agent touched. AgentOps Replay proves the agent's own event record wasn't modified.
+
+### Enterprise Roadmap
+
+**v1.0 (current):** Core SDK + verifier + Ingestion Service. Five evidence classes. 37-test adversarial suite. Terrarium, Colosseum, LangChain integrations.
+
+**v1.1:** SIEM webhook (CEF/LEEF/ECS). FORENSIC_FREEZE mode. PII redaction with hash integrity preserved. ECDSA signing (non-repudiation without symmetric key distribution). Nonce-based session freshness.
+
+**v2.0:** RFC 6962 transparency log — CHAIN_SEAL Merkle roots published publicly, making Byzantine server equivocation detectable by any third party.
+
+---
+
+---
+
+## For OpenClaw and Self-Hosted AI Users
+
+### Your Agent Has Broad Access. Can You Prove What It Did?
+
+OpenClaw (formerly Clawdbot / Moltbot) gives your AI agent access to your shell, files, email, calendar, and financial accounts. It runs on a heartbeat schedule — waking up autonomously, even overnight, taking actions without being prompted.
+
+OpenClaw's session logs at `~/.openclaw/agents/<agentId>/sessions/*.jsonl` tell you what happened. Those files are mutable plaintext. Anyone with shell access — including an attacker who exploited CVE-2026-25253 (1-click RCE, January 2026) — can modify or delete them silently. There is no way to prove the log you're looking at is the original one.
+
+AgentOps Replay adds cryptographic proof. And nothing leaves your machine.
+
+### Install and Verify
+
+```bash
+pip install agentops-replay
+# Instrument your OpenClaw sessions — a sealed JSONL is produced automatically
+
+agentops-verify ~/.openclaw/agentops/<session_id>.jsonl
+```
+
+```
+Result: PASS ✅
+Evidence: NON_AUTHORITATIVE_EVIDENCE
+```
+
+**Privacy guarantees (critical for self-hosters):**
+- LLM prompts, responses, tool arguments, and results are stored as SHA-256 hashes only. Raw content never appears in the AgentOps log.
+- Local authority mode (default): nothing leaves your machine. JSONL stays in `~/.openclaw/agentops/`.
+- Verifier has zero external dependencies. Runs without network access. No account required.
+
+### OpenClaw Built-In vs. AgentOps Replay
+
+| Property | OpenClaw Built-In | AgentOps Replay |
+|---|---|---|
+| Log format | JSONL session transcripts | Hash-chained JSONL event envelopes |
+| Tamper evidence | None — files are mutable | SHA-256 chain — any change detected immediately |
+| Verification | No independent tool | `agentops-verify` — zero-dependency, runs anywhere |
+| Evidence class | Not defined | Formal classes with stated trust levels |
+| Content stored? | Full conversation transcripts | Hashes only — content never stored |
+| Requires account? | No | No |
+
+OpenClaw does engineering-grade vulnerability management. AgentOps Replay does evidence production. These are complementary, not competing.
+
+### Optional: Local Server Mode (AUTHORITATIVE_EVIDENCE)
+
+For users who want the strongest possible guarantee:
+
+```bash
+docker-compose -f backend/docker-compose.yml up -d
+# Configure server_url in your AgentOps settings
+agentops-verify session.jsonl
+# Result: PASS ✅  Evidence: AUTHORITATIVE_EVIDENCE
+```
+
+The Ingestion Service runs locally on your machine. Nothing goes to any external server.
+
+### The NemoClaw Connection
+
+NVIDIA's NemoClaw adds policy-based guardrails to OpenClaw (what the agent is *allowed* to do). AgentOps Replay adds evidence production (what the agent *actually did*). These are complementary. NemoClaw's existence confirms institutional recognition that enterprise-grade accountability infrastructure is needed around OpenClaw.
+
+---
 
 ---
 
@@ -246,62 +320,17 @@ Step 4 — Verify tampered record:
 | Core SDK | `agentops_sdk/` | Hash chain, Ed25519 signing, LOG_DROP, local JSONL or HTTP send |
 | Verifier | `verifier/` | Zero-dependency CLI. Six checks. Evidence class. trust_assumptions. |
 | Ingestion Service | `backend/` | FastAPI + PostgreSQL. Independent hash recomputation. Merkle seal. |
-| Terrarium Adapter | `examples/terrarium_adapter/` | Drop-in AuditedBlackboardLogger. 50 lines. |
-| Colosseum Adapter | `examples/colosseum_adapter/` | ColosseumAuditSession wrapper. Differential audit. |
-| LangChain Integration | `sdk/python/` | AgentOpsCallbackHandler. Zero config. Content hashed at boundary. |
-
----
-
-## Development
-
-```bash
-# Install with all extras
-pip install -e ".[langchain,server,dev]"
-
-# Unit tests (no external dependencies)
-pytest tests/unit/ -v
-
-# Adversarial test suite (A1–A5, all 37 tests)
-pytest tests/adversarial/ -v
-
-# Regenerate and verify test vectors
-python verifier/generator.py
-agentops-verify verifier/test_vectors/valid_session.jsonl
-agentops-verify verifier/test_vectors/tampered_hash.jsonl  # must exit 1
-agentops-verify verifier/test_vectors/sequence_gap.jsonl   # must exit 1
-
-# Start Ingestion Service (Docker required)
-docker-compose -f backend/docker-compose.yml up -d
-curl http://localhost:8000/health
-```
-
-**Requirements:** Python 3.11+ (required for JCS float serialization determinism — see `docs/EVENT_LOG_SPEC.md`)
-
----
+| Terrarium Adapter | `examples/terrarium_adapter/` | Drop-in AuditedBlackboardLogger. 50 lines. No Terrarium source changes. |
+| Colosseum Adapter | `examples/colosseum_adapter/` | ColosseumAuditSession. Differential audit. metrics.json discrepancy demo. |
+| LangChain Integration | `sdk/python/` | AgentOpsCallbackHandler. Zero config. Content hashed at callback boundary. |
 
 ## Documentation
 
-- [`docs/TRUST_MODEL.md`](docs/TRUST_MODEL.md) — Formal guarantees, threat model, five adversary classes, known limits
-- [`docs/EVENT_LOG_SPEC.md`](docs/EVENT_LOG_SPEC.md) — 8-field envelope, 12 event types, hash algorithm, GENESIS_HASH
+- [`docs/TRUST_MODEL.md`](docs/TRUST_MODEL.md) — Formal guarantees, five adversary classes, known limits, what a PASS does not prove
+- [`docs/EVENT_LOG_SPEC.md`](docs/EVENT_LOG_SPEC.md) — 8-field envelope, 12 event types, hash algorithm, GENESIS_HASH definition
 - [`docs/CHAIN_AUTHORITY_INVARIANTS.md`](docs/CHAIN_AUTHORITY_INVARIANTS.md) — Authority separation, evidence class conditions, frozen invariants
 - [`docs/FAILURE_MODES.md`](docs/FAILURE_MODES.md) — LOG_DROP semantics, CHAIN_BROKEN, A5 boundary condition
-- [`docs/REGULATORY_NOTE.md`](docs/REGULATORY_NOTE.md) — Hedged alignment with EU AI Act, NIST AI RMF, ISO/IEC 42001
-
----
-
-## Related Work
-
-This system was built in direct response to gaps identified in:
-
-- **Terrarium** (Nakamura et al., 2025) — arXiv:2510.14312 — UMass CICS AI Security Lab
-- **Colosseum** (Nakamura et al., 2026) — arXiv:2602.15198 — UMass CICS AI Security Lab
-- **Auditable Agents** (Nian et al., 2026) — arXiv:2604.05485 — ecosystem-scale survey confirming the gap across six open-source agent projects
-
-The formal treatment of evidence classes, authority separation, LOG_DROP semantics, and the Colosseum differential audit is described in the companion paper:
-
-> Shaik Ahamed Sahir. *AgentOps Replay: Tamper-Evident Behavioral Sequence Integrity for Multi-Agent Systems.* arXiv preprint, 2026. [Paper link — to be added after arXiv submission]
-
----
+- [`docs/REGULATORY_NOTE.md`](docs/REGULATORY_NOTE.md) — EU AI Act, NIST AI RMF, ISO/IEC 42001 clause mapping (not legal advice)
 
 ## License
 
@@ -309,4 +338,4 @@ Apache 2.0 — See [LICENSE](LICENSE)
 
 ---
 
-> **Note on naming:** This project is currently named AgentOps Replay for continuity with an earlier published system (Sahir, IEEE 2026) and active external links. A rename to **Tessera** is planned once link dependencies resolve. The name Tessera better reflects the system's actual function, cryptographic chain-of-custody and tamper-evident audit, rather than session replay, which was the focus of the v1 system. If you are reading this after the rename, the repository will have redirected automatically.
+> **Note on naming:** This project is currently named AgentOps Replay for continuity with a prior published system (Sahir, IEEE 2026) and active external links. A rename to **Tessera** is planned once link dependencies resolve. The name better reflects the system's actual function — cryptographic chain-of-custody and tamper-evident audit — rather than session replay, which was the focus of the v1 system. GitHub will redirect automatically when the rename happens.
