@@ -33,13 +33,14 @@ class TestColosseumAuditSession:
             path = session.finalize()
 
             result = subprocess.run(
-                ["python3", "verifier/agentops_verify.py", path, "--format", "json"],
+                [sys.executable, "verifier/agentops_verify.py", path, "--format", "json"],
                 capture_output=True, text=True,
                 cwd=str(Path(__file__).parent.parent.parent)
             )
             data = json.loads(result.stdout)
             assert data["result"] == "PASS"
-            assert data["evidence_class"] == "NON_AUTHORITATIVE_EVIDENCE"
+            assert data["evidence_class"] == "SIGNED_NON_AUTHORITATIVE_EVIDENCE"
+            assert data["signatures_valid"] is True
             assert result.returncode == 0
 
     def test_tamper_detected(self):
@@ -60,7 +61,8 @@ class TestColosseumAuditSession:
             path = session.finalize()
 
             # Tamper: modify the collusive action summary without updating the hash
-            events = [json.loads(l) for l in open(path)]
+            with open(path) as f:
+                events = [json.loads(line) for line in f]
             for e in events:
                 if "collusive=True" in e.get("payload", {}).get("result_summary", ""):
                     e["payload"]["result_summary"] = \
@@ -73,7 +75,7 @@ class TestColosseumAuditSession:
                     f.write(json.dumps(e) + "\n")
 
             result = subprocess.run(
-                ["python3", "verifier/agentops_verify.py", tampered, "--format", "json"],
+                [sys.executable, "verifier/agentops_verify.py", tampered, "--format", "json"],
                 capture_output=True, text=True,
                 cwd=str(Path(__file__).parent.parent.parent)
             )
@@ -98,7 +100,8 @@ class TestColosseumAuditSession:
             session.record_agent_action("agent_1", "cooperate", 0.85, iteration=1, is_collusive=False)
             path = session.finalize()
 
-            events = [json.loads(l) for l in open(path)]
+            with open(path) as f:
+                events = [json.loads(line) for line in f]
             event_types = [e["event_type"] for e in events]
             summaries = [
                 e.get("payload", {}).get("result_summary", "")
@@ -119,7 +122,7 @@ class TestColosseumAuditSession:
     def test_demo_runs_clean(self):
         """Demo script runs without errors."""
         result = subprocess.run(
-            ["python3", "examples/colosseum_adapter/demo_evidence_gap.py"],
+            [sys.executable, "examples/colosseum_adapter/demo_evidence_gap.py"],
             capture_output=True, text=True,
             cwd=str(Path(__file__).parent.parent.parent)
         )

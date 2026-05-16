@@ -37,24 +37,33 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import sys
 from pathlib import Path
 from typing import Any, Optional
 
+_logger = logging.getLogger(__name__)
+
 # ── AgentOps Replay SDK import ────────────────────────────────────────────────
+# Attempt the import without mutating sys.path first; only add to sys.path if
+# the package is not already findable, to avoid import-time side effects.
 _ADAPTER_DIR = Path(__file__).parent
 _AGENTOPS_ROOT = _ADAPTER_DIR.parent.parent
-sys.path.insert(0, str(_AGENTOPS_ROOT))
 
 try:
     from agentops_sdk.client import AgentOpsClient
     from agentops_sdk.events import EventType
-except ImportError as e:
-    raise ImportError(
-        "AgentOps Replay SDK not found. "
-        "Run: pip install -e '.' from AgentOps Replay repo root."
-    ) from e
+except ImportError:
+    sys.path.insert(0, str(_AGENTOPS_ROOT))
+    try:
+        from agentops_sdk.client import AgentOpsClient
+        from agentops_sdk.events import EventType
+    except ImportError as e:
+        raise ImportError(
+            "AgentOps Replay SDK not found. "
+            "Run: pip install -e '.' from AgentOps Replay repo root."
+        ) from e
 
 
 def _hash_content(content: Any) -> str:
@@ -115,6 +124,7 @@ class ColosseumAuditSession:
         self._event_count = 0
         self._action_count = 0
         self._secret_message_count = 0
+        self._record_failures = 0
 
     def record_main_channel_message(
         self,
@@ -144,8 +154,9 @@ class ColosseumAuditSession:
                 },
             )
             self._event_count += 1
-        except Exception as e:
-            print(f"[ColosseumAudit] Warning: failed to record main channel: {e}")
+        except Exception:
+            self._record_failures += 1
+            _logger.exception("Failed to record main channel message (agent=%s)", agent_id)
 
     def record_secret_channel_message(
         self,
@@ -178,8 +189,9 @@ class ColosseumAuditSession:
             )
             self._secret_message_count += 1
             self._event_count += 1
-        except Exception as e:
-            print(f"[ColosseumAudit] Warning: failed to record secret channel: {e}")
+        except Exception:
+            self._record_failures += 1
+            _logger.exception("Failed to record secret channel message (agent=%s)", agent_id)
 
     def record_agent_action(
         self,
@@ -223,8 +235,9 @@ class ColosseumAuditSession:
             )
             self._action_count += 1
             self._event_count += 1
-        except Exception as e:
-            print(f"[ColosseumAudit] Warning: failed to record action: {e}")
+        except Exception:
+            self._record_failures += 1
+            _logger.exception("Failed to record agent action (agent=%s)", agent_id)
 
     def record_regret(
         self,
@@ -266,8 +279,9 @@ class ColosseumAuditSession:
                 },
             )
             self._event_count += 1
-        except Exception as e:
-            print(f"[ColosseumAudit] Warning: failed to record regret: {e}")
+        except Exception:
+            self._record_failures += 1
+            _logger.exception("Failed to record regret metric")
 
     def finalize(self, output_path: Optional[str] = None) -> str:
         """
@@ -293,4 +307,5 @@ class ColosseumAuditSession:
             "actions_recorded": self._action_count,
             "secret_messages_recorded": self._secret_message_count,
             "has_secret_channel": len(self.colluding_agents) > 0,
+            "record_failures": self._record_failures,
         }

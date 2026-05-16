@@ -104,7 +104,8 @@ def tamper_with_agentops_log(jsonl_path: str) -> str:
     to make the collusion appear not to have occurred.
     Does NOT update the hash — simulates attacker without JCS knowledge.
     """
-    events = [json.loads(line) for line in open(jsonl_path)]
+    with open(jsonl_path) as f:
+        events = [json.loads(line) for line in f]
     tampered = False
     for event in events:
         payload = event.get("payload", {})

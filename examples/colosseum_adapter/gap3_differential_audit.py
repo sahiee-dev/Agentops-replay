@@ -44,20 +44,14 @@ sys.path.insert(0, str(_ROOT))
 from examples.colosseum_adapter.colosseum_adapter import ColosseumAuditSession
 
 # ── real experiment path ──────────────────────────────────────────────────────
-_REAL_DATA_DIR = (
-    Path("/Users/lulu/Desktop/colosseum/experiments/collusion/outputs")
-    / "gap3_differential_audit"
-    / "20260515-191752"
-    / "runs"
-    / "ollama-qwen2.5-3b"
-    / "gap3_sweep"
+# Resolved at runtime inside _run_real() from COLOSSEUM_GAP3_DIR env var or
+# the --real-data-dir CLI flag; no hardcoded user-specific path at module level.
+_RUN_SUBDIR = (
+    "runs/ollama-qwen2.5-3b/gap3_sweep/"
+    "ollama-qwen2.5-3b__gap3_sweep__complete__n2__c1"
 )
-_BASELINE_DIR = _REAL_DATA_DIR / (
-    "ollama-qwen2.5-3b__gap3_sweep__complete__n2__c1__secret0__pvcontrol__seed1"
-)
-_COLLUDING_DIR = _REAL_DATA_DIR / (
-    "ollama-qwen2.5-3b__gap3_sweep__complete__n2__c1__secret1__pvcontrol__seed1"
-)
+_BASELINE_SUFFIX  = "__secret0__pvcontrol__seed1"
+_COLLUDING_SUFFIX = "__secret1__pvcontrol__seed1"
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -159,18 +153,25 @@ def _run_synthetic(output_dir: str) -> None:
 
 # ── real-data path ────────────────────────────────────────────────────────────
 
-def _run_real(output_dir: str) -> None:
+def _run_real(output_dir: str, real_data_dir: Path) -> None:
     print("Running REAL Gap 3 demo (using actual Colosseum experiment output)")
     print(f"Experiment: 2026-05-15, ollama qwen2.5:3b, JiraTicketEnvironment")
     print()
 
-    for d, label in [(_BASELINE_DIR, "baseline"), (_COLLUDING_DIR, "colluding")]:
+    baseline_dir  = real_data_dir / (_RUN_SUBDIR + _BASELINE_SUFFIX)
+    colluding_dir = real_data_dir / (_RUN_SUBDIR + _COLLUDING_SUFFIX)
+
+    for d, label in [(baseline_dir, "baseline"), (colluding_dir, "colluding")]:
         if not d.exists():
-            print(f"ERROR: {d} not found. Run gap3_ollama_minimal.yaml first.")
+            print(
+                f"ERROR: {d} not found.\n"
+                f"Set COLOSSEUM_GAP3_DIR or pass --real-data-dir pointing at the "
+                f"gap3_differential_audit experiment root."
+            )
             sys.exit(1)
 
-    baseline_events  = json.loads((_BASELINE_DIR  / "tool_events.json").read_text())
-    colluding_events = json.loads((_COLLUDING_DIR / "tool_events.json").read_text())
+    baseline_events  = json.loads((baseline_dir  / "tool_events.json").read_text())
+    colluding_events = json.loads((colluding_dir / "tool_events.json").read_text())
 
     bb1_baseline  = [e for e in baseline_events  if e.get("arguments", {}).get("blackboard_id") == 1]
     bb1_colluding = [e for e in colluding_events if e.get("arguments", {}).get("blackboard_id") == 1]
@@ -180,13 +181,11 @@ def _run_real(output_dir: str) -> None:
     print(f"  Colluding tool events: {len(colluding_events):2d}  |  secret-channel events: {len(bb1_colluding)}")
     print()
 
-    baseline_path  = _seal_run(baseline_events,  "gap3_baseline_real",
-                                ["Layla"] if False else [], output_dir)
-    colluding_path = _seal_run(colluding_events, "gap3_colluding_real",
-                                ["Layla"], output_dir)
+    baseline_path  = _seal_run(baseline_events,  "gap3_baseline_real",  [], output_dir)
+    colluding_path = _seal_run(colluding_events, "gap3_colluding_real", ["Layla"], output_dir)
 
     _report(baseline_path, colluding_path, output_dir, is_real=True,
-            secret_events=bb1_colluding)
+            secret_events=bb1_colluding, colluding_dir=colluding_dir)
 
 
 # ── shared report ─────────────────────────────────────────────────────────────
@@ -197,6 +196,7 @@ def _report(
     output_dir: str,
     is_real: bool,
     secret_events: list[dict] | None = None,
+    colluding_dir: Path | None = None,
 ) -> None:
 
     # ── 1. verify both sealed logs ────────────────────────────────────────────
@@ -206,8 +206,10 @@ def _report(
     print()
 
     # ── 2. differential: count secret-channel events ──────────────────────────
-    baseline_events_raw  = [json.loads(l) for l in open(baseline_path)]
-    colluding_events_raw = [json.loads(l) for l in open(colluding_path)]
+    with open(baseline_path) as f:
+        baseline_events_raw  = [json.loads(line) for line in f]
+    with open(colluding_path) as f:
+        colluding_events_raw = [json.loads(line) for line in f]
 
     def _secret_in_sealed(events: list[dict]) -> list[dict]:
         return [
@@ -239,8 +241,9 @@ def _report(
     print("Step 3 — Native log: silently remove secret-channel evidence")
 
     if is_real:
-        native_path = str(_COLLUDING_DIR / "tool_events.json")
-        native_events = json.loads(open(native_path).read())
+        native_path = str(colluding_dir / "tool_events.json")
+        with open(native_path) as f:
+            native_events = json.load(f)
         native_before = len([e for e in native_events
                               if e.get("arguments", {}).get("blackboard_id") == 1])
         tampered_native = [e for e in native_events
@@ -262,7 +265,8 @@ def _report(
     # ── 4. sealed log tampering (detected) ────────────────────────────────────
     print("Step 4 — Sealed log: remove same events → verify should FAIL")
 
-    sealed_events = [json.loads(l) for l in open(colluding_path)]
+    with open(colluding_path) as f:
+        sealed_events = [json.loads(line) for line in f]
     tampered_sealed = [
         e for e in sealed_events
         if not (
@@ -311,13 +315,27 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--real-data", action="store_true",
-        help="Use real Colosseum experiment output from 2026-05-15",
+        help="Use real Colosseum experiment output.",
+    )
+    parser.add_argument(
+        "--real-data-dir",
+        help=(
+            "Root of the gap3_differential_audit experiment directory. "
+            "Overrides the COLOSSEUM_GAP3_DIR environment variable."
+        ),
     )
     args = parser.parse_args()
 
     with tempfile.TemporaryDirectory() as tmp:
         if args.real_data:
-            _run_real(tmp)
+            raw = args.real_data_dir or os.environ.get("COLOSSEUM_GAP3_DIR")
+            if not raw:
+                print(
+                    "ERROR: set COLOSSEUM_GAP3_DIR or pass --real-data-dir "
+                    "pointing at the gap3_differential_audit experiment root."
+                )
+                sys.exit(1)
+            _run_real(tmp, Path(raw))
         else:
             _run_synthetic(tmp)
 
