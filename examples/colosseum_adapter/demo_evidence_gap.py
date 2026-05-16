@@ -259,9 +259,12 @@ def main():
         print("FINDING:")
         print("  Colosseum's primary metric (regret) can be silently modified")
         print("  post-experiment. The collusion finding — agent_1 defects with")
-        print(f"  regret={ground_truth['regret']:.2f} — is based on NON_AUTHORITATIVE_EVIDENCE.")
-        print("  AgentOps Replay upgrades this to AUTHORITATIVE_EVIDENCE:")
+        print(f"  regret={ground_truth['regret']:.2f} — is based on mutable plaintext logs.")
+        print(f"  AgentOps Replay seals this as {original_result['evidence_class']}:")
         print("  any post-hoc modification is detected immediately.")
+        print()
+        print("  Note: AUTHORITATIVE_EVIDENCE requires a running Ingestion Service")
+        print("  (server-side CHAIN_SEAL + HMAC). This demo runs fully locally.")
         print("=" * 65)
 
 

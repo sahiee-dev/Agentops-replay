@@ -31,7 +31,7 @@ Usage:
 
     # At end:
     jsonl_path = session.finalize()
-    # agentops-verify jsonl_path → PASS ✅ NON_AUTHORITATIVE_EVIDENCE
+    # agentops-verify jsonl_path → PASS ✅ (evidence class depends on deployment mode)
 """
 from __future__ import annotations
 
