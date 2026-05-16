@@ -20,10 +20,8 @@ classifiers = [
     "Topic :: Security",
 ]
 
-# Core SDK + Verifier: cryptography for Ed25519 signing
-dependencies = [
-    "cryptography>=40.0",
-]
+# Core SDK + Verifier: ZERO DEPENDENCIES
+dependencies = []
 
 [project.optional-dependencies]
 langchain = [

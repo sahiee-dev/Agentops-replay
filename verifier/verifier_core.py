@@ -254,8 +254,6 @@ def build_trust_assumptions(
     hmac_verified: bool,
     hmac_key_provided: bool,
     evidence_class: str,
-    signatures_valid: bool = False,
-    merkle_valid: bool = False,
 ) -> dict:
     """
     Build the trust_assumptions field for JSON output.
@@ -307,19 +305,10 @@ def build_trust_assumptions(
         # No — ordering is cryptographic (hash chain), not timestamp-based.
         "clock_accuracy_required": False,
 
-        # Was each event Ed25519-signed by the session keypair?
-        # True only when all events carry a valid signature from SESSION_START pubkey.
-        "ed25519_signatures_verified": signatures_valid,
-
-        # Was an RFC 6962 Merkle root sealed in SESSION_END and verified?
-        # Enables O(log n) inclusion proofs and external root publication.
-        "merkle_root_verified": merkle_valid,
-
         # Does the Verifier defend against full-chain rewrite by an attacker
         # who knows the hash algorithm?
-        # True if HMAC verified (server auth) OR Ed25519 signatures verified
-        # (an attacker without the private key cannot forge valid signatures).
-        "full_chain_rewrite_defended": hmac_verified or signatures_valid,
+        # Only if HMAC verified (server-authority + key provided).
+        "full_chain_rewrite_defended": hmac_verified,
 
         # Reference to the formal trust model
         "trust_model_ref": "docs/TRUST_MODEL.md",
